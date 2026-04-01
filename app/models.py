@@ -1,13 +1,41 @@
+# BakeManage IP Assignment: All contributions assign IP to BakeManage (c) 2026
 from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List
 
-from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, Numeric, String
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+
+
+class UserAccount(Base):
+    __tablename__ = "user_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    pin_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(64), default="operations")
+    allowed_fields: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    api_credentials: Mapped[List["ServiceCredential"]] = relationship(
+        "ServiceCredential", back_populates="owner", cascade="all, delete-orphan"
+    )
 
 
 class Vendor(Base):
@@ -64,6 +92,8 @@ class InventoryItem(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     quantity_on_hand: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     unit_of_measure: Mapped[str] = mapped_column(String(32), default="unit")
+    category: Mapped[str] = mapped_column(String(64), default="general")
+    vertical: Mapped[str] = mapped_column(String(32), default="bakery")
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     expiration_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     invoice_item_id: Mapped[int | None] = mapped_column(
@@ -103,3 +133,64 @@ class RecipeIngredient(Base):
 
     recipe: Mapped["Recipe"] = relationship("Recipe", back_populates="components")
     inventory_item: Mapped["InventoryItem"] = relationship("InventoryItem")
+
+
+class ServiceCredential(Base):
+    __tablename__ = "service_credentials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    encrypted_api_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("user_accounts.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    owner: Mapped["UserAccount"] = relationship("UserAccount", back_populates="api_credentials")
+
+
+class ProofingTelemetry(Base):
+    __tablename__ = "proofing_telemetry"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    temperature_c: Mapped[float] = mapped_column(Float, nullable=False)
+    humidity_percent: Mapped[float] = mapped_column(Float, nullable=False)
+    co2_ppm: Mapped[float] = mapped_column(Float, nullable=False)
+    fan_speed_rpm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(64), default="stable")
+    anomaly_score: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class QualityInspection(Base):
+    __tablename__ = "quality_inspections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    image_fingerprint: Mapped[str] = mapped_column(String(64), index=True, unique=True)
+    browning_score: Mapped[float] = mapped_column(Float, nullable=False)
+    uniformity_score: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[str] = mapped_column(String(64), default="needs_review")
+    notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class HealthSignal(Base):
+    __tablename__ = "health_signals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    latency_ms: Mapped[float] = mapped_column(Float, nullable=False)
+    request_per_minute: Mapped[float] = mapped_column(Float, nullable=False)
+    error_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    saturation_percent: Mapped[float] = mapped_column(Float, nullable=False)
+    anomaly_score: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AnomalyEvent(Base):
+    __tablename__ = "anomaly_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    action_taken: Mapped[str] = mapped_column(String(128), nullable=False)
+    succeeded: Mapped[bool] = mapped_column(Boolean, default=True)
+    human_notified: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
