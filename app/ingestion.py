@@ -1,3 +1,4 @@
+# BakeManage IP Assignment: All contributions assign IP to BakeManage (c) 2026
 from __future__ import annotations
 
 import hashlib
@@ -49,17 +50,23 @@ def simulate_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
     items = [
         InvoiceItemPayload(
             item_name="Flour",
-            quantity=50,
+            quantity=50.0,
             unit_price=Decimal("1.20"),
             tax_rate=Decimal("5.00"),
             expiration_date=date.today() + timedelta(days=60),
+            category="kirana_staple",
+            unit_of_measure="kg",
+            vertical="kirana",
         ),
         InvoiceItemPayload(
             item_name="Butter",
-            quantity=20,
+            quantity=20.0,
             unit_price=Decimal("2.50"),
             tax_rate=Decimal("5.00"),
             expiration_date=date.today() + timedelta(days=30),
+            category="bakery_fat",
+            unit_of_measure="kg",
+            vertical="bakery",
         ),
     ]
     total = sum(
@@ -96,6 +103,9 @@ def parse_excel_invoice(file_bytes: bytes) -> InvoicePayload:
                 unit_price=Decimal(str(record["unit_price"])),
                 tax_rate=Decimal(str(record.get("tax_rate", 0))),
                 expiration_date=expiration_date,
+                category=str(record.get("category", "general")),
+                unit_of_measure=str(record.get("unit_of_measure", "unit")),
+                vertical=str(record.get("vertical", "restaurant")),
             )
         )
 
@@ -167,6 +177,9 @@ def persist_invoice(session: Session, payload: InvoicePayload) -> models.Invoice
             quantity_on_hand=item.quantity,
             unit_price=item.unit_price,
             expiration_date=item.expiration_date,
+            category=item.category,
+            unit_of_measure=item.unit_of_measure,
+            vertical=item.vertical,
             invoice_item=invoice_item,
         )
         session.add(inventory_entry)
