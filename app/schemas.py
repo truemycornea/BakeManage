@@ -35,9 +35,47 @@ class InventoryDeductionResult(BaseModel):
 class CostComputationRequest(BaseModel):
     overhead: Decimal = Field(ge=0)
     components: list[dict]
+    selling_price: Optional[Decimal] = Field(default=None, gt=0)
+    margin_floor: Optional[Decimal] = Field(default=Decimal("0.20"), ge=0, le=1)
 
 
 class CostComputationResponse(BaseModel):
     total_cost: Decimal
+    warning: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AuthRequest(BaseModel):
+    username: str
+    pin: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserOut(BaseModel):
+    id: int
+    username: str
+    role: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProofingTelemetryRequest(BaseModel):
+    temperature_c: float
+    humidity_percent: float
+    timestamp: Optional[str] = None
+
+
+class ProofingTelemetryResponse(BaseModel):
+    status: str
+    anomaly_score: float
+
+
+class BrowningResult(BaseModel):
+    score: float
+    status: str
+    notes: Optional[str] = None
