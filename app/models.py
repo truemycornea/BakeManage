@@ -22,6 +22,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="viewer")
+    hashed_pin: Mapped[str] = mapped_column(String(255), nullable=False)
+    salt: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 class UserAccount(Base):
     __tablename__ = "user_accounts"
 
@@ -153,6 +162,19 @@ class ProofingTelemetry(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     temperature_c: Mapped[float] = mapped_column(Float, nullable=False)
     humidity_percent: Mapped[float] = mapped_column(Float, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    anomaly_score: Mapped[float] = mapped_column(Float, default=0.0)
+
+
+class QualityCheck(Base):
+    __tablename__ = "quality_checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    image_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     co2_ppm: Mapped[float] = mapped_column(Float, nullable=False)
     fan_speed_rpm: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(64), default="stable")
