@@ -213,13 +213,41 @@ code{font-size:11.5px;background:var(--bg);border:1px solid var(--border);paddin
 .toast-err{background:var(--err);color:#fff}
 .toast-info{background:var(--info);color:#fff}
 
-/* ── AUTH MODAL ── */
-.modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.7);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:1000}
-.modal-box{background:var(--surface);border-radius:var(--rl);padding:38px 36px;width:420px;box-shadow:0 25px 60px rgba(0,0,0,.25);border:1px solid var(--border)}
+/* ── AUTH MODAL – warm bakery illustrated background (§3 OptimisedPPv1) ── */
+.modal-bg{position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 80% 55% at 50% 108%,rgba(220,138,52,.28) 0%,transparent 65%),
+    radial-gradient(ellipse 46% 36% at 7%  90%, rgba(183,112,52,.20) 0%,transparent 58%),
+    radial-gradient(ellipse 46% 36% at 93% 88%,rgba(183,112,52,.17) 0%,transparent 58%),
+    linear-gradient(175deg,#FDF8EE 0%,#F8EFD8 28%,#EFDDB8 58%,#E2C897 80%,#D2B074 100%);
+  display:flex;align-items:center;justify-content:center;z-index:1000}
+/* bread silhouettes on the counter */
+.modal-bg::before{content:'';position:absolute;bottom:0;left:0;right:0;height:190px;
+  background:
+    radial-gradient(ellipse 90px 56px  at 10% 102%,rgba(158,92,40,.38) 0%,transparent 100%),
+    radial-gradient(ellipse 68px 42px  at 20%  99%,rgba(142,80,35,.30) 0%,transparent 100%),
+    radial-gradient(ellipse 74px 46px  at 31% 101%,rgba(150,86,38,.25) 0%,transparent 100%),
+    radial-gradient(ellipse 85px 52px  at 72% 102%,rgba(158,92,40,.34) 0%,transparent 100%),
+    radial-gradient(ellipse 64px 40px  at 82%  99%,rgba(142,80,35,.27) 0%,transparent 100%),
+    radial-gradient(ellipse 54px 34px  at 91% 100%,rgba(136,76,33,.20) 0%,transparent 100%),
+    linear-gradient(0deg,rgba(172,106,56,.17) 0%,transparent 42%);
+  pointer-events:none}
+/* wheat stalk accent */
+.modal-bg::after{content:'';position:absolute;bottom:68px;left:50px;width:2px;height:108px;
+  background:linear-gradient(180deg,rgba(175,148,58,.58) 0%,rgba(175,148,58,.06) 100%);
+  border-radius:2px;
+  box-shadow:13px -7px 0 0 rgba(175,148,58,.42),21px -21px 0 -1px rgba(175,148,58,.34),
+             9px -43px 0 -1px rgba(175,148,58,.26),-9px -16px 0 0 rgba(175,148,58,.36),
+             -17px -34px 0 -1px rgba(175,148,58,.26);
+  pointer-events:none}
+.modal-box{background:rgba(255,252,244,.97);backdrop-filter:blur(14px);border-radius:16px;
+  padding:38px 36px;width:420px;
+  box-shadow:0 28px 72px rgba(152,96,36,.18),0 0 0 1px rgba(198,152,96,.20);
+  border:1px solid rgba(210,165,106,.25);position:relative;z-index:1}
 .modal-center{text-align:center;margin-bottom:28px}
-.modal-bmark{width:54px;height:54px;background:linear-gradient(135deg,#F59E0B,#B45309);border-radius:13px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px}
-.modal-title{font-size:21px;font-weight:700;color:var(--text);letter-spacing:-.4px}
-.modal-sub{font-size:13px;color:var(--muted);margin-top:5px;line-height:1.5}
+.modal-bmark{width:54px;height:54px;background:linear-gradient(135deg,#E8951A,#A85C0A);border-radius:13px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px}
+.modal-title{font-size:21px;font-weight:700;color:#3A1F08;letter-spacing:-.4px}
+.modal-sub{font-size:13px;color:#8B5E30;margin-top:5px;line-height:1.5}
 .role-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
 .role-opt{border:2px solid var(--border);border-radius:8px;padding:11px 8px;text-align:center;cursor:pointer;transition:all .15s}
 .role-opt:hover{border-color:#CBD5E1}
@@ -533,33 +561,58 @@ function renderView(v) {
 /* ════════════════════════════════════
    DASHBOARD
 ════════════════════════════════════ */
+/* ════════════════════════════════════
+   DASHBOARD  §2 OptimisedPPv1 — business KPI cards + operational status
+════════════════════════════════════ */
 async function dashboard(el) {
   el.innerHTML = `
     <div class="page-hd">
-      <div class="page-title">Good ${greet()}, <span style="text-transform:capitalize;">${S.role}</span> 👋</div>
-      <div class="page-desc">Your bakery operations command centre. All systems at a glance.</div>
+      <div class="page-title">Good ${greet()}, <span style="text-transform:capitalize;">${S.role}</span></div>
+      <div class="page-desc">Bakery operations at a glance — live from stock, quality, proofing, and cost signals.</div>
     </div>
 
     <div class="stats-grid">
       <div class="stat-card">
-        <div><div class="stat-lbl">API Status</div><div class="stat-val" id="d-api-val" style="font-size:17px;margin-top:6px;">Checking…</div><div class="stat-hint">FastAPI + uvicorn :8000</div></div>
+        <div><div class="stat-lbl">Revenue Today</div>
+          <div class="stat-val" id="d-revenue" style="font-size:17px;margin-top:6px;">—</div>
+          <div class="stat-hint">Sales tracking: Phase 3</div></div>
+        <div class="ico ico-green"><i data-lucide="trending-up"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Items Sold Today</div>
+          <div class="stat-val" id="d-sold" style="font-size:17px;margin-top:6px;">—</div>
+          <div class="stat-hint">Sales log: Phase 3</div></div>
+        <div class="ico ico-amber"><i data-lucide="shopping-bag"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Quality Pass Rate</div>
+          <div class="stat-val" id="d-quality" style="font-size:17px;margin-top:6px;">…</div>
+          <div class="stat-hint" id="d-quality-hint">Loading…</div></div>
+        <div class="ico ico-blue"><i data-lucide="badge-check"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Stock Items</div>
+          <div class="stat-val" id="d-stock" style="font-size:17px;margin-top:6px;">…</div>
+          <div class="stat-hint" id="d-stock-hint">Loading…</div></div>
+        <div class="ico ico-purple"><i data-lucide="package"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Proofing Readings</div>
+          <div class="stat-val" id="d-proofing" style="font-size:17px;margin-top:6px;">…</div>
+          <div class="stat-hint" id="d-proofing-hint">Loading…</div></div>
+        <div class="ico" style="background:#F0FDF4;color:#16A34A;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-lucide="thermometer"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">API Health</div>
+          <div class="stat-val" id="d-api-val" style="font-size:17px;margin-top:6px;">…</div>
+          <div class="stat-hint">FastAPI + uvicorn :8000</div></div>
         <div class="ico ico-green"><i data-lucide="server"></i></div>
-      </div>
-      <div class="stat-card">
-        <div><div class="stat-lbl">Active Role</div><div class="stat-val" style="font-size:17px;margin-top:6px;text-transform:capitalize;">${S.role}</div><div class="stat-hint">Domain permissions enforced</div></div>
-        <div class="ico ico-amber"><i data-lucide="shield-check"></i></div>
-      </div>
-      <div class="stat-card">
-        <div><div class="stat-lbl">Document AI</div><div class="stat-val" style="font-size:17px;margin-top:6px;">Ready</div><div class="stat-hint">Image · PDF · Excel supported</div></div>
-        <div class="ico ico-blue"><i data-lucide="file-scan"></i></div>
-      </div>
-      <div class="stat-card">
-        <div><div class="stat-lbl">Task Queue</div><div class="stat-val" style="font-size:17px;margin-top:6px;">Celery</div><div class="stat-hint">Workers connected via Redis</div></div>
-        <div class="ico ico-purple"><i data-lucide="zap"></i></div>
       </div>
     </div>
 
-    <div class="page-hd" style="margin-bottom:10px;"><div style="font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Quick Actions</div></div>
+    <div class="page-hd" style="margin-bottom:10px;">
+      <div style="font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Quick Actions</div>
+    </div>
     <div class="qa-row">
       <div class="qa-btn" onclick="nav('stock')"><i data-lucide="package"></i> Stock Management</div>
       <div class="qa-btn" onclick="nav('ingestion')"><i data-lucide="scan-line"></i> Inject Document</div>
@@ -567,14 +620,92 @@ async function dashboard(el) {
       <div class="qa-btn" onclick="nav('quality')"><i data-lucide="badge-check"></i> Quality Check</div>
       <div class="qa-btn" onclick="nav('sales')"><i data-lucide="trending-up"></i> Sales Log</div>
       <div class="qa-btn" onclick="nav('proofing')"><i data-lucide="thermometer"></i> Log Proofing</div>
+    </div>
+
+    <div class="card">
+      <div class="card-hd">
+        <div><div class="card-title">Operational Status</div>
+          <div class="card-sub">Services + Four Golden Signals</div></div>
+        <span class="badge badge-neutral" id="d-status-badge">Checking…</span>
+      </div>
+      <div class="card-bd">
+        <div class="grid-3" style="margin-bottom:14px;">
+          <div style="text-align:center;padding:11px;border:1px solid var(--border);border-radius:8px;">
+            <div id="d-dot-api" style="width:9px;height:9px;border-radius:50%;background:#94A3B8;margin:0 auto 6px;"></div>
+            <div style="font-size:12px;font-weight:600;">API</div>
+            <div style="font-size:11px;color:var(--muted);" id="d-api-sub">Checking</div>
+          </div>
+          <div style="text-align:center;padding:11px;border:1px solid var(--border);border-radius:8px;">
+            <div id="d-dot-db" style="width:9px;height:9px;border-radius:50%;background:#94A3B8;margin:0 auto 6px;"></div>
+            <div style="font-size:12px;font-weight:600;">PostgreSQL</div>
+            <div style="font-size:11px;color:var(--muted);">Internal</div>
+          </div>
+          <div style="text-align:center;padding:11px;border:1px solid var(--border);border-radius:8px;">
+            <div id="d-dot-cel" style="width:9px;height:9px;border-radius:50%;background:#94A3B8;margin:0 auto 6px;"></div>
+            <div style="font-size:12px;font-weight:600;">Celery</div>
+            <div style="font-size:11px;color:var(--muted);">Workers + Redis</div>
+          </div>
+        </div>
+        <div id="d-signals" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;"></div>
+      </div>
     </div>`;
   lucide.createIcons();
+  _loadDashboardData();
+}
+
+async function _loadDashboardData() {
+  // 1. Basic health
   try {
     const h = await GET('/health');
     const ok = h.status === 'ok';
-    document.getElementById('d-api-val').textContent = ok ? 'Online ✓' : 'Degraded';
-    document.getElementById('d-api-val').style.color = ok ? 'var(--ok)' : 'var(--err)';
-  } catch { document.getElementById('d-api-val').textContent = 'Offline'; document.getElementById('d-api-val').style.color = 'var(--err)'; }
+    const set = (id, val) => { const e = document.getElementById(id); if (e) e[typeof val === 'string' ? 'textContent' : 'style'] = val; };
+    const setT = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    const setS = (id, prop, v) => { const e = document.getElementById(id); if (e) e.style[prop] = v; };
+    setT('d-api-val', ok ? 'Online ✓' : 'Degraded');
+    setS('d-api-val', 'color', ok ? 'var(--ok)' : 'var(--err)');
+    ['d-dot-api','d-dot-db','d-dot-cel'].forEach(id => setS(id, 'background', ok ? 'var(--ok)' : '#94A3B8'));
+    setT('d-api-sub', ok ? 'Operational' : 'Degraded');
+    const badge = document.getElementById('d-status-badge');
+    if (badge) { badge.textContent = ok ? 'All Systems Go' : 'Degraded'; badge.className = `badge badge-${ok ? 'ok' : 'err'}`; }
+  } catch {
+    const e = document.getElementById('d-api-val'); if (e) { e.textContent = 'Offline'; e.style.color = 'var(--err)'; }
+    const b = document.getElementById('d-status-badge'); if (b) { b.textContent = 'API Offline'; b.className = 'badge badge-err'; }
+  }
+  // 2. DB-backed KPIs from /dashboard/summary
+  try {
+    const s = await GET('/dashboard/summary');
+    const setKpi = (id, val, hint, hintId) => {
+      const e = document.getElementById(id); if (e) e.textContent = val;
+      const h = document.getElementById(hintId); if (h) h.textContent = hint;
+    };
+    const qRate = s.quality_pass_rate != null ? `${s.quality_pass_rate}%` : '—';
+    const qHint = s.quality_inspections ? `${s.quality_inspections} inspection${s.quality_inspections !== 1 ? 's' : ''} logged` : 'No inspections yet';
+    setKpi('d-quality', qRate, qHint, 'd-quality-hint');
+    const stHint = s.stock_items ? `${s.stock_items} line item${s.stock_items !== 1 ? 's' : ''} on record` : 'Inject invoices to populate';
+    setKpi('d-stock', s.stock_items ?? '0', stHint, 'd-stock-hint');
+    const prHint = s.proofing_readings ? `${s.proofing_readings} reading${s.proofing_readings !== 1 ? 's' : ''} logged` : 'Submit proofing readings to populate';
+    setKpi('d-proofing', s.proofing_readings ?? '0', prHint, 'd-proofing-hint');
+  } catch {
+    ['d-quality','d-stock','d-proofing'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = '—'; });
+  }
+  // 3. Golden signals from extended health
+  try {
+    const ext = await GET('/health/extended');
+    const gs = ext.golden_signals || {};
+    const sig = document.getElementById('d-signals');
+    if (sig) {
+      sig.innerHTML = [
+        { k:'Latency',    v:`${gs.latency_ms_p50 ?? '—'} ms`,              cls: (gs.latency_ms_p50 ?? 0) < 150 ? 'ok' : 'warn' },
+        { k:'Traffic',    v:`${gs.traffic_rps ?? '—'} rps`,                cls: 'ok' },
+        { k:'Error Rate', v:`${(((gs.error_rate || 0)*100).toFixed(1))}%`, cls: (gs.error_rate || 0) < 0.05 ? 'ok' : 'err' },
+        { k:'Saturation', v:`${(((gs.saturation || 0)*100).toFixed(0))}%`, cls: (gs.saturation || 0) < 0.8 ? 'ok' : 'warn' },
+      ].map(({ k, v, cls }) => `
+        <div style="padding:10px;border:1px solid var(--border);border-radius:7px;text-align:center;">
+          <div style="font-size:14px;font-weight:700;color:var(--${cls === 'ok' ? 'ok' : cls === 'warn' ? 'warn' : 'err'});">${v}</div>
+          <div style="font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:3px;">${k}</div>
+        </div>`).join('');
+    }
+  } catch {}
 }
 
 function greet() {

@@ -9,7 +9,7 @@ from typing import Annotated, Optional
 
 import jwt
 from cryptography.fernet import Fernet
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -93,18 +93,18 @@ def enforce_https(request: Request) -> None:
     proto = request.headers.get("x-forwarded-proto") or request.url.scheme
     if proto and proto.lower() != "https" and settings.environment == "production":
         raise HTTPException(status_code=status.HTTP_426_UPGRADE_REQUIRED, detail="HTTPS required")
-# BakeManage IP Assignment: All contributions assign IP to BakeManage (c) 2026
-from __future__ import annotations
 
-import base64
-import hmac
+
+# ---------------------------------------------------------------------------
+# PIN-based sandbox auth (bootstrap)
+# ---------------------------------------------------------------------------
+
+import base64 as _b64
+import hmac as _hmac
 from hashlib import pbkdf2_hmac
-from typing import Any, Iterable
+from typing import Iterable
 
-from cryptography.fernet import Fernet, InvalidToken
-from fastapi import Header, HTTPException, status
-
-from .config import settings
+from cryptography.fernet import Fernet as _Fernet, InvalidToken
 
 ROLE_FIELD_PERMISSIONS: dict[str, list[str]] = {
     "owner": ["*"],

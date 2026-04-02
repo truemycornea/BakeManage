@@ -222,3 +222,27 @@ def test_auditor_cannot_access_ingestion(client):
 def test_auditor_can_access_health(client):
     r = client.get("/health", headers=AUD)
     assert r.status_code == 200
+
+
+# ── §2 Dashboard KPI endpoint ──────────────────────────────────────────────
+
+def test_dashboard_summary_returns_kpis(client):
+    r = client.get("/dashboard/summary", headers=OWNER)
+    assert r.status_code == 200
+    body = r.json()
+    assert "stock_items" in body
+    assert "quality_pass_rate" in body
+    assert "quality_inspections" in body
+    assert "proofing_readings" in body
+    assert isinstance(body["stock_items"], int)
+    assert 0.0 <= body["quality_pass_rate"] <= 100.0
+
+
+def test_dashboard_summary_operations_role(client):
+    r = client.get("/dashboard/summary", headers=OPS)
+    assert r.status_code == 200
+
+
+def test_dashboard_summary_auditor_role(client):
+    r = client.get("/dashboard/summary", headers=AUD)
+    assert r.status_code == 200

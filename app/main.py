@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile, Request
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -61,7 +61,6 @@ from .tasks import (
     compute_cost_from_components,
     evaluate_margin,
     monitor_four_signals,
-    persist_proofing_telemetry,
     validate_requirements_locked,
 )
 
@@ -353,6 +352,7 @@ async def ingest_proofing_telemetry(
     record = ProofingTelemetry(
         temperature_c=payload.temperature_c,
         humidity_percent=payload.humidity_percent,
+        co2_ppm=payload.co2_ppm or 0.0,
         anomaly_score=anomaly_score,
     )
     session.add(record)
@@ -363,7 +363,6 @@ async def ingest_proofing_telemetry(
 @app.post("/proofing/telemetry", response_model=dict)
 async def post_proofing_telemetry(
     payload: ProofingTelemetryPayload,
-    background_tasks: BackgroundTasks,
     role: str = Depends(authorize_request),
     session: Session = Depends(get_session),
 ) -> dict:
@@ -371,11 +370,13 @@ async def post_proofing_telemetry(
     telemetry = ProofingTelemetry(
         temperature_c=payload.temperature_c,
         humidity_percent=payload.humidity_percent,
+        co2_ppm=payload.co2_ppm or 0.0,
+        fan_speed_rpm=payload.fan_speed_rpm,
+        status=payload.status or "stable",
         anomaly_score=payload.anomaly_score or 0.0,
     )
     session.add(telemetry)
     session.commit()
-    background_tasks.add_task(persist_proofing_telemetry.delay, payload.model_dump())
     return filter_fields(
         {
             "telemetry": {
@@ -448,6 +449,46 @@ async def validate_quality(
                 "uniformity_score": assessment.uniformity_score,
                 "verdict": assessment.verdict,
             }
+        },
+        role,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Dashboard KPI summary  (PIN-based, §2 OptimisedPPv1)
+# ---------------------------------------------------------------------------
+
+@app.get("/dashboard/summary", response_model=dict)
+async def dashboard_summary(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Aggregated KPIs for the operations dashboard.
+    Phase-3 stubs: revenue_today_inr, items_sold_today, cost_saved_week_inr.
+    Phase-2 stubs: expiring_soon, vendor_savings_inr.
+    """
+    stock_count = session.query(InventoryItem).count()
+    qi_total = session.query(QualityInspection).count()
+    qi_pass = (
+        session.query(QualityInspection)
+        .filter(QualityInspection.status == "optimal")
+        .count()
+    )
+    pass_rate = round((qi_pass / qi_total * 100) if qi_total > 0 else 0.0, 1)
+    proofing_count = session.query(ProofingTelemetry).count()
+    return filter_fields(
+        {
+            "stock_items": stock_count,
+            "quality_inspections": qi_total,
+            "quality_pass_rate": pass_rate,
+            "proofing_readings": proofing_count,
+            # Phase-2 stubs — replaced by stock endpoint data
+            "expiring_soon": 0,
+            "vendor_savings_inr": None,
+            # Phase-3 stubs — replaced by sales endpoint data
+            "revenue_today_inr": None,
+            "items_sold_today": None,
+            "cost_saved_week_inr": None,
         },
         role,
     )

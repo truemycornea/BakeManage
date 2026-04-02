@@ -162,8 +162,11 @@ class ProofingTelemetry(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     temperature_c: Mapped[float] = mapped_column(Float, nullable=False)
     humidity_percent: Mapped[float] = mapped_column(Float, nullable=False)
-    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    co2_ppm: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    fan_speed_rpm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="stable")
     anomaly_score: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class QualityCheck(Base):
