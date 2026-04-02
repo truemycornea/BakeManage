@@ -1,14 +1,17 @@
 # scripts/bootstrap_users.py
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from sqlalchemy.orm import Session
-from app.database import SessionLocal
-from app.models import User
-from app.security import hash_pin
-from app.config import settings
-
+try:
+    from sqlalchemy.orm import Session
+    from app.database import SessionLocal
+    from app.models import User
+    from app.security import hash_pin
+    from app.config import settings
+except ImportError as exc:
+    if __name__ == "__main__":
+        raise SystemExit(
+            "Unable to import application modules. Run this script as a module from the project root, "
+            "for example: python -m scripts.bootstrap_users"
+        ) from exc
+    raise
 def bootstrap():
     db: Session = SessionLocal()
     try:
