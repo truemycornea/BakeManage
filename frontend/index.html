@@ -204,6 +204,7 @@ code{font-size:11.5px;background:var(--bg);border:1px solid var(--border);paddin
 .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite;flex-shrink:0}
 .spin-dark{border-color:rgba(0,0,0,.1);border-top-color:var(--accent-d)}
 @keyframes rot{to{transform:rotate(360deg)}}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── TOASTS ── */
 #toasts{position:fixed;top:18px;right:18px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
@@ -390,6 +391,9 @@ const NAV = [
   { id:'quality',      label:'Quality Control',    icon:'badge-check',      sec:'OPERATIONS',  ownerOnly:false },
   { id:'cost',         label:'Cost Calculator',    icon:'calculator',       sec:'OPERATIONS',  ownerOnly:false },
   { id:'proofing',     label:'Proofing',           icon:'thermometer',      sec:'OPERATIONS',  ownerOnly:false },
+  // LIBRARY
+  { id:'recipes',      label:'Recipe Library',     icon:'chef-hat',         sec:'LIBRARY',     ownerOnly:false },
+  { id:'media',        label:'Media Library',      icon:'film',             sec:'LIBRARY',     ownerOnly:false },
   // SETTINGS — owner/admin only
   { id:'sys_monitor',  label:'System Monitoring',  icon:'activity',         sec:'SETTINGS',    ownerOnly:true  },
   { id:'auth_access',  label:'Auth & Access',      icon:'shield-check',     sec:'SETTINGS',    ownerOnly:true  },
@@ -544,6 +548,7 @@ function renderView(v) {
   const views = {
     dashboard, sales, stock,
     ingestion, quality, cost, proofing,
+    recipes, media,
     sys_monitor, auth_access, app_config,
     credits, roadmap,
     // legacy aliases (backward-compat deep links)
@@ -733,45 +738,91 @@ function ingestion(el) {
       <div class="tab" id="tab-wizard" onclick="ingTab('wizard')"><i data-lucide="list-checks" style="width:13px;height:13px;vertical-align:middle;margin-right:5px;"></i>Context Wizard</div>
     </div>
 
+    <!-- Image / Receipt tab -->
     <div id="ing-img-panel">
-      <div class="card">
-        <div class="card-bd">
-          <label class="drop-zone" id="dz-img" for="fi-img">
-            <input type="file" id="fi-img" accept="image/*" onchange="onImgSel(event)">
-            <div class="dz-icon"><i data-lucide="image"></i></div>
-            <div class="dz-title">Drop image here or click to browse</div>
-            <div class="dz-sub">JPG, PNG, WEBP — handwritten or printed receipts</div>
-          </label>
-          <div id="img-prev-wrap" style="display:none;margin-top:14px;text-align:center;">
-            <img id="img-prev" style="max-height:180px;border-radius:8px;border:1px solid var(--border);">
-            <div id="img-fname" style="font-size:11px;color:var(--muted);margin-top:5px;"></div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Upload Receipt or Invoice Image</div></div>
+          <div class="card-bd">
+            <label class="drop-zone" id="dz-img" for="fi-img">
+              <input type="file" id="fi-img" accept="image/*" onchange="onImgSel(event)">
+              <div class="dz-icon"><i data-lucide="image"></i></div>
+              <div class="dz-title">Drop image here or click to browse</div>
+              <div class="dz-sub">JPG, PNG, WEBP — handwritten or printed receipts</div>
+            </label>
+            <div id="img-prev-wrap" style="display:none;margin-top:14px;text-align:center;">
+              <img id="img-prev" style="max-height:180px;border-radius:8px;border:1px solid var(--border);">
+              <div id="img-fname" style="font-size:11px;color:var(--muted);margin-top:5px;"></div>
+            </div>
+            <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+              <button class="btn btn-primary btn-lg" id="btn-ing-img" onclick="doIngImg()" disabled>
+                <i data-lucide="scan-line"></i> Extract Invoice
+              </button>
+            </div>
           </div>
-          <div style="margin-top:14px;display:flex;justify-content:flex-end;">
-            <button class="btn btn-primary btn-lg" id="btn-ing-img" onclick="doIngImg()" disabled>
-              <i data-lucide="scan-line"></i> Extract Invoice
-            </button>
+        </div>
+        <div class="col-stack">
+          <div class="card">
+            <div class="card-hd"><div class="card-title">How it works</div></div>
+            <div class="card-bd">
+              ${[
+                ['scan-line','AI OCR','VLM reads handwritten or printed receipts and extracts structured line items.'],
+                ['layers','Auto-categorises','Each item is classified by category, vertical, and unit automatically.'],
+                ['database','Persists to Stock','Extracted invoice items are saved to inventory after confirmation.'],
+              ].map(([icon,title,desc])=>`
+              <div style="display:flex;gap:10px;margin-bottom:12px;">
+                <div class="ico ico-amber" style="flex-shrink:0;"><i data-lucide="${icon}"></i></div>
+                <div><div style="font-size:13px;font-weight:600;margin-bottom:2px;">${title}</div>
+                <div style="font-size:12px;color:var(--muted);">${desc}</div></div>
+              </div>`).join('')}
+              <div class="info-box info-info" style="margin-top:8px;font-size:12px;">
+                <strong>Sandbox:</strong> VLM OCR is simulated — returns realistic synthetic invoice data (Flour 50kg + Butter 20kg).
+              </div>
+            </div>
           </div>
         </div>
       </div>
+      <div id="ing-img-result"></div>
     </div>
 
+    <!-- Excel / PDF tab -->
     <div id="ing-doc-panel" style="display:none;">
-      <div class="card">
-        <div class="card-bd">
-          <label class="drop-zone" id="dz-doc" for="fi-doc">
-            <input type="file" id="fi-doc" accept=".xlsx,.xls,.pdf" onchange="onDocSel(event)">
-            <div class="dz-icon"><i data-lucide="file-spreadsheet"></i></div>
-            <div class="dz-title">Drop a document here or click to browse</div>
-            <div class="dz-sub">XLSX, XLS and PDF formats supported</div>
-          </label>
-          <div id="doc-fname" style="display:none;margin-top:10px;font-size:12px;color:var(--muted);text-align:center;"></div>
-          <div style="margin-top:14px;display:flex;justify-content:flex-end;">
-            <button class="btn btn-primary btn-lg" id="btn-ing-doc" onclick="doIngDoc()" disabled>
-              <i data-lucide="file-scan"></i> Parse Document
-            </button>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Upload Excel or PDF Document</div></div>
+          <div class="card-bd">
+            <label class="drop-zone" id="dz-doc" for="fi-doc">
+              <input type="file" id="fi-doc" accept=".xlsx,.xls,.pdf" onchange="onDocSel(event)">
+              <div class="dz-icon"><i data-lucide="file-spreadsheet"></i></div>
+              <div class="dz-title">Drop a document here or click to browse</div>
+              <div class="dz-sub">XLSX, XLS and PDF formats supported</div>
+            </label>
+            <div id="doc-fname" style="display:none;margin-top:10px;font-size:12px;color:var(--muted);text-align:center;"></div>
+            <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+              <button class="btn btn-primary btn-lg" id="btn-ing-doc" onclick="doIngDoc()" disabled>
+                <i data-lucide="file-scan"></i> Parse Document
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Excel template columns</div></div>
+          <div class="card-bd" style="padding:0;">
+            <table>
+              <thead><tr><th>Column</th><th>Required</th><th>Example</th></tr></thead>
+              <tbody>
+                ${[
+                  ['item_name','Yes','Flour'],['quantity','Yes','50'],['unit_price','Yes','1.20'],
+                  ['unit_of_measure','No','kg'],['category','No','kirana_staple'],
+                  ['tax_rate','No','5.00'],['expiration_date','No','2026-06-01'],
+                  ['vendor_name','No','Green Mill'],['invoice_number','No','INV-001'],
+                ].map(([col,req,ex])=>`<tr><td style="font-family:ui-monospace,monospace;font-size:12px;">${col}</td><td><span class="badge badge-${req==='Yes'?'err':'neutral'}">${req}</span></td><td style="color:var(--muted);font-size:12px;">${ex}</td></tr>`).join('')}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
+      <div id="ing-doc-result"></div>
     </div>
 
     <!-- Video tab -->
@@ -849,13 +900,8 @@ function ingestion(el) {
           <div id="wiz-result"></div>
         </div>
       </div>
-    </div>
+    </div>`;
 
-    <div class="info-box info-info" style="margin-top:14px;font-size:12px;">
-      <strong>Sandbox mode:</strong> VLM OCR is simulated — returns realistic synthetic invoice data. Document parsing is stubbed. Context Wizard classification is saved locally for Phase 3 cross-linking.
-    </div>
-
-    <div id="ing-result"></div>`;
   lucide.createIcons();
   setupDZ('dz-img', onImgSel);
   setupDZ('dz-doc', onDocSel);
@@ -868,7 +914,6 @@ function ingTab(t) {
     if (tab) tab.classList.toggle('active', id === t);
     if (panel) panel.style.display = id === t ? '' : 'none';
   });
-  document.getElementById('ing-result').innerHTML = '';
 }
 
 function doWizardSave() {
@@ -925,7 +970,7 @@ async function doIngImg() {
   try {
     const fd = new FormData(); fd.append('file', _imgFile);
     const data = await POSTF('/ingest/image', fd);
-    renderIngResult(data); toast('Invoice extracted');
+    renderIngResult(data, 'ing-img-result'); toast('Invoice extracted');
   } catch (e) { toast(e.message, 'err'); } finally { setLoad(btn, false); }
 }
 
@@ -935,13 +980,16 @@ async function doIngDoc() {
   try {
     const fd = new FormData(); fd.append('file', _docFile);
     const data = await POSTF('/ingest/document', fd);
-    renderIngResult(data); toast('Document parsed');
+    renderIngResult(data, 'ing-doc-result'); toast('Document parsed');
   } catch (e) { toast(e.message, 'err'); } finally { setLoad(btn, false); }
 }
 
-function renderIngResult(data) {
+function renderIngResult(data, targetId) {
+  const targetEl = document.getElementById(targetId || 'ing-img-result');
+  if (!targetEl) return;
   const inv = data.invoice || data;
-  document.getElementById('ing-result').innerHTML = `
+  const safe = v => (v !== undefined && v !== null) ? v : '—';
+  targetEl.innerHTML = `
     <div class="card" style="margin-top:20px;">
       <div class="card-hd">
         <div><div class="card-title">Extracted Invoice</div><div class="card-sub">Structured data from the AI pipeline</div></div>
@@ -949,25 +997,29 @@ function renderIngResult(data) {
       </div>
       <div class="card-bd">
         <div class="grid-3" style="margin-bottom:18px;">
-          <div><div class="stat-lbl">Vendor</div><div style="font-size:15px;font-weight:700;margin-top:4px;">${inv.vendor_name || '—'}</div></div>
-          <div><div class="stat-lbl">Invoice #</div><div style="font-size:15px;font-weight:700;margin-top:4px;">${inv.invoice_number || '—'}</div></div>
-          <div><div class="stat-lbl">Total Amount</div><div style="font-size:15px;font-weight:700;margin-top:4px;color:var(--ok);">₹${inv.total_amount || '—'}</div></div>
+          <div><div class="stat-lbl">Vendor</div><div style="font-size:15px;font-weight:700;margin-top:4px;">${safe(inv.vendor_name)}</div></div>
+          <div><div class="stat-lbl">Invoice #</div><div style="font-size:15px;font-weight:700;margin-top:4px;">${safe(inv.invoice_number)}</div></div>
+          <div><div class="stat-lbl">Total</div><div style="font-size:15px;font-weight:700;margin-top:4px;color:var(--ok);">₹${safe(inv.total_amount)}</div></div>
         </div>
+        ${inv.invoice_date ? `<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Date: ${inv.invoice_date}</div>` : ''}
         <div class="tbl-wrap">
           <table>
             <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Tax</th><th>Category</th><th>Expiry</th></tr></thead>
             <tbody>
               ${(inv.items || []).map(it => `
                 <tr>
-                  <td style="font-weight:600;">${it.item_name}</td>
-                  <td>${it.quantity} ${it.unit_of_measure || ''}</td>
-                  <td>₹${it.unit_price}</td>
-                  <td>${it.tax_rate || 0}%</td>
+                  <td style="font-weight:600;">${safe(it.item_name)}</td>
+                  <td>${safe(it.quantity)} ${it.unit_of_measure || ''}</td>
+                  <td>₹${safe(it.unit_price)}</td>
+                  <td>${it.tax_rate ?? 0}%</td>
                   <td><span class="badge badge-neutral">${it.category || '—'}</span></td>
                   <td>${it.expiration_date || '—'}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
+        </div>
+        <div class="info-box info-info" style="margin-top:14px;font-size:12px;">
+          <strong>Sandbox:</strong> Data extracted and saved to DB. Go to <strong>Stock</strong> to see inventory updated.
         </div>
       </div>
     </div>`;
@@ -2970,6 +3022,488 @@ function roadmap(el) {
 function updateUserPanel() {
   document.getElementById('user-role').textContent = S.role;
   document.getElementById('user-avatar').textContent = S.role[0].toUpperCase();
+}
+
+/* ════════════════════════════════════
+   RECIPE LIBRARY  §12 OptimisedPPv1
+════════════════════════════════════ */
+let _recipeDetail = null;
+
+async function recipes(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Recipe Library</div>
+      <div class="page-desc">All standardised bakery recipes with ingredient breakdown, cost analysis, and downloadable recipe cards.</div>
+    </div>
+    <div class="stats-grid" style="margin-bottom:18px;" id="rl-kpis">
+      <div class="stat-card"><div><div class="stat-lbl">Total Recipes</div><div class="stat-val" id="rl-total" style="font-size:20px;margin-top:4px;">—</div></div><div class="ico ico-amber"><i data-lucide="chef-hat"></i></div></div>
+      <div class="stat-card"><div><div class="stat-lbl">Avg Ingredient Cost</div><div class="stat-val" id="rl-avg-cost" style="font-size:20px;margin-top:4px;">—</div></div><div class="ico ico-blue"><i data-lucide="indian-rupee"></i></div></div>
+      <div class="stat-card"><div><div class="stat-lbl">Best Margin Recipe</div><div class="stat-val" id="rl-best-margin" style="font-size:15px;margin-top:4px;">—</div></div><div class="ico ico-green"><i data-lucide="trending-up"></i></div></div>
+      <div class="stat-card"><div><div class="stat-lbl">Total Ingredients</div><div class="stat-val" id="rl-ing-count" style="font-size:20px;margin-top:4px;">—</div></div><div class="ico ico-purple"><i data-lucide="layers"></i></div></div>
+    </div>
+
+    <!-- Search + filter row -->
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+      <input class="form-input" id="rl-search" placeholder="Search recipes..." style="max-width:260px;" oninput="_filterRecipes()">
+      <select class="form-input" id="rl-filter-tag" style="max-width:200px;" onchange="_filterRecipes()">
+        <option value="">All categories</option>
+        <option value="Bread">Bread</option>
+        <option value="Pastry">Pastry</option>
+        <option value="Cake">Cake</option>
+        <option value="Cookie">Cookie</option>
+        <option value="Brownie">Brownie</option>
+        <option value="Cracker">Cracker</option>
+        <option value="Indian">Indian</option>
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="recipes(document.getElementById('content'))">
+        <i data-lucide="refresh-cw" style="width:13px;height:13px;"></i> Refresh
+      </button>
+    </div>
+
+    <!-- Recipe grid -->
+    <div id="rl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px;">
+      <div class="empty-state" style="grid-column:1/-1;"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Loading recipes…</p></div>
+    </div>
+
+    <!-- Recipe detail drawer -->
+    <div id="rl-drawer" style="display:none;position:fixed;top:0;right:0;width:min(560px,100vw);height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:200;overflow-y:auto;box-shadow:-8px 0 32px rgba(0,0,0,.12);">
+      <div id="rl-drawer-content"></div>
+    </div>
+    <div id="rl-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199;" onclick="closeRecipeDrawer()"></div>`;
+  lucide.createIcons();
+
+  try {
+    const data = await GET('/recipes');
+    window._allRecipes = data.recipes || [];
+    _renderRecipeKPIs(window._allRecipes);
+    _renderRecipeGrid(window._allRecipes);
+  } catch(e) {
+    document.getElementById('rl-grid').innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i data-lucide="alert-circle"></i><p>Failed to load recipes: ${e.message}</p></div>`;
+    lucide.createIcons();
+  }
+}
+
+function _renderRecipeKPIs(list) {
+  const total = list.length;
+  const avgCost = total ? (list.reduce((a, r) => a + r.total_cost, 0) / total).toFixed(0) : 0;
+  const totalIng = list.reduce((a, r) => a + r.ingredient_count, 0);
+  // Best margin = highest (assuming sell price ≈ 1.8× cost as proxy)
+  const bestMargin = list.reduce((best, r) => {
+    const margin = ((r.total_cost * 1.8 - r.total_cost) / (r.total_cost * 1.8) * 100);
+    return margin > best.m ? { name: r.name, m: margin } : best;
+  }, { name: '—', m: 0 });
+
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  set('rl-total', total);
+  set('rl-avg-cost', 'Rs.' + avgCost);
+  set('rl-best-margin', bestMargin.name.split(' ').slice(0,3).join(' '));
+  set('rl-ing-count', totalIng);
+}
+
+function _filterRecipes() {
+  const q = (document.getElementById('rl-search')?.value || '').toLowerCase();
+  const tag = (document.getElementById('rl-filter-tag')?.value || '').toLowerCase();
+  const list = (window._allRecipes || []).filter(r => {
+    const matchQ = !q || r.name.toLowerCase().includes(q);
+    const matchTag = !tag || r.name.toLowerCase().includes(tag) ||
+      r.ingredients.some(i => i.ingredient_name.toLowerCase().includes(tag));
+    return matchQ && matchTag;
+  });
+  _renderRecipeGrid(list);
+}
+
+const _RECIPE_COLOURS = ['#78350F','#1E3A5F','#14532D','#4C1D95','#7F1D1D','#1C3A4A','#713F12'];
+
+function _renderRecipeGrid(list) {
+  const grid = document.getElementById('rl-grid');
+  if (!grid) return;
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i data-lucide="search-x"></i><p>No recipes match your filter.</p></div>`;
+    lucide.createIcons(); return;
+  }
+  grid.innerHTML = list.map((r, i) => {
+    const colour = _RECIPE_COLOURS[i % _RECIPE_COLOURS.length];
+    const perUnit = (r.total_cost / r.yield_amount).toFixed(1);
+    const topIng = r.ingredients.slice(0,3).map(x => x.ingredient_name.split(' ')[0]).join(', ');
+    return `
+    <div class="card" style="cursor:pointer;transition:box-shadow .15s,transform .15s;" onmouseenter="this.style.boxShadow='0 8px 24px rgba(0,0,0,.12)';this.style.transform='translateY(-2px)'" onmouseleave="this.style.boxShadow='';this.style.transform=''" onclick="openRecipeDrawer(${r.id})">
+      <!-- Recipe card header with colour accent -->
+      <div style="height:6px;background:${colour};border-radius:8px 8px 0 0;margin:-16px -16px 16px -16px;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:var(--txt);line-height:1.3;margin-bottom:4px;">${r.name}</div>
+          <div style="font-size:11.5px;color:var(--muted);">${r.ingredient_count} ingredients • Yield: ${r.yield_amount} unit${r.yield_amount > 1 ? 's' : ''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:12px;">
+          <div style="font-size:17px;font-weight:700;color:${colour};">Rs.${r.total_cost}</div>
+          <div style="font-size:10.5px;color:var(--muted);">Rs.${perUnit}/unit</div>
+        </div>
+      </div>
+      <!-- Top ingredients -->
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:5px;">
+        <i data-lucide="layers" style="width:11px;height:11px;"></i>
+        ${topIng}${r.ingredient_count > 3 ? ' +' + (r.ingredient_count - 3) + ' more' : ''}
+      </div>
+      <!-- Cost bar (ingredient vs overhead) -->
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+          <span style="font-size:10.5px;color:var(--muted);">Ingredient cost</span>
+          <span style="font-size:10.5px;color:var(--muted);">Overhead Rs.${r.overhead_cost}</span>
+        </div>
+        <div class="prog-bg">
+          <div class="prog-fill prog-amber" style="width:${Math.min(Math.round((r.total_cost - r.overhead_cost) / r.total_cost * 100), 100)}%"></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          <span class="badge badge-neutral" style="font-size:10px;">Recipe Card</span>
+          <span class="badge badge-ok" style="font-size:10px;">PDF</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="font-size:11px;gap:4px;" onclick="event.stopPropagation();openRecipeDrawer(${r.id})">
+          <i data-lucide="eye" style="width:12px;height:12px;"></i> View
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+async function openRecipeDrawer(recipeId) {
+  const drawer = document.getElementById('rl-drawer');
+  const overlay = document.getElementById('rl-overlay');
+  const content = document.getElementById('rl-drawer-content');
+  if (!drawer) return;
+  drawer.style.display = '';
+  if (overlay) overlay.style.display = '';
+  content.innerHTML = `<div style="padding:24px;"><div class="empty-state"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Loading…</p></div></div>`;
+  lucide.createIcons();
+
+  try {
+    const r = await GET('/recipes/' + recipeId);
+    // Try to get thumbnail from media
+    let thumbHtml = '';
+    try {
+      const media = await GET('/media/assets?asset_type=pdf&category=recipe');
+      const asset = (media.assets || []).find(a => a.recipe_id === recipeId && a.has_thumbnail);
+      if (asset) {
+        const full = await GET('/media/assets/' + asset.id);
+        if (full.thumbnail_data) {
+          thumbHtml = `<img src="${full.thumbnail_data}" alt="${r.name}" style="width:100%;border-radius:0;display:block;max-height:420px;object-fit:cover;">`;
+        }
+      }
+    } catch(_) {}
+
+    const totalIngCost = r.ingredients.reduce((a, i) => a + i.cost, 0);
+    const colour = '#78350F';
+    content.innerHTML = `
+      <div style="position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:16px;font-weight:700;">${r.name}</div>
+          <div style="font-size:11.5px;color:var(--muted);">Recipe ID #${r.id} • ${r.ingredient_count} ingredients</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="closeRecipeDrawer()" style="padding:6px 10px;"><i data-lucide="x"></i></button>
+      </div>
+      ${thumbHtml}
+      <div style="padding:20px;">
+        <!-- Cost KPIs -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px;">
+          ${[
+            ['Total Cost', 'Rs.' + r.total_cost, colour],
+            ['Yield', r.yield_amount + ' units', '#1E3A5F'],
+            ['Per Unit', 'Rs.' + (r.total_cost / r.yield_amount).toFixed(1), '#14532D'],
+          ].map(([l, v, c]) => `<div style="background:var(--bg);border-radius:8px;padding:10px 14px;border:1px solid var(--border);">
+            <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px;">${l}</div>
+            <div style="font-size:17px;font-weight:700;color:${c};">${v}</div>
+          </div>`).join('')}
+        </div>
+
+        <!-- Ingredients table -->
+        <div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+          <i data-lucide="layers" style="width:14px;height:14px;color:var(--muted);"></i> Ingredients
+        </div>
+        <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:20px;">
+          <div style="display:grid;grid-template-columns:1fr 70px 80px 60px;gap:0;padding:8px 14px;background:var(--bg);border-bottom:1px solid var(--border);">
+            ${['Ingredient','Qty','Cost (Rs.)','Yield%'].map(h => `<div style="font-size:11px;font-weight:600;color:var(--muted);">${h}</div>`).join('')}
+          </div>
+          ${r.ingredients.map((ing, i) => `
+          <div style="display:grid;grid-template-columns:1fr 70px 80px 60px;gap:0;padding:9px 14px;${i % 2 ? 'background:var(--bg);' : ''}border-bottom:1px solid var(--border);">
+            <div style="font-size:12.5px;font-weight:500;color:var(--txt);">${ing.ingredient_name}</div>
+            <div style="font-size:12px;color:var(--muted);">${ing.required_quantity}</div>
+            <div style="font-size:12px;font-weight:600;color:#78350F;">${ing.cost.toFixed(2)}</div>
+            <div style="font-size:12px;color:var(--muted);">${(ing.yield_amount * 100).toFixed(0)}%</div>
+          </div>`).join('')}
+          <div style="display:grid;grid-template-columns:1fr 70px 80px 60px;gap:0;padding:9px 14px;background:var(--surface-2,#fef3c7);">
+            <div style="font-size:12px;font-weight:700;color:var(--txt);">Ingredient Subtotal</div>
+            <div></div>
+            <div style="font-size:13px;font-weight:700;color:#78350F;">Rs.${totalIngCost.toFixed(2)}</div>
+            <div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 70px 80px 60px;gap:0;padding:9px 14px;">
+            <div style="font-size:12px;font-weight:700;color:var(--txt);">Overhead</div>
+            <div></div>
+            <div style="font-size:13px;font-weight:700;color:var(--muted);">Rs.${r.overhead_cost}</div>
+            <div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 70px 80px 60px;gap:0;padding:10px 14px;background:#78350F;">
+            <div style="font-size:13px;font-weight:700;color:#fff;">Total Cost</div>
+            <div></div>
+            <div style="font-size:15px;font-weight:700;color:#FCD34D;">Rs.${r.total_cost}</div>
+            <div></div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" onclick="loadRecipeIntoCalculator(${r.id})">
+            <i data-lucide="calculator" style="width:13px;height:13px;"></i> Load in Calculator
+          </button>
+          <button class="btn btn-outline btn-sm" onclick="nav('media')">
+            <i data-lucide="film" style="width:13px;height:13px;"></i> View Media Assets
+          </button>
+        </div>
+      </div>`;
+    lucide.createIcons();
+  } catch(e) {
+    content.innerHTML = `<div style="padding:24px;"><div class="info-box info-err">Failed to load recipe: ${e.message}</div></div>`;
+  }
+}
+
+function closeRecipeDrawer() {
+  const d = document.getElementById('rl-drawer');
+  const o = document.getElementById('rl-overlay');
+  if (d) d.style.display = 'none';
+  if (o) o.style.display = 'none';
+}
+
+async function loadRecipeIntoCalculator(recipeId) {
+  closeRecipeDrawer();
+  try {
+    const r = await GET('/recipes/' + recipeId);
+    window._rows = r.ingredients.map(i => ({
+      name: i.ingredient_name,
+      cost: parseFloat(i.cost.toFixed(2)),
+      yp: i.yield_amount,
+    }));
+    nav('cost');
+    toast('Recipe loaded into Cost Calculator');
+  } catch(e) {
+    toast('Could not load recipe: ' + e.message, 'err');
+  }
+}
+
+/* ════════════════════════════════════
+   MEDIA LIBRARY  §13 OptimisedPPv1
+════════════════════════════════════ */
+async function media(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Media Library</div>
+      <div class="page-desc">Recipe PDF cards, instructional video clips, quality reference images, and vendor training materials.</div>
+    </div>
+    <div class="stats-grid" style="margin-bottom:18px;">
+      <div class="stat-card"><div><div class="stat-lbl">Total Assets</div><div class="stat-val" id="ml-total" style="font-size:20px;margin-top:4px;">—</div></div><div class="ico ico-amber"><i data-lucide="film"></i></div></div>
+      <div class="stat-card"><div><div class="stat-lbl">Recipe PDFs</div><div class="stat-val" id="ml-pdfs" style="font-size:20px;margin-top:4px;">—</div></div><div class="ico ico-blue"><i data-lucide="file-text"></i></div></div>
+      <div class="stat-card"><div><div class="stat-lbl">Video Clips</div><div class="stat-val" id="ml-videos" style="font-size:20px;margin-top:4px;">—</div></div><div class="ico ico-green"><i data-lucide="video"></i></div></div>
+      <div class="stat-card"><div><div class="stat-lbl">Total Duration</div><div class="stat-val" id="ml-duration" style="font-size:20px;margin-top:4px;">—</div></div><div class="ico ico-purple"><i data-lucide="clock"></i></div></div>
+    </div>
+
+    <!-- Filter tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+      ${[['all','All','layers'],['pdf','Recipe PDFs','file-text'],['video','Videos','video'],['recipe','Recipe','chef-hat'],['training','Training','graduation-cap'],['quality','Quality','badge-check'],['vendor','Vendor','truck']].map(([id, label, icon]) => `
+      <button id="ml-tab-${id}" onclick="mediaTab('${id}')" class="btn ${id==='all'?'btn-primary':'btn-outline'}" style="gap:5px;font-size:12px;">
+        <i data-lucide="${icon}" style="width:13px;height:13px;"></i>${label}
+      </button>`).join('')}
+    </div>
+
+    <!-- Asset grid -->
+    <div id="ml-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+      <div class="empty-state" style="grid-column:1/-1;"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Loading assets…</p></div>
+    </div>
+
+    <!-- Asset viewer modal -->
+    <div id="ml-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:none;align-items:center;justify-content:center;padding:20px;">
+      <div id="ml-modal-box" style="background:var(--surface);border-radius:12px;max-width:680px;width:100%;max-height:90vh;overflow-y:auto;position:relative;">
+        <div id="ml-modal-content"></div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+
+  try {
+    const data = await GET('/media/assets');
+    window._allMedia = data.assets || [];
+    _renderMediaKPIs(window._allMedia);
+    _renderMediaGrid(window._allMedia);
+  } catch(e) {
+    document.getElementById('ml-grid').innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i data-lucide="alert-circle"></i><p>Failed to load media: ${e.message}</p></div>`;
+    lucide.createIcons();
+  }
+}
+
+function _renderMediaKPIs(list) {
+  const pdfs = list.filter(a => a.asset_type === 'pdf').length;
+  const videos = list.filter(a => a.asset_type === 'video');
+  const totalSec = videos.reduce((a, v) => a + (v.duration_seconds || 0), 0);
+  const m = Math.floor(totalSec / 60);
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  set('ml-total', list.length);
+  set('ml-pdfs', pdfs);
+  set('ml-videos', videos.length);
+  set('ml-duration', m + ' min');
+}
+
+function mediaTab(id) {
+  ['all','pdf','video','recipe','training','quality','vendor'].forEach(t => {
+    const btn = document.getElementById('ml-tab-' + t);
+    if (btn) btn.className = t === id ? 'btn btn-primary' : 'btn btn-outline';
+  });
+  const all = window._allMedia || [];
+  let filtered = all;
+  if (id === 'pdf') filtered = all.filter(a => a.asset_type === 'pdf');
+  else if (id === 'video') filtered = all.filter(a => a.asset_type === 'video');
+  else if (id !== 'all') filtered = all.filter(a => a.category === id);
+  _renderMediaGrid(filtered);
+}
+
+const _CAT_COLOURS = { recipe:'#78350F', training:'#1E3A5F', quality:'#14532D', vendor:'#4C1D95' };
+const _TYPE_ICONS  = { pdf:'file-text', video:'video', image:'image' };
+
+function _renderMediaGrid(list) {
+  const grid = document.getElementById('ml-grid');
+  if (!grid) return;
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i data-lucide="inbox"></i><p>No assets match.</p></div>`;
+    lucide.createIcons(); return;
+  }
+  grid.innerHTML = list.map(a => {
+    const colour = _CAT_COLOURS[a.category] || '#78350F';
+    const icon = _TYPE_ICONS[a.asset_type] || 'file';
+    const dur = a.duration_seconds ? _fmtDur(a.duration_seconds) : null;
+    const sizeLabel = a.file_size_kb ? (a.file_size_kb > 1024 ? (a.file_size_kb / 1024).toFixed(1) + ' MB' : a.file_size_kb + ' KB') : null;
+    const tagChips = (a.tags || []).slice(0, 3).map(t =>
+      `<span style="font-size:10px;padding:1px 7px;background:var(--bg);border:1px solid var(--border);border-radius:99px;color:var(--muted);">${t}</span>`
+    ).join('');
+
+    const thumbHtml = a.has_thumbnail && a.thumbnail_data
+      ? `<div style="height:160px;overflow:hidden;margin:-14px -14px 14px -14px;border-radius:8px 8px 0 0;position:relative;">
+           <img src="${a.thumbnail_data}" alt="${a.title}" style="width:100%;height:100%;object-fit:cover;">
+           ${a.asset_type === 'video' ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+             <div style="width:52px;height:52px;background:rgba(255,255,255,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.3);">
+               <i data-lucide="play" style="width:22px;height:22px;color:${colour};margin-left:3px;"></i>
+             </div>
+           </div>` : ''}
+         </div>`
+      : `<div style="height:100px;overflow:hidden;margin:-14px -14px 14px -14px;border-radius:8px 8px 0 0;background:${colour};display:flex;align-items:center;justify-content:center;">
+           <i data-lucide="${icon}" style="width:32px;height:32px;color:rgba(255,255,255,.5);"></i>
+         </div>`;
+
+    return `
+    <div class="card" style="cursor:pointer;transition:box-shadow .15s;" onmouseenter="this.style.boxShadow='0 6px 20px rgba(0,0,0,.11)'" onmouseleave="this.style.boxShadow=''" onclick="openMediaViewer(${a.id})">
+      ${thumbHtml}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-size:13.5px;font-weight:600;color:var(--txt);line-height:1.35;flex:1;margin-right:8px;">${a.title}</div>
+        <span class="badge badge-neutral" style="font-size:10px;flex-shrink:0;background:${colour}22;color:${colour};">${a.asset_type.toUpperCase()}</span>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.4;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+        ${a.description || ''}
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${tagChips}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);">
+        <div style="display:flex;gap:10px;">
+          ${dur ? `<span><i data-lucide="clock" style="width:11px;height:11px;vertical-align:middle;"></i> ${dur}</span>` : ''}
+          ${sizeLabel ? `<span><i data-lucide="hard-drive" style="width:11px;height:11px;vertical-align:middle;"></i> ${sizeLabel}</span>` : ''}
+        </div>
+        <span style="color:${colour};font-weight:600;text-transform:capitalize;">${a.category}</span>
+      </div>
+    </div>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+async function openMediaViewer(assetId) {
+  const modal = document.getElementById('ml-modal');
+  const content = document.getElementById('ml-modal-content');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  content.innerHTML = `<div style="padding:24px;"><div class="empty-state"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Loading…</p></div></div>`;
+  lucide.createIcons();
+
+  try {
+    const a = await GET('/media/assets/' + assetId);
+    const colour = _CAT_COLOURS[a.category] || '#78350F';
+    const isVideo = a.asset_type === 'video';
+    const dur = a.duration_seconds ? _fmtDur(a.duration_seconds) : null;
+    const sizeLabel = a.file_size_kb ? (a.file_size_kb > 1024 ? (a.file_size_kb / 1024).toFixed(1) + ' MB' : a.file_size_kb + ' KB') : null;
+
+    content.innerHTML = `
+      <div style="position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;z-index:5;border-radius:12px 12px 0 0;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:32px;height:32px;background:${colour}22;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+            <i data-lucide="${_TYPE_ICONS[a.asset_type]||'file'}" style="width:16px;height:16px;color:${colour};"></i>
+          </div>
+          <div>
+            <div style="font-size:14px;font-weight:700;">${a.title}</div>
+            <div style="font-size:11px;color:var(--muted);text-transform:capitalize;">${a.asset_type} • ${a.category}</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="closeMediaModal()"><i data-lucide="x"></i></button>
+      </div>
+
+      ${a.thumbnail_data ? `
+      <div style="position:relative;background:#000;max-height:380px;overflow:hidden;">
+        <img src="${a.thumbnail_data}" alt="${a.title}" style="width:100%;object-fit:contain;max-height:380px;display:block;">
+        ${isVideo ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+          <div style="width:64px;height:64px;background:rgba(255,255,255,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+            <i data-lucide="play" style="width:28px;height:28px;color:${colour};margin-left:4px;"></i>
+          </div>
+        </div>` : ''}
+      </div>` : ''}
+
+      <div style="padding:20px;">
+        <!-- Meta grid -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+          ${dur ? `<span class="badge badge-neutral"><i data-lucide="clock" style="width:11px;height:11px;"></i> ${dur}</span>` : ''}
+          ${sizeLabel ? `<span class="badge badge-neutral"><i data-lucide="hard-drive" style="width:11px;height:11px;"></i> ${sizeLabel}</span>` : ''}
+          ${(a.tags||[]).map(t => `<span class="badge badge-neutral">${t}</span>`).join('')}
+        </div>
+
+        <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px;">${a.description || ''}</div>
+
+        ${isVideo ? `
+        <div class="info-box info-info" style="margin-bottom:16px;">
+          <strong>Sandbox Mode:</strong> Video playback is simulated. In production, this would stream from your media server or cloud CDN. The thumbnail and metadata are fully functional.
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:10px;">Video Details</div>
+          ${[
+            ['Duration', dur || '—'],
+            ['File Size', sizeLabel || '—'],
+            ['Category', a.category],
+            ['Linked Recipe', a.recipe_id ? 'Recipe #' + a.recipe_id : 'General'],
+          ].map(([k,v]) => `<div class="kv" style="padding:7px 0;border-bottom:1px solid var(--border);"><span class="kv-key">${k}</span><span class="kv-val">${v}</span></div>`).join('')}
+        </div>` : `
+        <div class="info-box info-info" style="margin-bottom:16px;">
+          <strong>Recipe Card PDF</strong> — This is the standardised BakeManage recipe card for <strong>${a.title.replace('Recipe Card: ','')}</strong>. Contains ingredient breakdown, method, cost analysis, and yield data.
+        </div>`}
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${a.recipe_id ? `<button class="btn btn-primary btn-sm" onclick="closeMediaModal();openRecipeDrawer(${a.recipe_id});nav('recipes')"><i data-lucide="chef-hat" style="width:13px;height:13px;"></i> View Recipe</button>` : ''}
+          ${!isVideo && a.recipe_id ? `<button class="btn btn-outline btn-sm" onclick="closeMediaModal();loadRecipeIntoCalculator(${a.recipe_id})"><i data-lucide="calculator" style="width:13px;height:13px;"></i> Load in Calculator</button>` : ''}
+        </div>
+      </div>`;
+    lucide.createIcons();
+  } catch(e) {
+    content.innerHTML = `<div style="padding:24px;"><div class="info-box info-err">Failed: ${e.message}</div></div>`;
+  }
+}
+
+function closeMediaModal() {
+  const m = document.getElementById('ml-modal');
+  if (m) m.style.display = 'none';
+}
+
+function _fmtDur(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m + ':' + String(s).padStart(2,'0');
 }
 
 function initApp() {

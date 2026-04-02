@@ -111,12 +111,22 @@ ROLE_FIELD_PERMISSIONS: dict[str, list[str]] = {
     "operations": [
         "invoice",
         "layout",
+        # invoice-level fields
         "vendor_name",
         "invoice_number",
         "invoice_date",
         "items",
         "total_amount",
-        "layout",
+        # invoice item fields (needed to display line items)
+        "item_name",
+        "quantity",
+        "unit_price",
+        "tax_rate",
+        "expiration_date",
+        "category",
+        "unit_of_measure",
+        "vertical",
+        # other allowed domains
         "inventory",
         "telemetry",
         "quality",

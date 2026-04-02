@@ -23,9 +23,12 @@ from .database import Base, engine, get_session
 from .ingestion import parse_excel_invoice, parse_structural_layout, persist_invoice, simulate_vlm_ocr
 from .models import (
     InventoryItem,
+    MediaAsset,
     ProofingTelemetry,
     QualityCheck,
     QualityInspection,
+    Recipe,
+    RecipeIngredient,
     SaleRecord,
     ServiceCredential,
     User,
@@ -751,4 +754,142 @@ async def sales_daily(
         "total_sales": len(records),
         "total_revenue": round(total_revenue, 2),
         "items": items,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Recipe Library  (§12 OptimisedPPv1)
+# ---------------------------------------------------------------------------
+
+@app.get("/recipes", response_model=dict)
+async def list_recipes(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Return all recipes with ingredient breakdown and computed cost."""
+    require_domain(role, "costing")
+    recipes = session.query(Recipe).order_by(Recipe.name.asc()).all()
+    result = []
+    for r in recipes:
+        ingredients = [
+            {
+                "id": ing.id,
+                "ingredient_name": ing.ingredient_name,
+                "required_quantity": ing.required_quantity,
+                "cost": float(ing.cost),
+                "yield_amount": ing.yield_amount,
+            }
+            for ing in r.components
+        ]
+        total_ingredient_cost = sum(i["cost"] for i in ingredients)
+        total_cost = round(total_ingredient_cost + float(r.overhead_cost), 2)
+        result.append({
+            "id": r.id,
+            "name": r.name,
+            "overhead_cost": float(r.overhead_cost),
+            "yield_amount": float(r.yield_amount),
+            "total_cost": total_cost,
+            "ingredient_count": len(ingredients),
+            "ingredients": ingredients,
+        })
+    return {"total": len(result), "recipes": result}
+
+
+@app.get("/recipes/{recipe_id}", response_model=dict)
+async def get_recipe(
+    recipe_id: int,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Get a single recipe with full ingredient breakdown."""
+    require_domain(role, "costing")
+    r = session.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    ingredients = [
+        {
+            "id": ing.id,
+            "ingredient_name": ing.ingredient_name,
+            "required_quantity": ing.required_quantity,
+            "cost": float(ing.cost),
+            "yield_amount": ing.yield_amount,
+        }
+        for ing in r.components
+    ]
+    total_ingredient_cost = sum(i["cost"] for i in ingredients)
+    return {
+        "id": r.id,
+        "name": r.name,
+        "overhead_cost": float(r.overhead_cost),
+        "yield_amount": float(r.yield_amount),
+        "total_cost": round(total_ingredient_cost + float(r.overhead_cost), 2),
+        "ingredients": ingredients,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Media Library  (§13 OptimisedPPv1)
+# ---------------------------------------------------------------------------
+
+@app.get("/media/assets", response_model=dict)
+async def list_media_assets(
+    asset_type: str | None = None,
+    category: str | None = None,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Return media library assets (PDFs, videos, images) with optional type/category filter."""
+    require_domain(role, "ingestion")
+    query = session.query(MediaAsset)
+    if asset_type:
+        query = query.filter(MediaAsset.asset_type == asset_type)
+    if category:
+        query = query.filter(MediaAsset.category == category)
+    assets = query.order_by(MediaAsset.created_at.desc()).all()
+    result = [
+        {
+            "id": a.id,
+            "title": a.title,
+            "asset_type": a.asset_type,
+            "category": a.category,
+            "description": a.description,
+            "duration_seconds": a.duration_seconds,
+            "file_size_kb": a.file_size_kb,
+            "tags": a.tags.split(",") if a.tags else [],
+            "recipe_id": a.recipe_id,
+            "has_thumbnail": bool(a.thumbnail_data),
+            "has_pdf": bool(a.pdf_data),
+            "thumbnail_data": a.thumbnail_data,
+            "pdf_data": a.pdf_data,
+            "created_at": a.created_at.isoformat(),
+        }
+        for a in assets
+    ]
+    return {"total": len(result), "assets": result}
+
+
+@app.get("/media/assets/{asset_id}", response_model=dict)
+async def get_media_asset(
+    asset_id: int,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Get a single media asset including full thumbnail/pdf data."""
+    require_domain(role, "ingestion")
+    a = session.query(MediaAsset).filter(MediaAsset.id == asset_id).first()
+    if not a:
+        raise HTTPException(status_code=404, detail="Media asset not found")
+    return {
+        "id": a.id,
+        "title": a.title,
+        "asset_type": a.asset_type,
+        "category": a.category,
+        "description": a.description,
+        "duration_seconds": a.duration_seconds,
+        "file_size_kb": a.file_size_kb,
+        "tags": a.tags.split(",") if a.tags else [],
+        "recipe_id": a.recipe_id,
+        "thumbnail_data": a.thumbnail_data,
+        "pdf_data": a.pdf_data,
+        "created_at": a.created_at.isoformat(),
     }

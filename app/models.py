@@ -226,3 +226,23 @@ class SaleRecord(Base):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     sold_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MediaAsset(Base):
+    """Library of recipe PDFs, instructional video clips, and reference images."""
+    __tablename__ = "media_assets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    asset_type: Mapped[str] = mapped_column(String(32), nullable=False)  # pdf | video | image
+    category: Mapped[str] = mapped_column(String(64), default="recipe")   # recipe | training | quality | vendor
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)  # for video
+    file_size_kb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tags: Mapped[str | None] = mapped_column(String(255), nullable=True)   # comma-separated
+    recipe_id: Mapped[int | None] = mapped_column(ForeignKey("recipes.id"), nullable=True)
+    thumbnail_data: Mapped[str | None] = mapped_column(String, nullable=True)   # base64 PNG data URI
+    pdf_data: Mapped[str | None] = mapped_column(String, nullable=True)          # base64 PDF data URI
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    recipe: Mapped["Recipe | None"] = relationship("Recipe")
