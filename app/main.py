@@ -72,6 +72,7 @@ from .security import (
     require_role,
     verify_pin,
 )
+from .seeding import seed_users
 from .tasks import (
     calculate_inventory_deductions,
     cache_inventory_state_task,
@@ -110,14 +111,13 @@ def _ensure_requirements_locked() -> None:
 
 
 def _seed_admin_user(session: Session) -> None:
-    if session.query(User).filter(User.username == settings.default_admin_username).first():
-        return
-    if not settings.default_admin_pin:
-        raise RuntimeError("DEFAULT_ADMIN_PIN must be set for initial admin user")
-    hashed, salt = hash_pin(settings.default_admin_pin)
-    admin = User(username=settings.default_admin_username, role="admin", hashed_pin=hashed, salt=salt)
-    session.add(admin)
-    session.commit()
+    seed_users(
+        session,
+        default_admin_username=settings.default_admin_username,
+        default_admin_pin=settings.default_admin_pin,
+        environment=settings.environment,
+        seed_local_users=settings.seed_local_users,
+    )
 
 
 class CredentialRequest(BaseModel):
