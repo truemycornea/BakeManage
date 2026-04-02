@@ -74,6 +74,7 @@ class UserOut(BaseModel):
 class ProofingTelemetryRequest(BaseModel):
     temperature_c: float
     humidity_percent: float
+    co2_ppm: Optional[float] = None
     timestamp: Optional[str] = None
 
 

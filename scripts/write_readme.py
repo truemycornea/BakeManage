@@ -1,3 +1,9 @@
+"""One-time script to write the comprehensive README.md"""
+import pathlib
+
+README = pathlib.Path(__file__).parent.parent / "README.md"
+
+content = """\
 # BakeManage ERP - v1.5 Sandbox
 
 Enterprise-grade SaaS ERP for Indian bakeries - multimodal AI ingestion, recipe costing,
@@ -171,9 +177,9 @@ The SPA login accepts only the PIN. API calls use
 ### Get a Token
 
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","pin":"sandbox1234"}' \
+TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \\
+  -H "Content-Type: application/json" \\
+  -d '{"username":"admin","pin":"sandbox1234"}' \\
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 ```
 
@@ -210,7 +216,7 @@ curl http://localhost:8000/health/extended
 | GET | /dashboard/summary | Role+PIN | Stock, quality pass rate, proofing readings, expiry count |
 
 ```bash
-curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \\
   http://localhost:8000/dashboard/summary
 ```
 
@@ -225,13 +231,13 @@ curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
 
 ```bash
 # Upload image receipt
-curl -X POST http://localhost:8000/ingest/image \
-  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+curl -X POST http://localhost:8000/ingest/image \\
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \\
   -F "file=@receipt.jpg" -F "vendor_hint=Amul Dairy"
 
 # Upload Excel PO
-curl -X POST http://localhost:8000/ingest/document \
-  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+curl -X POST http://localhost:8000/ingest/document \\
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \\
   -F "file=@purchase_order.xlsx"
 ```
 
@@ -249,9 +255,9 @@ curl -X POST http://localhost:8000/ingest/document \
 
 ```bash
 # Add stock
-curl -X POST http://localhost:8000/stock/add \
-  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  -H "Content-Type: application/json" \
+curl -X POST http://localhost:8000/stock/add \\
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \\
+  -H "Content-Type: application/json" \\
   -d '{
     "name": "Maida Flour",
     "quantity": 50,
@@ -271,9 +277,9 @@ curl -X POST http://localhost:8000/stock/add \
 | POST | /cost/compute | Role+PIN | Roll up components + overhead; returns margin |
 
 ```bash
-curl -X POST http://localhost:8000/cost/compute \
-  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  -H "Content-Type: application/json" \
+curl -X POST http://localhost:8000/cost/compute \\
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \\
+  -H "Content-Type: application/json" \\
   -d '{
     "components": [
       {"name": "Maida", "quantity": 1.0, "unit_cost": 42.0, "yield_pct": 0.95},
@@ -295,9 +301,9 @@ curl -X POST http://localhost:8000/cost/compute \
 | POST | /proofing/telemetry | Role+PIN | Extended telemetry (fan speed, status fields) |
 
 ```bash
-curl -X POST http://localhost:8000/telemetry/proofing \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
+curl -X POST http://localhost:8000/telemetry/proofing \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
   -d '{"temperature_c": 27.5, "humidity_percent": 78.0, "co2_ppm": 450.0}'
 # Returns: {"status":"ok","anomaly_score":0.0}
 ```
@@ -344,11 +350,11 @@ Anomaly scoring formula: `max(0, (temp-38) * 0.01) + max(0, (humidity-85) * 0.00
 
 ```bash
 # Video training assets
-curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \\
   "http://localhost:8000/media/assets?asset_type=video&category=training"
 
 # Recipe PDF cards
-curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \\
   "http://localhost:8000/media/assets?asset_type=pdf&category=recipe"
 ```
 
@@ -515,3 +521,7 @@ Full strategic blueprint: [bakemanagerootv2.5.md](bakemanagerootv2.5.md)
 ---
 
 BakeManage (c) 2026 - All IP assigned to BakeManage
+"""
+
+README.write_text(content, encoding="utf-8")
+print(f"README.md written: {len(content.splitlines())} lines, {len(content)} chars")
