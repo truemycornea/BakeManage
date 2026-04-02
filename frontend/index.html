@@ -407,6 +407,10 @@ const NAV = [
   // CRM  (Phase 3 v3.3)
   { id:'whatsapp_crm', label:'WhatsApp Notify',    icon:'message-circle',   sec:'CRM',         ownerOnly:false },
   { id:'loyalty',      label:'Loyalty Program',    icon:'award',            sec:'CRM',         ownerOnly:false },
+  // COMPLIANCE & OPERATIONS  (Complete Phase 2+3)
+  { id:'gst_calc',     label:'GST Calculator',     icon:'receipt',          sec:'COMPLIANCE',  ownerOnly:false },
+  { id:'waste_track',  label:'Waste Tracker',      icon:'trash-2',          sec:'COMPLIANCE',  ownerOnly:false },
+  { id:'recipe_scale', label:'Batch Scaling',      icon:'sliders',          sec:'INTELLIGENCE',ownerOnly:false },
   // SETTINGS — owner/admin only
   { id:'sys_monitor',  label:'System Monitoring',  icon:'activity',         sec:'SETTINGS',    ownerOnly:true  },
   { id:'auth_access',  label:'Auth & Access',      icon:'shield-check',     sec:'SETTINGS',    ownerOnly:true  },
@@ -570,6 +574,8 @@ function renderView(v) {
     menu_engineering, vendor_opt, demand_forecast,
     // Phase 3 — CRM
     whatsapp_crm, loyalty,
+    // Compliance & Operations
+    gst_calc, waste_track, recipe_scale,
     // legacy aliases (backward-compat deep links)
     inventory, credentials, health,
   };
@@ -3498,6 +3504,292 @@ async function _loadLoyalty() {
       </div></div>`;
   } catch(e) { el.innerHTML = `<div class="empty-state"><i data-lucide="alert-circle"></i><p>${e.message}</p></div>`; }
   lucide.createIcons();
+}
+
+/* ════════════════════════════════════
+   COMPLIANCE — GST CALCULATOR  (Feature 13)
+   ════════════════════════════════════ */
+async function gst_calc(el) {
+  el.innerHTML = `
+    <div class="page-title">GST Calculator</div>
+    <div class="page-desc">Multi-slab bakery GST computation — CGST + SGST split for intra-state transactions.</div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Compute GST</div></div>
+        <div class="card-bd">
+          <div style="margin-bottom:12px;">
+            <label class="form-label">Item Name</label>
+            <input id="gst-item" class="form-input" placeholder="e.g. Butter Croissant" value="Butter Croissant">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="form-label">Category (GST Slab)</label>
+            <select id="gst-cat" class="form-input">
+              <option value="pastries_cakes">Pastries / Cakes — 18%</option>
+              <option value="branded_biscuits">Branded Biscuits / Cookies — 5%</option>
+              <option value="branded_namkeen">Branded Packaged Namkeen — 12%</option>
+              <option value="unbranded_bread">Unbranded Fresh Bread — 0%</option>
+              <option value="unpackaged_namkeen">Loose Unpackaged Namkeen — 0%</option>
+              <option value="chocolate">Chocolate-Coated Goods — 18%</option>
+              <option value="custom">Custom Rate</option>
+            </select>
+          </div>
+          <div id="gst-custom-row" style="margin-bottom:12px;display:none;">
+            <label class="form-label">Custom GST Rate (%)</label>
+            <input id="gst-custom-rate" class="form-input" type="number" min="0" max="28" step="0.5" placeholder="e.g. 12">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="form-label">Base Price per Unit (₹, pre-tax)</label>
+            <input id="gst-price" class="form-input" type="number" min="0.01" step="0.01" placeholder="85.00" value="85.00">
+          </div>
+          <div style="margin-bottom:16px;">
+            <label class="form-label">Quantity</label>
+            <input id="gst-qty" class="form-input" type="number" min="1" step="1" value="1">
+          </div>
+          <button class="btn btn-primary" onclick="computeGST()">Calculate GST</button>
+        </div>
+      </div>
+      <div id="gst-result" class="card">
+        <div class="card-hd"><div class="card-title">GST Breakdown</div></div>
+        <div class="card-bd" style="color:var(--muted);text-align:center;padding:40px 0;">
+          Enter item details and click Calculate GST.
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <div class="card-hd"><div class="card-title">Bakery GST Slab Reference</div></div>
+      <div class="card-bd" id="gst-slabs-table"><div style="color:var(--muted);text-align:center;">Loading…</div></div>
+    </div>`;
+  document.getElementById('gst-cat').addEventListener('change', function() {
+    document.getElementById('gst-custom-row').style.display = this.value === 'custom' ? 'block' : 'none';
+  });
+  try {
+    const slabs = await GET('/gst/slabs');
+    document.getElementById('gst-slabs-table').innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr>
+          <th style="padding:8px 12px;text-align:left;color:var(--muted);">Category</th>
+          <th style="padding:8px 12px;text-align:center;color:var(--muted);">GST Rate</th>
+          <th style="padding:8px 12px;text-align:left;color:var(--muted);">Description</th>
+        </tr></thead>
+        <tbody>${slabs.slabs.map(s => `<tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 12px;font-family:monospace;font-size:12px;">${s.category}</td>
+          <td style="padding:8px 12px;text-align:center;font-weight:700;color:${s.rate_pct===0?'var(--success)':s.rate_pct>=18?'var(--danger)':'var(--warning)'};">${s.rate_pct === 0 ? 'NIL' : s.rate_pct + '%'}</td>
+          <td style="padding:8px 12px;font-size:13px;color:var(--muted);">${s.description}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  } catch(e) { document.getElementById('gst-slabs-table').textContent = 'Could not load slabs.'; }
+  lucide.createIcons();
+}
+
+async function computeGST() {
+  const item = document.getElementById('gst-item').value.trim() || 'Item';
+  const cat  = document.getElementById('gst-cat').value;
+  const price = parseFloat(document.getElementById('gst-price').value) || 0;
+  const qty   = parseFloat(document.getElementById('gst-qty').value) || 1;
+  const customRate = cat === 'custom' ? parseFloat(document.getElementById('gst-custom-rate').value) : null;
+  const payload = { item_name: item, category: cat, base_price: price, quantity: qty };
+  if (cat === 'custom' && customRate !== null) payload.custom_rate_pct = customRate;
+  try {
+    const d = await POST('/gst/compute', payload);
+    document.getElementById('gst-result').innerHTML = `
+      <div class="card-hd"><div class="card-title">GST Breakdown — ${d.item_name}</div></div>
+      <div class="card-bd">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 0;color:var(--muted);">GST Rate</td>
+            <td style="padding:8px 0;text-align:right;font-weight:700;">${d.gst_rate_pct}%</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 0;color:var(--muted);">Base Amount (× ${d.quantity})</td>
+            <td style="padding:8px 0;text-align:right;">₹${d.total_base_amount.toFixed(2)}</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 0;color:var(--muted);">CGST (${d.gst_rate_pct/2}%)</td>
+            <td style="padding:8px 0;text-align:right;">₹${d.cgst.toFixed(2)}</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 0;color:var(--muted);">SGST (${d.gst_rate_pct/2}%)</td>
+            <td style="padding:8px 0;text-align:right;">₹${d.sgst.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding:12px 0;font-weight:700;font-size:16px;">Total (Inc. GST)</td>
+            <td style="padding:12px 0;text-align:right;font-weight:700;font-size:18px;color:var(--primary);">₹${d.total_with_gst.toFixed(2)}</td>
+          </tr>
+        </table>
+        <p style="margin-top:12px;font-size:12px;color:var(--muted);">${d.note}</p>
+      </div>`;
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+/* ════════════════════════════════════
+   COMPLIANCE — WASTE TRACKER  (Feature 12)
+   ════════════════════════════════════ */
+async function waste_track(el) {
+  el.innerHTML = `
+    <div class="page-title">Waste Tracker</div>
+    <div class="page-desc">Log and analyse kitchen waste events — overproduction, spoilage, trim, breakage.</div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Log Waste Event</div></div>
+        <div class="card-bd">
+          <div style="margin-bottom:12px;">
+            <label class="form-label">Item / Ingredient Name</label>
+            <input id="wt-item" class="form-input" placeholder="e.g. Butter">
+          </div>
+          <div class="grid-2" style="gap:12px;margin-bottom:12px;">
+            <div>
+              <label class="form-label">Quantity Wasted</label>
+              <input id="wt-qty" class="form-input" type="number" min="0.01" step="0.01" placeholder="1.5">
+            </div>
+            <div>
+              <label class="form-label">Unit</label>
+              <select id="wt-uom" class="form-input">
+                <option>kg</option><option>g</option><option>litre</option><option>pcs</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="form-label">Waste Cause</label>
+            <select id="wt-cause" class="form-input">
+              <option value="overproduction">Overproduction</option>
+              <option value="spoilage">Spoilage</option>
+              <option value="breakage">Breakage</option>
+              <option value="trim">Trim / Offcut</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="form-label">Cost per Unit (₹, optional)</label>
+            <input id="wt-cost" class="form-input" type="number" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div style="margin-bottom:16px;">
+            <label class="form-label">Notes</label>
+            <input id="wt-notes" class="form-input" placeholder="Optional reason / batch ID">
+          </div>
+          <button class="btn btn-primary" onclick="logWaste()">Log Waste</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Waste Report — Last 30 Days</div></div>
+        <div class="card-bd" id="wt-report"><div class="empty-state"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Loading…</p></div></div>
+      </div>
+    </div>`;
+  await loadWasteReport();
+  lucide.createIcons();
+}
+
+async function logWaste() {
+  const item  = document.getElementById('wt-item').value.trim();
+  const qty   = parseFloat(document.getElementById('wt-qty').value);
+  const uom   = document.getElementById('wt-uom').value;
+  const cause = document.getElementById('wt-cause').value;
+  const cost  = parseFloat(document.getElementById('wt-cost').value) || null;
+  const notes = document.getElementById('wt-notes').value.trim() || null;
+  if (!item || !qty) { toast('Item name and quantity are required', 'err'); return; }
+  try {
+    const d = await POST('/waste/log', { item_name:item, quantity_wasted:qty, unit_of_measure:uom, waste_cause:cause, cost_per_unit:cost, notes });
+    toast(`Waste logged — ${d.item_name} ${d.quantity_wasted}${d.unit_of_measure} (₹${d.estimated_cost.toFixed(2)})`, 'ok');
+    await loadWasteReport();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function loadWasteReport() {
+  const rep = document.getElementById('wt-report');
+  if (!rep) return;
+  try {
+    const d = await GET('/waste/report?days=30');
+    if (!d.total_events) { rep.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;">No waste events logged in the last 30 days.</div>'; return; }
+    const causeColors = { overproduction:'#F59E0B', spoilage:'#EF4444', breakage:'#8B5CF6', trim:'#3B82F6', other:'#9CA3AF' };
+    rep.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div style="text-align:center;"><div style="font-size:22px;font-weight:700;color:var(--danger);">₹${d.total_waste_cost_inr.toFixed(2)}</div><div style="font-size:11px;color:var(--muted);">Total Waste Cost</div></div>
+        <div style="text-align:center;"><div style="font-size:22px;font-weight:700;">${d.total_events}</div><div style="font-size:11px;color:var(--muted);">Events Logged</div></div>
+      </div>
+      <div style="margin-bottom:12px;">
+        ${Object.entries(d.by_cause).map(([cause,v]) => `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:${causeColors[cause]||'#9CA3AF'};display:inline-block;"></span>
+            <span style="flex:1;font-size:13px;">${cause.charAt(0).toUpperCase()+cause.slice(1)}</span>
+            <span style="font-size:13px;color:var(--muted);">${v.count} events</span>
+            <span style="font-size:13px;font-weight:600;">₹${v.total_cost.toFixed(2)}</span>
+          </div>`).join('')}
+      </div>
+      ${d.top_wasted_items.length ? `<div style="font-size:12px;color:var(--muted);margin-top:8px;font-weight:600;">TOP WASTED ITEMS</div>
+        ${d.top_wasted_items.slice(0,5).map(i=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:13px;"><span>${i.item_name}</span><span style="color:var(--danger);">₹${i.total_cost.toFixed(2)}</span></div>`).join('')}` : ''}`;
+  } catch(e) { rep.textContent = 'Failed to load waste report.'; }
+}
+
+/* ════════════════════════════════════
+   INTELLIGENCE — RECIPE BATCH SCALING  (Feature 10)
+   ════════════════════════════════════ */
+async function recipe_scale(el) {
+  el.innerHTML = `
+    <div class="page-title">Batch Scaling</div>
+    <div class="page-desc">Recalculate ingredient quantities and COGS for any number of servings. Scale recipes up or down precisely.</div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-hd"><div class="card-title">Scale a Recipe</div></div>
+      <div class="card-bd">
+        <div class="grid-2" style="gap:12px;margin-bottom:16px;">
+          <div>
+            <label class="form-label">Recipe</label>
+            <select id="rs-recipe" class="form-input"><option value="">— loading recipes —</option></select>
+          </div>
+          <div>
+            <label class="form-label">Target Servings / Batch Size</label>
+            <input id="rs-servings" class="form-input" type="number" min="0.1" step="0.5" value="10" placeholder="10">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="computeScale()">Calculate Scaled Batch</button>
+      </div>
+    </div>
+    <div id="rs-result"></div>`;
+  // Populate recipe dropdown
+  try {
+    const d = await GET('/recipes');
+    const sel = document.getElementById('rs-recipe');
+    sel.innerHTML = d.recipes.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+  } catch(e) { /* leave blank */ }
+  lucide.createIcons();
+}
+
+async function computeScale() {
+  const recipeId = document.getElementById('rs-recipe').value;
+  const servings = parseFloat(document.getElementById('rs-servings').value) || 1;
+  if (!recipeId) { toast('Select a recipe first', 'err'); return; }
+  const res = document.getElementById('rs-result');
+  res.innerHTML = '<div style="color:var(--muted);text-align:center;">Calculating…</div>';
+  try {
+    const d = await GET(`/recipes/${recipeId}/scale?servings=${servings}`);
+    res.innerHTML = `
+      <div class="card">
+        <div class="card-hd"><div class="card-title">${d.recipe_name} — ${servings} serving${servings!==1?'s':''}</div></div>
+        <div class="card-bd">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+            <div style="text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--primary);">₹${d.total_cost.toFixed(2)}</div><div style="font-size:11px;color:var(--muted);">Total COGS</div></div>
+            <div style="text-align:center;"><div style="font-size:20px;font-weight:700;">₹${d.cost_per_serving.toFixed(2)}</div><div style="font-size:11px;color:var(--muted);">Per Serving</div></div>
+            <div style="text-align:center;"><div style="font-size:20px;font-weight:700;">×${d.scale_factor.toFixed(2)}</div><div style="font-size:11px;color:var(--muted);">Scale Factor</div></div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr>
+              <th style="padding:8px 12px;text-align:left;color:var(--muted);">Ingredient</th>
+              <th style="padding:8px 12px;text-align:right;color:var(--muted);">Base Qty</th>
+              <th style="padding:8px 12px;text-align:right;color:var(--muted);">Scaled Qty</th>
+              <th style="padding:8px 12px;text-align:right;color:var(--muted);">Scaled Cost</th>
+            </tr></thead>
+            <tbody>${d.ingredients.map(i => `<tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:8px 12px;font-weight:500;">${i.ingredient_name}</td>
+              <td style="padding:8px 12px;text-align:right;color:var(--muted);">${i.base_quantity}</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:600;">${i.scaled_quantity}</td>
+              <td style="padding:8px 12px;text-align:right;">₹${i.scaled_cost.toFixed(2)}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+          <div style="margin-top:12px;display:flex;justify-content:space-between;font-size:13px;">
+            <span style="color:var(--muted);">Scaled Overhead</span>
+            <span>₹${d.scaled_overhead.toFixed(2)}</span>
+          </div>
+        </div>
+      </div>`;
+  } catch(e) { res.innerHTML = `<div class="empty-state"><i data-lucide="alert-circle"></i><p>${e.message}</p></div>`; lucide.createIcons(); }
 }
 
 /* ════════════════════════════════════

@@ -312,3 +312,24 @@ class LoyaltyRecord(Base):
     loyalty_points: Mapped[int] = mapped_column(Integer, default=0)
     tier: Mapped[str] = mapped_column(String(32), default="bronze")  # bronze | silver | gold
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Feature 12 — Waste Tracking
+# ---------------------------------------------------------------------------
+
+class WasteRecord(Base):
+    """Logs waste events with cause classification for kitchen efficiency analysis."""
+    __tablename__ = "waste_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity_wasted: Mapped[float] = mapped_column(Float, nullable=False)
+    unit_of_measure: Mapped[str] = mapped_column(String(32), default="kg")
+    waste_cause: Mapped[str] = mapped_column(String(64), nullable=False, default="overproduction")
+    # overproduction | spoilage | breakage | trim | other
+    cost_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    estimated_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    logged_by: Mapped[str] = mapped_column(String(64), default="staff")
+    logged_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

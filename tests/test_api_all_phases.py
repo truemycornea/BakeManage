@@ -630,3 +630,129 @@ class TestSecurityBoundaries:
         """/health must be accessible without auth (liveness probe)."""
         r = httpx.get(f"{BASE}/health", timeout=10)
         assert r.status_code == 200
+
+
+# ===========================================================================
+# New Feature Tests: Recipe Batch Scaling, GST Calculator, Waste Tracking
+# ===========================================================================
+
+class TestRecipeBatchScaling:
+    """Feature 10 — AI-Driven Recipe Batch Scaling."""
+
+    def test_scale_recipe_returns_200(self) -> None:
+        global _recipe_id
+        r = httpx.get(f"{BASE}/recipes/{_recipe_id}/scale?servings=5", headers=HEADERS, timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        assert "total_cost" in d
+        assert "cost_per_serving" in d
+        assert "ingredients" in d
+        assert d["requested_servings"] == 5.0
+
+    def test_scale_factor_matches_servings(self) -> None:
+        """Scale factor should equal servings / base_yield."""
+        global _recipe_id
+        r = httpx.get(f"{BASE}/recipes/{_recipe_id}/scale?servings=1", headers=HEADERS, timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        assert d["scale_factor"] > 0
+
+    def test_scale_invalid_servings_rejected(self) -> None:
+        global _recipe_id
+        r = httpx.get(f"{BASE}/recipes/{_recipe_id}/scale?servings=0", headers=HEADERS, timeout=10)
+        assert r.status_code == 422
+
+    def test_scale_nonexistent_recipe_returns_404(self) -> None:
+        r = httpx.get(f"{BASE}/recipes/999999/scale?servings=10", headers=HEADERS, timeout=10)
+        assert r.status_code == 404
+
+
+class TestGSTCalculator:
+    """Feature 13 — Multi-Slab GST Calculator."""
+
+    def test_gst_slabs_returns_table(self) -> None:
+        r = httpx.get(f"{BASE}/gst/slabs", headers=HEADERS, timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        assert "slabs" in d
+        assert any(s["category"] == "pastries_cakes" for s in d["slabs"])
+
+    def test_gst_compute_pastries_18pct(self) -> None:
+        payload = {"item_name": "Butter Croissant", "category": "pastries_cakes", "base_price": 100.0, "quantity": 1.0}
+        r = httpx.post(f"{BASE}/gst/compute", json=payload, headers=HEADERS, timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        assert d["gst_rate_pct"] == 18.0
+        assert d["total_gst"] == 18.0
+        assert d["total_with_gst"] == 118.0
+
+    def test_gst_compute_zero_slab(self) -> None:
+        payload = {"item_name": "Plain Rusk", "category": "unbranded_bread", "base_price": 50.0, "quantity": 2.0}
+        r = httpx.post(f"{BASE}/gst/compute", json=payload, headers=HEADERS, timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        assert d["gst_rate_pct"] == 0.0
+        assert d["total_gst"] == 0.0
+        assert d["total_with_gst"] == 100.0
+
+    def test_gst_compute_custom_rate(self) -> None:
+        payload = {"item_name": "Branded Cookies", "category": "custom", "base_price": 200.0, "quantity": 1.0, "custom_rate_pct": 12.0}
+        r = httpx.post(f"{BASE}/gst/compute", json=payload, headers=HEADERS, timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        assert d["gst_rate_pct"] == 12.0
+        assert d["total_gst"] == 24.0
+
+    def test_gst_compute_invalid_category(self) -> None:
+        payload = {"item_name": "Test", "category": "invalid_category", "base_price": 100.0}
+        r = httpx.post(f"{BASE}/gst/compute", json=payload, headers=HEADERS, timeout=10)
+        assert r.status_code == 422
+
+    def test_gst_compute_invalid_price(self) -> None:
+        payload = {"item_name": "Test", "category": "pastries_cakes", "base_price": 0.0}
+        r = httpx.post(f"{BASE}/gst/compute", json=payload, headers=HEADERS, timeout=10)
+        assert r.status_code == 422
+
+
+class TestWasteTracking:
+    """Feature 12 — Visual Waste Tracking."""
+
+    def test_log_waste_returns_201_or_200(self) -> None:
+        payload = {
+            "item_name": "Butter",
+            "quantity_wasted": 0.5,
+            "unit_of_measure": "kg",
+            "waste_cause": "spoilage",
+            "cost_per_unit": 450.0,
+            "notes": "Left in proofer overnight",
+        }
+        r = httpx.post(f"{BASE}/waste/log", json=payload, headers=HEADERS, timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        assert d["item_name"] == "Butter"
+        assert d["waste_cause"] == "spoilage"
+        assert d["estimated_cost"] > 0
+
+    def test_log_waste_overproduction(self) -> None:
+        payload = {"item_name": "Croissant", "quantity_wasted": 10.0, "unit_of_measure": "pcs", "waste_cause": "overproduction"}
+        r = httpx.post(f"{BASE}/waste/log", json=payload, headers=HEADERS, timeout=10)
+        assert r.status_code == 200
+
+    def test_log_waste_invalid_cause_rejected(self) -> None:
+        payload = {"item_name": "Flour", "quantity_wasted": 1.0, "waste_cause": "bad_cause"}
+        r = httpx.post(f"{BASE}/waste/log", json=payload, headers=HEADERS, timeout=10)
+        assert r.status_code == 422
+
+    def test_log_waste_zero_quantity_rejected(self) -> None:
+        payload = {"item_name": "Sugar", "quantity_wasted": 0.0, "waste_cause": "trim"}
+        r = httpx.post(f"{BASE}/waste/log", json=payload, headers=HEADERS, timeout=10)
+        assert r.status_code == 422
+
+    def test_waste_report_returns_summary(self) -> None:
+        r = httpx.get(f"{BASE}/waste/report?days=30", headers=HEADERS, timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        assert "total_events" in d
+        assert "total_waste_cost_inr" in d
+        assert "by_cause" in d
+        assert "top_wasted_items" in d

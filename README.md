@@ -1,12 +1,13 @@
-# BakeManage ERP — v2.0.0 Sandbox
+# BakeManage ERP — v2.1.0 Sandbox
 
 Enterprise-grade SaaS ERP for Indian bakeries — multimodal AI ingestion, recipe costing,
 inventory FEFO, proofing telemetry, quality control, supply chain automation, CRM loyalty
-programme, and ML-powered demand forecasting. Built on FastAPI + PostgreSQL + Redis + Celery,
-delivered as a single-page web application.
+programme, ML-powered demand forecasting, GST compliance, and waste tracking. Built on
+FastAPI + PostgreSQL + Redis + Celery, delivered as a single-page web application.
 
-**v2.0.0 additions:** Phase 2 hardening (rate-limit, GZip, Prometheus, health gate) + Phase 3
-enterprise ops (supply chain, AI insights, WhatsApp CRM, loyalty). 82/82 tests passing.
+**v2.1.0 additions:** Recipe Batch Scaling, Waste Tracking, Multi-Slab GST Calculator;
+7 bug fixes (lifespan migration, real dashboard KPIs, Phase 3 status counts, targeted cache
+clear). 97/97 tests passing.
 
 ---
 
@@ -94,6 +95,14 @@ enterprise ops (supply chain, AI insights, WhatsApp CRM, loyalty). 82/82 tests p
 | 23 | Demand Forecast | ✅ done | Linear regression via scikit-learn, configurable lookahead |
 | 24 | WhatsApp CRM | ✅ done | Sandboxed Twilio dispatch stub with template support |
 | 25 | Loyalty Programme | ✅ done | Bronze/Silver/Gold tiers, birthday triggers, spend tracking |
+
+### v2.1.0 — Compliance & Intelligence Add-ons
+
+| # | Module | Status | Description |
+|---|---|---|---|
+| 26 | Recipe Batch Scaling | ✅ done | Scale any recipe to target servings; returns scale factor, COGS, per-serving cost |
+| 27 | Waste Tracking | ✅ done | Log and report waste events by cause (spoilage/overproduction/trim/breakage/other) |
+| 28 | GST Calculator | ✅ done | Multi-slab CGST+SGST computation (0/5/12/18%) with category presets and custom rate |
 
 ---
 
@@ -361,8 +370,63 @@ Anomaly scoring formula: `max(0, (temp-38) * 0.01) + max(0, (humidity-85) * 0.00
 |---|---|---|---|
 | GET | /recipes | Role+PIN | All 13 recipes with BOM and total cost |
 | GET | /recipes/{id} | Role+PIN | Single recipe BOM detail |
+| GET | /recipes/{id}/scale | Role+PIN | Scale recipe to target servings; returns scale factor + COGS |
 | POST | /recipes/{id}/cogs/queue | JWT | Queue async COGS Celery task |
 | POST | /recipes/{id}/inventory/queue | JWT | Queue async inventory deduction |
+
+---
+
+### GST Calculator
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | /gst/slabs | Role+PIN | Reference table of all GST category slabs |
+| POST | /gst/compute | Role+PIN | Compute CGST + SGST for a product (supports presets and custom rate) |
+
+```bash
+curl -X POST http://localhost:8000/gst/compute \
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+  -H "Content-Type: application/json" \
+  -d '{"category": "pastries_cakes", "base_price": 100.0, "quantity": 1}'
+# Returns: {"category":"pastries_cakes","gst_rate_pct":18.0,"cgst_pct":9.0,"sgst_pct":9.0,
+#           "cgst_amount":9.0,"sgst_amount":9.0,"total_gst":18.0,"total_with_gst":118.0}
+```
+
+**Supported categories and rates:**
+
+| Category | GST Rate |
+|---|---|
+| unbranded_bread | 0% |
+| unpackaged_namkeen | 0% |
+| branded_biscuits | 5% |
+| branded_namkeen | 12% |
+| pastries_cakes | 18% |
+| chocolate | 18% |
+| custom | caller-supplied |
+
+---
+
+### Waste Tracking
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | /waste/log | Role+PIN | Log a waste event with item, quantity, cause, and cost |
+| GET | /waste/report | Role+PIN | Aggregated waste report by cause and item (configurable window) |
+
+```bash
+# Log a waste event
+curl -X POST http://localhost:8000/waste/log \
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+  -H "Content-Type: application/json" \
+  -d '{"item_name": "Croissant", "quantity_wasted": 3.5, "unit_of_measure": "kg",
+       "waste_cause": "overproduction", "cost_per_unit": 85.0}'
+
+# 30-day summary
+curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+  "http://localhost:8000/waste/report?days=30"
+```
+
+**Cause enum:** `overproduction | spoilage | breakage | trim | other`
 
 ---
 
@@ -432,6 +496,11 @@ curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
 | sales_records | id, product_name, quantity_sold, unit_price, sale_date |
 | api_credentials | id, service_name, encrypted_key |
 | media_assets | id, title, asset_type, category, thumbnail_data, pdf_data |
+| loyalty_records | id, customer_name, phone, tier, total_spend, points, last_visit |
+| supplier_lead_times | id, vendor_name, ingredient_name, lead_days, price_per_unit |
+| stock_indents | id, ingredient_name, quantity_needed, urgency, status |
+| stock_transfers | id, source_location, dest_location, item_name, quantity, transferred_at |
+| waste_records | id, item_name, quantity_wasted, unit_of_measure, waste_cause, cost_per_unit, estimated_cost, notes, logged_by, logged_at |
 
 ### Seeded Demo Data
 
@@ -452,7 +521,7 @@ curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
 ## 9. Running Tests
 
 ```bash
-# All 82 tests — inside container (recommended)
+# All 97 tests — inside container (recommended)
 docker compose exec api pytest --tb=short -q
 
 # With coverage report
@@ -475,14 +544,14 @@ docker compose exec api pytest tests/test_ingestion.py -v  # 10 tests: ingestion
 > docker compose cp tests/test_api_all_phases.py api:/app/tests/
 > ```
 
-### Current Status: 82/82 passed
+### Current Status: 97/97 passed
 
 | Test File | Tests | Coverage Area |
 |---|---|---|
 | test_controls.py | 15 | Auth, RBAC, HTTPS enforcement, Fernet, field-level filtering |
 | test_costing.py | 10 | Cost roll-up, margin computation, guardrail trigger |
 | test_ingestion.py | 10 | Image/doc ingestion, invoice persistence |
-| test_api_all_phases.py | 47 | Full API integration: all Phase 1/2/3 endpoints, security boundaries |
+| test_api_all_phases.py | 62 | Full API integration: all Phase 1/2/3 endpoints, security boundaries, Features 10/12/13 |
 
 #### Seeding Demo Data
 
@@ -518,6 +587,13 @@ INVENTORY
 LIBRARY
   Recipes           13 recipe cards, BOM detail drawer, load-to-calculator
   Media             23 assets: PDF card viewer + video metadata browser
+
+COMPLIANCE
+  GST Calculator    Multi-slab CGST+SGST computation with category presets
+  Waste Tracker     Log waste events by cause; 30-day report with top-item breakdown
+
+INTELLIGENCE
+  Batch Scaling     Scale any recipe to target servings; displays scale factor + COGS
 
 SYSTEM
   Health Monitor    Golden signals: latency p50, error rate, saturation
@@ -560,6 +636,7 @@ Full endpoint listing, environment reference, and runbook: `production/v2.0.0/PR
 
 | Version | Date | Changes |
 |---|---|---|
+| v2.1.0 | 2026-04-02 | Feature 26 recipe batch scaling (`/recipes/{id}/scale`), Feature 27 waste tracking (`/waste/log`, `/waste/report`, `waste_records` table), Feature 28 GST calculator (`/gst/compute`, `/gst/slabs`); 3 new UI modules (GST Calculator, Waste Tracker, Batch Scaling); 7 bug fixes: lifespan migration (deprecation warnings eliminated), dashboard real sales KPIs (was returning None), system/status Phase 3 DB counts (loyalty/lead-times/indents/transfers/waste), targeted cache clear (was flushdb); +15 integration tests → 97/97 passing |
 | v2.0.0 | 2026-04-02 | Phase 2 hardening (rate-limit 120 req/min, GZip, Prometheus /metrics, health gate) + Phase 3 enterprise ops (supply-chain indent/transfer/lead-time, menu engineering, vendor optimisation, ML demand forecast, WhatsApp CRM, loyalty programme); drop-zone CSS breakpoint fix (720 px → 960 px); 47 API integration tests; 82/82 tests passing; production backup archive |
 | v1.5 | 2026-04-02 | Recipe Library, Media Library, 13 seeded recipes, 23 media assets, drop-zone CSS fix (display:block), responsive grid breakpoints at 720px, REDIS_URL env fix, co2_ppm schema fix, 35/35 tests |
 | v1.0 | 2026-04-01 | Core FastAPI, multimodal ingestion, FEFO inventory, cost engine, proofing telemetry, quality control, SRE golden signals, dashboard KPIs, Redis caching, Celery workers |
@@ -577,7 +654,7 @@ Full strategic blueprint: [bakemanagerootv2.5.md](bakemanagerootv2.5.md)
 - Predictive Redis cache warming
 - Container health gate with automatic rollback
 
-### v3 - Enterprise Operations (Phase 3)
+### v3 - Enterprise Operations (Phase 3) ✅ Complete
 - Central kitchen indent generation
 - Multi-location stock transfer
 - Supplier lead-time tracing
@@ -586,6 +663,9 @@ Full strategic blueprint: [bakemanagerootv2.5.md](bakemanagerootv2.5.md)
 - ML demand forecasting
 - WhatsApp CRM integration stub
 - Loyalty and birthday triggers
+- Recipe batch scaling (v2.1.0)
+- Waste tracking and reporting (v2.1.0)
+- Multi-slab GST CGST/SGST calculator (v2.1.0)
 
 ### v4 - Horizontal Scale
 - Multi-UOM schema, offline-first sync, white-label component library

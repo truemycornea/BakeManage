@@ -10,6 +10,8 @@ from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -23,7 +25,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from .cache import cache_get, cache_set, get_redis_client
-from .cache import cache_inventory_snapshot
+from .cache import cache_inventory_snapshot, clear_namespace
 from .tasks import cached_inventory_state
 from .config import settings
 from .database import Base, engine, get_session
@@ -42,6 +44,7 @@ from .models import (
     StockTransfer,
     SupplierLeadTime,
     LoyaltyRecord,
+    WasteRecord,
     User,
 )
 from .schemas import (
@@ -122,7 +125,19 @@ class CredentialRequest(BaseModel):
     api_key: str
 
 
-app = FastAPI(title="BakeManage Platform API", version="2.0.0")
+@asynccontextmanager
+async def lifespan(application: FastAPI):  # noqa: ARG001
+    Base.metadata.create_all(bind=engine)
+    _ensure_requirements_locked()
+    session = next(get_session())
+    try:
+        _seed_admin_user(session)
+    finally:
+        session.close()
+    yield
+
+
+app = FastAPI(title="BakeManage Platform API", version="2.0.0", lifespan=lifespan)
 
 # Rate limiter — 120 req/min per IP by default  (Phase 2 v2.1)
 limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
@@ -142,17 +157,6 @@ app.add_middleware(
 
 if settings.enforce_https:
     app.add_middleware(HTTPSRedirectMiddleware)
-
-
-@app.on_event("startup")
-def _create_schema() -> None:
-    Base.metadata.create_all(bind=engine)
-    _ensure_requirements_locked()
-    session = next(get_session())
-    try:
-        _seed_admin_user(session)
-    finally:
-        session.close()
 
 
 @app.middleware("http")
@@ -233,7 +237,7 @@ async def extended_health() -> dict[str, object]:
     anomaly_score = round((error_rate * 2) + (saturation * 0.5), 3)
     remediation = None
     if anomaly_score > 0.6:
-        redis_client.flushdb()
+        clear_namespace(settings.cache_namespace)
         remediation = "cache_cleared"
     return {
         "status": "ok",
@@ -260,7 +264,12 @@ async def system_status(
     quality_count  = session.query(QualityInspection).count()
     proofing_count = session.query(ProofingTelemetry).count()
     cred_count     = session.query(ServiceCredential).count()
-    qi_pass = session.query(QualityInspection).filter(QualityInspection.status == "optimal").count()
+    qi_pass        = session.query(QualityInspection).filter(QualityInspection.status == "optimal").count()
+    loyalty_count  = session.query(LoyaltyRecord).count()
+    lead_time_count = session.query(SupplierLeadTime).count()
+    indent_count   = session.query(StockIndent).count()
+    transfer_count = session.query(StockTransfer).count()
+    waste_count    = session.query(WasteRecord).count()
     # Simulated resource metrics (no psutil in container)
     cpu_pct   = round(random.uniform(8, 45), 1)
     ram_pct   = round(random.uniform(30, 65), 1)
@@ -280,11 +289,16 @@ async def system_status(
         "queue": {"depth": queue_depth, "latency_ms": latency},
         "ai_usage": {"tokens_used_session": ai_tokens_used, "ocr_jobs_run": proofing_count},
         "db_record_counts": {
-            "stock_items":         stock_count,
-            "quality_inspections": quality_count,
-            "proofing_readings":   proofing_count,
-            "service_credentials": cred_count,
-            "quality_pass":        qi_pass,
+            "stock_items":          stock_count,
+            "quality_inspections":  quality_count,
+            "proofing_readings":    proofing_count,
+            "service_credentials":  cred_count,
+            "quality_pass":         qi_pass,
+            "loyalty_customers":    loyalty_count,
+            "supplier_lead_times":  lead_time_count,
+            "stock_indents":        indent_count,
+            "stock_transfers":      transfer_count,
+            "waste_records":        waste_count,
         },
     }
 
@@ -560,10 +574,8 @@ async def dashboard_summary(
     session: Session = Depends(get_session),
     role: str = Depends(authorize_request),
 ) -> dict:
-    """Aggregated KPIs for the operations dashboard.
-    Phase-3 stubs: revenue_today_inr, items_sold_today, cost_saved_week_inr.
-    Phase-2 stubs: expiring_soon, vendor_savings_inr.
-    """
+    """Aggregated KPIs for the operations dashboard."""
+    from datetime import date as _date
     stock_count = session.query(InventoryItem).count()
     qi_total = session.query(QualityInspection).count()
     qi_pass = (
@@ -573,19 +585,38 @@ async def dashboard_summary(
     )
     pass_rate = round((qi_pass / qi_total * 100) if qi_total > 0 else 0.0, 1)
     proofing_count = session.query(ProofingTelemetry).count()
+
+    # Real sales data — today's revenue and items sold
+    today_start = datetime.combine(_date.today(), datetime.min.time())
+    today_sales = session.query(SaleRecord).filter(SaleRecord.sold_at >= today_start).all()
+    revenue_today = round(sum(float(s.total_amount) for s in today_sales), 2)
+    items_sold_today = int(sum(s.quantity_sold for s in today_sales))
+
+    # Weekly savings proxy: items expiring soon avoided via FEFO
+    week_start = datetime.combine(_date.today() - __import__("datetime").timedelta(days=7), datetime.min.time())
+    weekly_sales = session.query(SaleRecord).filter(SaleRecord.sold_at >= week_start).all()
+    cost_saved_week = round(sum(float(s.total_amount) for s in weekly_sales) * 0.05, 2)  # 5% FEFO savings estimate
+
+    expiring_soon = (
+        session.query(InventoryItem)
+        .filter(
+            InventoryItem.expiration_date.is_not(None),
+            InventoryItem.expiration_date <= (__import__("datetime").date.today() + __import__("datetime").timedelta(days=7)),
+        )
+        .count()
+    )
+
     return filter_fields(
         {
             "stock_items": stock_count,
             "quality_inspections": qi_total,
             "quality_pass_rate": pass_rate,
             "proofing_readings": proofing_count,
-            # Phase-2 stubs — replaced by stock endpoint data
-            "expiring_soon": 0,
+            "expiring_soon": expiring_soon,
             "vendor_savings_inr": None,
-            # Phase-3 stubs — replaced by sales endpoint data
-            "revenue_today_inr": None,
-            "items_sold_today": None,
-            "cost_saved_week_inr": None,
+            "revenue_today_inr": revenue_today,
+            "items_sold_today": items_sold_today,
+            "cost_saved_week_inr": cost_saved_week,
         },
         role,
     )
@@ -1503,4 +1534,267 @@ async def crm_loyalty(
         "birthday_triggers_next_30d": birthday_triggers,
         "top_customers": items[:10],
         "all_customers": items,
+    }
+
+
+# ===========================================================================
+# Feature 10 — Recipe Batch Scaling  (blueprint Feature #10)
+# ===========================================================================
+
+@app.get("/recipes/{recipe_id}/scale", response_model=dict)
+async def scale_recipe(
+    recipe_id: int,
+    servings: float = 1.0,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Recalculate ingredient quantities and cost roll-up for N servings (Feature 10).
+
+    Applies the formula: scaled_qty = base_qty × servings / recipe.yield_amount
+    Recomputes total COGS including overhead pro-rated to servings.
+    """
+    require_domain(role, "costing")
+    if servings <= 0:
+        raise HTTPException(status_code=422, detail="servings must be > 0")
+    r = session.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    yield_base = r.yield_amount if r.yield_amount > 0 else 1.0
+    scale_factor = servings / yield_base
+    scaled_ingredients = []
+    total_ingredient_cost = Decimal("0")
+    for ing in r.components:
+        scaled_qty = round(ing.required_quantity * scale_factor, 4)
+        scaled_cost = (ing.cost * Decimal(str(scale_factor))).quantize(Decimal("0.01"))
+        effective_cost = (scaled_cost / Decimal(str(ing.yield_amount))).quantize(Decimal("0.01")) if ing.yield_amount > 0 else scaled_cost
+        total_ingredient_cost += effective_cost
+        scaled_ingredients.append({
+            "ingredient_name": ing.ingredient_name,
+            "base_quantity": ing.required_quantity,
+            "scaled_quantity": scaled_qty,
+            "unit_cost": float(ing.cost),
+            "scaled_cost": float(scaled_cost),
+            "effective_cost": float(effective_cost),
+            "yield_amount": ing.yield_amount,
+        })
+
+    scaled_overhead = (Decimal(str(r.overhead_cost)) * Decimal(str(scale_factor))).quantize(Decimal("0.01"))
+    total_cost = (total_ingredient_cost + scaled_overhead).quantize(Decimal("0.01"))
+    cost_per_serving = (total_cost / Decimal(str(servings))).quantize(Decimal("0.01")) if servings > 0 else total_cost
+
+    return {
+        "recipe_id": r.id,
+        "recipe_name": r.name,
+        "base_yield": r.yield_amount,
+        "requested_servings": servings,
+        "scale_factor": round(scale_factor, 4),
+        "scaled_overhead": float(scaled_overhead),
+        "total_cost": float(total_cost),
+        "cost_per_serving": float(cost_per_serving),
+        "ingredients": scaled_ingredients,
+    }
+
+
+# ===========================================================================
+# Feature 13 — Multi-Slab GST Calculator  (blueprint Feature #13)
+# ===========================================================================
+
+# Indian bakery GST slabs per CBIC classification
+_GST_SLABS: dict[str, float] = {
+    "unbranded_bread": 0.0,       # 0%  — fresh unbranded bread / rusk
+    "unpackaged_namkeen": 0.0,    # 0%  — loose, unpackaged savouries
+    "branded_biscuits": 5.0,      # 5%  — branded biscuits / cookies < ₹100/kg
+    "pastries_cakes": 18.0,       # 18% — cakes, pastries, prepared bakery goods
+    "branded_namkeen": 12.0,      # 12% — branded packaged namkeen / snacks
+    "chocolate": 18.0,            # 18% — chocolate-coated goods
+    "custom": None,               # caller supplies rate
+}
+
+class GSTComputeRequest(BaseModel):
+    item_name: str
+    category: str = "pastries_cakes"    # one of _GST_SLABS keys
+    base_price: float                    # pre-tax selling price (₹)
+    custom_rate_pct: float | None = None # if category=custom, supply rate here
+    quantity: float = 1.0
+
+
+@app.post("/gst/compute", response_model=dict)
+async def gst_compute(
+    payload: GSTComputeRequest,
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Multi-slab GST computation for bakery products (Feature 13).
+
+    Returns tax breakdown: CGST + SGST (intra-state split) and total price.
+    """
+    require_domain(role, "costing")
+    if payload.base_price <= 0:
+        raise HTTPException(status_code=422, detail="base_price must be > 0")
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=422, detail="quantity must be > 0")
+
+    slab_rate = _GST_SLABS.get(payload.category)
+    if slab_rate is None and payload.category != "custom":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown category. Valid: {list(_GST_SLABS.keys())}",
+        )
+    if payload.category == "custom":
+        if payload.custom_rate_pct is None or payload.custom_rate_pct < 0:
+            raise HTTPException(status_code=422, detail="custom_rate_pct required when category=custom")
+        slab_rate = payload.custom_rate_pct
+
+    total_base = round(payload.base_price * payload.quantity, 2)
+    gst_total = round(total_base * slab_rate / 100, 2)
+    cgst = round(gst_total / 2, 2)
+    sgst = round(gst_total / 2, 2)
+    total_with_gst = round(total_base + gst_total, 2)
+
+    return {
+        "item_name": payload.item_name,
+        "category": payload.category,
+        "gst_rate_pct": slab_rate,
+        "quantity": payload.quantity,
+        "base_price_per_unit": payload.base_price,
+        "total_base_amount": total_base,
+        "cgst": cgst,
+        "sgst": sgst,
+        "total_gst": gst_total,
+        "total_with_gst": total_with_gst,
+        "note": "CGST + SGST split for intra-state transactions",
+    }
+
+
+@app.get("/gst/slabs", response_model=dict)
+async def gst_slabs(role: str = Depends(authorize_request)) -> dict:
+    """Return the bakery GST slab reference table (Feature 13)."""
+    require_domain(role, "costing")
+    return {
+        "slabs": [
+            {"category": k, "rate_pct": v if v is not None else "variable", "description": _slab_desc(k)}
+            for k, v in _GST_SLABS.items()
+        ]
+    }
+
+
+def _slab_desc(cat: str) -> str:
+    return {
+        "unbranded_bread": "Fresh unbranded bread, rusk — Nil GST",
+        "unpackaged_namkeen": "Loose, unpackaged savoury namkeen — Nil GST",
+        "branded_biscuits": "Branded biscuits, cookies (< ₹100/kg) — 5%",
+        "pastries_cakes": "Cakes, pastries, prepared bakery goods — 18%",
+        "branded_namkeen": "Branded packaged namkeen / snacks — 12%",
+        "chocolate": "Chocolate-coated goods — 18%",
+        "custom": "Custom rate supplied by caller",
+    }.get(cat, cat)
+
+
+# ===========================================================================
+# Feature 12 — Visual Waste Tracking  (blueprint Feature #12)
+# ===========================================================================
+
+class WasteLogRequest(BaseModel):
+    item_name: str
+    quantity_wasted: float
+    unit_of_measure: str = "kg"
+    waste_cause: str = "overproduction"   # overproduction | spoilage | breakage | trim | other
+    cost_per_unit: float | None = None
+    notes: str | None = None
+    logged_by: str = "staff"
+
+
+@app.post("/waste/log", response_model=dict)
+async def log_waste(
+    payload: WasteLogRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Log a waste event with cause classification (Feature 12)."""
+    require_domain(role, "inventory")
+    if payload.quantity_wasted <= 0:
+        raise HTTPException(status_code=422, detail="quantity_wasted must be > 0")
+    valid_causes = {"overproduction", "spoilage", "breakage", "trim", "other"}
+    if payload.waste_cause not in valid_causes:
+        raise HTTPException(status_code=422, detail=f"waste_cause must be one of {valid_causes}")
+
+    waste_cost = round(payload.quantity_wasted * (payload.cost_per_unit or 0.0), 2)
+    record = WasteRecord(
+        item_name=payload.item_name,
+        quantity_wasted=payload.quantity_wasted,
+        unit_of_measure=payload.unit_of_measure,
+        waste_cause=payload.waste_cause,
+        cost_per_unit=Decimal(str(payload.cost_per_unit)) if payload.cost_per_unit else None,
+        estimated_cost=Decimal(str(waste_cost)),
+        notes=payload.notes,
+        logged_by=payload.logged_by,
+    )
+    session.add(record)
+    session.commit()
+    return {
+        "id": record.id,
+        "item_name": record.item_name,
+        "quantity_wasted": record.quantity_wasted,
+        "unit_of_measure": record.unit_of_measure,
+        "waste_cause": record.waste_cause,
+        "estimated_cost": float(record.estimated_cost) if record.estimated_cost else 0.0,
+        "logged_at": record.logged_at.isoformat(),
+    }
+
+
+@app.get("/waste/report", response_model=dict)
+async def waste_report(
+    days: int = 30,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Waste analysis: by cause, by item, total cost (Feature 12)."""
+    require_domain(role, "inventory")
+    from datetime import timedelta
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    records = session.query(WasteRecord).filter(WasteRecord.logged_at >= cutoff).all()
+
+    by_cause: dict[str, dict] = {}
+    by_item: dict[str, dict] = {}
+    total_cost = 0.0
+    for r in records:
+        cost = float(r.estimated_cost) if r.estimated_cost else 0.0
+        total_cost += cost
+        # Group by cause
+        if r.waste_cause not in by_cause:
+            by_cause[r.waste_cause] = {"count": 0, "total_quantity": 0.0, "total_cost": 0.0}
+        by_cause[r.waste_cause]["count"] += 1
+        by_cause[r.waste_cause]["total_quantity"] += r.quantity_wasted
+        by_cause[r.waste_cause]["total_cost"] += cost
+        # Group by item
+        if r.item_name not in by_item:
+            by_item[r.item_name] = {"count": 0, "total_quantity": 0.0, "total_cost": 0.0}
+        by_item[r.item_name]["count"] += 1
+        by_item[r.item_name]["total_quantity"] += r.quantity_wasted
+        by_item[r.item_name]["total_cost"] += cost
+
+    items_sorted = sorted(by_item.items(), key=lambda x: x[1]["total_cost"], reverse=True)
+    recent = [
+        {
+            "id": r.id,
+            "item_name": r.item_name,
+            "quantity_wasted": r.quantity_wasted,
+            "unit_of_measure": r.unit_of_measure,
+            "waste_cause": r.waste_cause,
+            "estimated_cost": float(r.estimated_cost) if r.estimated_cost else 0.0,
+            "logged_by": r.logged_by,
+            "logged_at": r.logged_at.isoformat(),
+        }
+        for r in sorted(records, key=lambda x: x.logged_at, reverse=True)[:20]
+    ]
+    return {
+        "period_days": days,
+        "total_events": len(records),
+        "total_waste_cost_inr": round(total_cost, 2),
+        "by_cause": {k: {**v, "total_cost": round(v["total_cost"], 2)} for k, v in by_cause.items()},
+        "top_wasted_items": [
+            {"item_name": k, **{kk: round(vv, 2) if isinstance(vv, float) else vv for kk, vv in v.items()}}
+            for k, v in items_sorted[:10]
+        ],
+        "recent_events": recent,
     }
