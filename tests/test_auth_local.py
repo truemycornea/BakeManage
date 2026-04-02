@@ -14,13 +14,13 @@ import os
 import pytest
 
 # ── Environment must be patched before the app module is imported ───────────
-os.environ.setdefault("DATABASE_URL", "sqlite:///./test_auth_local.db")
-os.environ.setdefault("CELERY_BROKER_URL", "memory://")
-os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
-os.environ.setdefault("ENFORCE_HTTPS", "false")
-os.environ.setdefault("SUPPLY_CHAIN_GUARD", "false")
-os.environ.setdefault("DEFAULT_ADMIN_PIN", "test-admin-1234")
-os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-auth-local")
+os.environ["DATABASE_URL"] = "sqlite:///./test_auth_local.db"
+os.environ["CELERY_BROKER_URL"] = "memory://"
+os.environ["CELERY_RESULT_BACKEND"] = "cache+memory://"
+os.environ["ENFORCE_HTTPS"] = "false"
+os.environ["SUPPLY_CHAIN_GUARD"] = "false"
+os.environ["DEFAULT_ADMIN_PIN"] = "test-admin-1234"
+os.environ["JWT_SECRET"] = "test-jwt-secret-for-auth-local"
 
 from fastapi.testclient import TestClient  # noqa: E402
 import jwt as pyjwt  # noqa: E402
