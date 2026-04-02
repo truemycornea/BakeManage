@@ -26,6 +26,7 @@ from .models import (
     ProofingTelemetry,
     QualityCheck,
     QualityInspection,
+    SaleRecord,
     ServiceCredential,
     User,
 )
@@ -672,3 +673,82 @@ async def health_metrics(role: str = Depends(authorize_request)) -> dict:
     require_domain(role, "health")
     task = monitor_four_signals.delay()
     return {"task_id": task.id, "message": "health sampling queued"}
+
+
+# ---------------------------------------------------------------------------
+# Sales recording
+# ---------------------------------------------------------------------------
+
+class SaleRequest(BaseModel):
+    product_name: str
+    quantity_sold: float
+    unit_price: float
+
+
+@app.post("/sales/record", response_model=dict)
+async def record_sale(
+    payload: SaleRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Record a product sale."""
+    require_domain(role, "costing")
+    if not payload.product_name.strip():
+        raise HTTPException(status_code=422, detail="product_name is required")
+    if payload.quantity_sold <= 0:
+        raise HTTPException(status_code=422, detail="quantity_sold must be positive")
+    if payload.unit_price <= 0:
+        raise HTTPException(status_code=422, detail="unit_price must be positive")
+    total = Decimal(str(payload.quantity_sold)) * Decimal(str(payload.unit_price))
+    record = SaleRecord(
+        product_name=payload.product_name.strip(),
+        quantity_sold=payload.quantity_sold,
+        unit_price=Decimal(str(payload.unit_price)),
+        total_amount=total,
+        sold_at=datetime.utcnow(),
+    )
+    session.add(record)
+    session.commit()
+    return {
+        "id": record.id,
+        "product_name": record.product_name,
+        "quantity_sold": record.quantity_sold,
+        "unit_price": str(record.unit_price),
+        "total_amount": str(record.total_amount),
+        "sold_at": record.sold_at.isoformat(),
+    }
+
+
+@app.get("/sales/daily", response_model=dict)
+async def sales_daily(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Today's sales summary and line items."""
+    require_domain(role, "costing")
+    from datetime import date as _date
+    today_start = datetime.combine(_date.today(), datetime.min.time())
+    records = (
+        session.query(SaleRecord)
+        .filter(SaleRecord.sold_at >= today_start)
+        .order_by(SaleRecord.sold_at.desc())
+        .all()
+    )
+    total_revenue = sum(float(r.total_amount) for r in records)
+    items = [
+        {
+            "id": r.id,
+            "product_name": r.product_name,
+            "quantity_sold": r.quantity_sold,
+            "unit_price": str(r.unit_price),
+            "total_amount": str(r.total_amount),
+            "sold_at": r.sold_at.isoformat(),
+        }
+        for r in records
+    ]
+    return {
+        "date": _date.today().isoformat(),
+        "total_sales": len(records),
+        "total_revenue": round(total_revenue, 2),
+        "items": items,
+    }

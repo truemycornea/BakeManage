@@ -988,48 +988,179 @@ function cost(el) {
   el.innerHTML = `
     <div class="page-hd">
       <div class="page-title">Cost Calculator</div>
-      <div class="page-desc">Build a recipe ingredient list, set overhead and selling price, then compute total cost and profit margin.</div>
+      <div class="page-desc">Recipe costing, ingredient breakdown, margin analysis, and cost-saving recommendations.</div>
     </div>
-    <div class="two-col">
-      <div class="col-stack">
-        <div class="card">
-          <div class="card-hd">
-            <div><div class="card-title">Ingredients</div><div class="card-sub">Cost & yield per component</div></div>
-            <button class="btn btn-secondary btn-sm" onclick="addCostRow()"><i data-lucide="plus"></i> Add</button>
-          </div>
-          <div class="card-bd">
-            <div style="display:grid;grid-template-columns:1fr 90px 90px 34px;gap:8px;margin-bottom:6px;align-items:center;">
-              <div class="form-label" style="margin:0;">Ingredient</div>
-              <div class="form-label" style="margin:0;">Cost (₹)</div>
-              <div class="form-label" style="margin:0;">Yield % <span title="Fraction of input that ends in final product (0–1)">ⓘ</span></div>
-              <div></div>
+
+    <!-- KPI row -->
+    <div class="stats-grid" style="margin-bottom:18px;">
+      <div class="stat-card">
+        <div><div class="stat-lbl">Last Computed Cost</div><div class="stat-val" id="cost-last" style="font-size:20px;margin-top:4px;">—</div></div>
+        <div class="ico ico-amber"><i data-lucide="indian-rupee"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Last Margin</div><div class="stat-val" id="cost-margin-kpi" style="font-size:20px;margin-top:4px;">—</div></div>
+        <div class="ico ico-green"><i data-lucide="trending-up"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Ingredients</div><div class="stat-val" id="cost-count-kpi" style="font-size:20px;margin-top:4px;">${_rows.length}</div></div>
+        <div class="ico ico-blue"><i data-lucide="layers"></i></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+      ${[['cost-tab-calc','Calculator','calculator'],['cost-tab-scan','Recipe Scan','file-scan'],['cost-tab-reco','Recommendations','lightbulb']].map(([id,label,icon],i)=>`
+      <button id="${id}" onclick="costTab('${id}')" class="btn ${i===0?'btn-primary':'btn-outline'}" style="gap:6px;">
+        <i data-lucide="${icon}" style="width:14px;height:14px;"></i>${label}
+      </button>`).join('')}
+    </div>
+
+    <!-- Calculator tab -->
+    <div id="cost-panel-calc">
+      <div class="two-col">
+        <div class="col-stack">
+          <div class="card">
+            <div class="card-hd">
+              <div><div class="card-title">Ingredients</div><div class="card-sub">Cost &amp; yield per component</div></div>
+              <button class="btn btn-secondary btn-sm" onclick="addCostRow()"><i data-lucide="plus"></i> Add</button>
             </div>
-            <div id="cost-rows"></div>
+            <div class="card-bd">
+              <div style="display:grid;grid-template-columns:1fr 90px 90px 34px;gap:8px;margin-bottom:6px;align-items:center;">
+                <div class="form-label" style="margin:0;">Ingredient</div>
+                <div class="form-label" style="margin:0;">Cost (₹)</div>
+                <div class="form-label" style="margin:0;">Yield % <span title="Fraction of input that ends in final product (0–1)">ⓘ</span></div>
+                <div></div>
+              </div>
+              <div id="cost-rows"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-stack">
+          <div class="card">
+            <div class="card-hd"><div class="card-title">Parameters</div></div>
+            <div class="card-bd">
+              <div class="form-group">
+                <label class="form-label">Overhead Cost (₹)</label>
+                <input class="form-input" type="number" id="c-overhead" value="5" min="0" step="0.5">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Selling Price (₹) <span class="form-hint">for margin analysis</span></label>
+                <input class="form-input" type="number" id="c-selling" value="35" min="0" step="0.5">
+              </div>
+              <button class="btn btn-primary btn-full" id="btn-cost" onclick="doComputeCost()">
+                <i data-lucide="calculator"></i> Calculate
+              </button>
+            </div>
+          </div>
+          <div id="cost-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recipe Scan tab -->
+    <div id="cost-panel-scan" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Recipe Document Scan</div><span class="badge badge-neutral">Phase 3</span></div>
+          <div class="card-bd">
+            <label class="drop-zone" style="cursor:default;opacity:0.7;">
+              <div class="dz-icon"><i data-lucide="file-text"></i></div>
+              <div class="dz-title">Drop recipe PDF or image here</div>
+              <div class="dz-sub">Extracts ingredients, quantities, and unit costs automatically</div>
+            </label>
+            <div class="info-box info-warn" style="margin-top:14px;font-size:12.5px;">
+              <strong>Phase 3:</strong> OCR-powered recipe scanning will extract ingredient names, quantities, and match them against your vendor price history to auto-populate the calculator.
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Market Rate Indicators</div><div class="card-sub">Reference prices — sandbox</div></div>
+          <div class="card-bd" style="padding:12px 16px;">
+            ${[
+              ['Atta (Chakki Fresh)', '₹40–46/kg', 'ok'],
+              ['Refined Sugar', '₹44–52/kg', 'ok'],
+              ['Butter (Amul)', '₹470–510/kg', 'warn'],
+              ['Fresh Yeast', '₹180–240/kg', 'warn'],
+              ['Maida', '₹28–36/kg', 'ok'],
+              ['Baking Powder', '₹200–280/kg', 'ok'],
+              ['Milk Powder', '₹280–340/kg', 'warn'],
+              ['Eggs', '₹6–8 each', 'ok'],
+            ].map(([item, range, status])=>`
+            <div class="kv" style="padding:9px 0;border-bottom:1px solid var(--border);">
+              <span style="font-size:12.5px;font-weight:500;">${item}</span>
+              <div style="display:flex;align-items:center;gap:7px;">
+                <span style="font-size:12px;color:var(--muted);font-family:ui-monospace,monospace;">${range}</span>
+                <span class="badge badge-${status === 'ok' ? 'ok' : 'warn'}" style="font-size:10px;">${status === 'ok' ? 'Stable' : 'Volatile'}</span>
+              </div>
+            </div>`).join('')}
+            <div class="info-box info-info" style="margin-top:12px;font-size:12px;">Phase 3: These will be pulled from vendor price history and updated on every purchase record.</div>
           </div>
         </div>
       </div>
-      <div class="col-stack">
+    </div>
+
+    <!-- Recommendations tab -->
+    <div id="cost-panel-reco" style="display:none;">
+      <div class="two-col">
         <div class="card">
-          <div class="card-hd"><div class="card-title">Parameters</div></div>
+          <div class="card-hd"><div class="card-title">Cost Optimization Tips</div></div>
           <div class="card-bd">
-            <div class="form-group">
-              <label class="form-label">Overhead Cost (₹)</label>
-              <input class="form-input" type="number" id="c-overhead" value="5" min="0" step="0.5">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Selling Price (₹) <span class="form-hint">for margin analysis</span></label>
-              <input class="form-input" type="number" id="c-selling" value="35" min="0" step="0.5">
-            </div>
-            <button class="btn btn-primary btn-full" id="btn-cost" onclick="doComputeCost()">
-              <i data-lucide="calculator"></i> Calculate
-            </button>
+            ${[
+              ['trending-down','Bulk purchase discount','Flour and sugar vendors typically offer 5–8% discount for monthly standing orders. Negotiate quarterly contracts.','High'],
+              ['package','Reduce waste yield','Increase yield % for flour from 0.9 → 0.95 by optimising dough hydration. Saves ~5% per unit.','Medium'],
+              ['truck','Alternate vendor comparison','Butter is your highest cost. Compare 3 vendors — typically ₹20–40/kg difference on bulk orders.','High'],
+              ['scissors','Overhead reduction','Overhead at ₹5/unit — energy cost tracking would identify peak-vs-off-peak baking savings.','Low'],
+              ['repeat','Recipe standardisation','Standardised recipes reduce material variance by 12–18%. Injection → Cost flow enables this.','Medium'],
+            ].map(([icon,title,desc,priority])=>`
+            <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);">
+              <div class="ico ico-amber" style="flex-shrink:0;"><i data-lucide="${icon}"></i></div>
+              <div style="flex:1;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                  <span style="font-size:13px;font-weight:600;">${title}</span>
+                  <span class="badge badge-${priority==='High'?'err':priority==='Medium'?'warn':'neutral'}" style="font-size:10px;">${priority}</span>
+                </div>
+                <div style="font-size:12px;color:var(--muted);line-height:1.5;">${desc}</div>
+              </div>
+            </div>`).join('')}
           </div>
         </div>
-        <div id="cost-result"></div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Recipe Popularity</div><span class="badge badge-neutral">Sandbox</span></div>
+          <div class="card-bd" style="padding:12px 16px;">
+            ${[
+              ['Croissant','High demand','₹38 avg cost','₹85 avg sell'],
+              ['Sourdough Loaf','Medium demand','₹28 avg cost','₹120 avg sell'],
+              ['Butter Cookies','High demand','₹12 avg cost','₹45 avg sell'],
+              ['Danish Pastry','Low demand','₹42 avg cost','₹90 avg sell'],
+            ].map(([name,demand,cost,sell])=>`
+            <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="font-size:13px;font-weight:600;">${name}</span>
+                <span class="badge badge-neutral">${demand}</span>
+              </div>
+              <div style="display:flex;gap:16px;">
+                <span style="font-size:11.5px;color:var(--err);">${cost}</span>
+                <span style="font-size:11.5px;color:var(--ok);">${sell}</span>
+              </div>
+            </div>`).join('')}
+            <div class="info-box info-info" style="margin-top:12px;font-size:12px;">Phase 3: Pulled from Sales records + Cost calculations automatically.</div>
+          </div>
+        </div>
       </div>
     </div>`;
+
   lucide.createIcons();
   renderCostRows();
+}
+
+function costTab(active) {
+  ['cost-tab-calc','cost-tab-scan','cost-tab-reco'].forEach(id => {
+    const btn = document.getElementById(id);
+    const panel = document.getElementById(id.replace('cost-tab-','cost-panel-'));
+    if (!btn) return;
+    if (id === active) { btn.className = 'btn btn-primary'; if (panel) panel.style.display = ''; }
+    else { btn.className = 'btn btn-outline'; if (panel) panel.style.display = 'none'; }
+  });
 }
 
 function renderCostRows() {
@@ -1058,7 +1189,14 @@ async function doComputeCost() {
       selling_price: +document.getElementById('c-selling').value || null,
     };
     const data = await POST('/cost/compute', payload);
-    renderCostResult(data); toast('Cost computed');
+    renderCostResult(data);
+    const kpiLast = document.getElementById('cost-last');
+    const kpiMargin = document.getElementById('cost-margin-kpi');
+    const kpiCount = document.getElementById('cost-count-kpi');
+    if (kpiLast) kpiLast.textContent = '₹' + data.total_cost;
+    if (kpiMargin) kpiMargin.textContent = data.margin_percent != null ? data.margin_percent + '%' : '—';
+    if (kpiCount) kpiCount.textContent = _rows.length;
+    toast('Cost computed');
   } catch(e) { toast(e.message, 'err'); } finally { setLoad(btn, false); }
 }
 
@@ -1093,69 +1231,191 @@ function proofing(el) {
   el.innerHTML = `
     <div class="page-hd">
       <div class="page-title">Proofing Telemetry</div>
-      <div class="page-desc">Submit fermentation chamber readings. Anomaly scores above 0.35 trigger auto-remediation and SRE escalation.</div>
+      <div class="page-desc">Submit fermentation chamber readings, view history trends, and monitor HVAC and environmental controls.</div>
     </div>
-    <div class="two-col">
-      <div class="card">
-        <div class="card-hd"><div class="card-title">Chamber Readings</div></div>
-        <div class="card-bd">
-          <div class="grid-2">
-            <div class="form-group">
-              <label class="form-label">Temperature (°C)</label>
-              <input class="form-input" type="number" id="p-temp" value="28" step="0.5">
+
+    <!-- KPI row -->
+    <div class="stats-grid" style="margin-bottom:18px;">
+      <div class="stat-card">
+        <div><div class="stat-lbl">Readings Today</div><div class="stat-val" id="pf-count" style="font-size:20px;margin-top:4px;">—</div></div>
+        <div class="ico ico-amber"><i data-lucide="thermometer"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Status</div><div class="stat-val" id="pf-status" style="font-size:16px;margin-top:4px;">—</div></div>
+        <div class="ico ico-green"><i data-lucide="activity"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Last Anomaly Score</div><div class="stat-val" id="pf-anomaly" style="font-size:20px;margin-top:4px;">—</div></div>
+        <div class="ico ico-blue"><i data-lucide="alert-triangle"></i></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+      ${[['pf-tab-chamber','Chamber Readings','thermometer'],['pf-tab-trends','Trends','bar-chart-2'],['pf-tab-controls','Control Systems','cpu']].map(([id,label,icon],i)=>`
+      <button id="${id}" onclick="pfTab('${id}')" class="btn ${i===0?'btn-primary':'btn-outline'}" style="gap:6px;">
+        <i data-lucide="${icon}" style="width:14px;height:14px;"></i>${label}
+      </button>`).join('')}
+    </div>
+
+    <!-- Chamber Readings tab -->
+    <div id="pf-panel-chamber">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Chamber Readings</div></div>
+          <div class="card-bd">
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Temperature (°C)</label>
+                <input class="form-input" type="number" id="p-temp" value="28" step="0.5">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Humidity (%)</label>
+                <input class="form-input" type="number" id="p-hum" value="75" step="1" min="0" max="100">
+              </div>
+              <div class="form-group">
+                <label class="form-label">CO₂ (PPM)</label>
+                <input class="form-input" type="number" id="p-co2" value="800" step="10">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Fan Speed (RPM) <span class="form-hint">optional</span></label>
+                <input class="form-input" type="number" id="p-fan" value="1200" step="50">
+              </div>
             </div>
             <div class="form-group">
-              <label class="form-label">Humidity (%)</label>
-              <input class="form-input" type="number" id="p-hum" value="75" step="1" min="0" max="100">
+              <label class="form-label">Chamber Status</label>
+              <select class="form-select" id="p-status">
+                <option value="stable">Stable</option>
+                <option value="rising">Rising</option>
+                <option value="falling">Falling</option>
+                <option value="anomaly">Anomaly</option>
+              </select>
             </div>
             <div class="form-group">
-              <label class="form-label">CO₂ (PPM)</label>
-              <input class="form-input" type="number" id="p-co2" value="800" step="10">
+              <label class="form-label">Anomaly Score (0–1) <span class="form-hint">triggers alert if &gt; 0.35</span></label>
+              <input class="form-input" type="number" id="p-anomaly" step="0.01" min="0" max="1" placeholder="e.g. 0.12">
             </div>
-            <div class="form-group">
-              <label class="form-label">Fan Speed (RPM) <span class="form-hint">optional</span></label>
-              <input class="form-input" type="number" id="p-fan" value="1200" step="50">
+            <button class="btn btn-primary btn-full" id="btn-proof" onclick="doProofing()">
+              <i data-lucide="send"></i> Submit Reading
+            </button>
+          </div>
+        </div>
+        <div class="col-stack">
+          <div class="card">
+            <div class="card-hd"><div class="card-title">Optimal Ranges</div></div>
+            <div class="card-bd" style="padding:12px 16px;">
+              ${[
+                ['Temperature','26 – 32 °C','Optimal yeast activity range'],
+                ['Humidity','70 – 80%','Prevents surface crust formation'],
+                ['CO₂','600 – 1200 ppm','Normal fermentation CO₂ output'],
+                ['Fan Speed','800 – 1500 RPM','Even air circulation in chamber'],
+              ].map(([label,range,note]) => `
+                <div class="kv" style="padding:9px 0;border-bottom:1px solid var(--border);">
+                  <div><div style="font-size:13px;font-weight:500;">${label}</div><div style="font-size:11px;color:var(--muted);">${note}</div></div>
+                  <span class="badge badge-neutral">${range}</span>
+                </div>`).join('')}
             </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Chamber Status</label>
-            <select class="form-select" id="p-status">
-              <option value="stable">Stable</option>
-              <option value="rising">Rising</option>
-              <option value="falling">Falling</option>
-              <option value="anomaly">Anomaly</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Anomaly Score (0–1) <span class="form-hint">optional — triggers alert if &gt; 0.35</span></label>
-            <input class="form-input" type="number" id="p-anomaly" step="0.01" min="0" max="1" placeholder="e.g. 0.12">
-          </div>
-          <button class="btn btn-primary btn-full" id="btn-proof" onclick="doProofing()">
-            <i data-lucide="send"></i> Submit Reading
-          </button>
+          <div id="proof-result"></div>
         </div>
       </div>
+    </div>
 
-      <div class="col-stack">
+    <!-- Trends tab -->
+    <div id="pf-panel-trends" style="display:none;">
+      <div class="two-col">
         <div class="card">
-          <div class="card-hd"><div class="card-title">Optimal Ranges</div></div>
-          <div class="card-bd" style="padding:12px 16px;">
-            ${[
-              ['Thermometer','Temperature','26 – 32 °C','Optimal yeast activity range'],
-              ['Droplets','Humidity','70 – 80%','Prevents surface crust formation'],
-              ['Wind','CO₂','600 – 1200 ppm','Normal fermentation CO₂ output'],
-              ['Fan','Fan Speed','800 – 1500 RPM','Even air circulation in chamber'],
-            ].map(([_,label,range,note]) => `
-              <div class="kv">
-                <div><div style="font-size:13px;font-weight:500;">${label}</div><div style="font-size:11px;color:var(--muted);">${note}</div></div>
-                <span class="badge badge-neutral">${range}</span>
-              </div>`).join('')}
+          <div class="card-hd"><div class="card-title">Reading History</div><div class="card-sub">Last 10 submissions this session</div></div>
+          <div class="card-bd" style="padding:0;">
+            <div id="pf-history-table" style="max-height:400px;overflow-y:auto;padding:12px 16px;">
+              <div style="text-align:center;color:var(--muted);font-size:12.5px;padding:24px 0;">Submit readings from the Chamber tab to populate history.</div>
+            </div>
           </div>
         </div>
-        <div id="proof-result"></div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Sparkline View</div><span class="badge badge-neutral">Phase 3</span></div>
+          <div class="card-bd">
+            <div style="height:160px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--bg-secondary);border:1px solid var(--border);color:var(--muted);font-size:12.5px;text-align:center;padding:16px;margin-bottom:12px;">
+              <div><i data-lucide="trending-up" style="width:32px;height:32px;margin-bottom:8px;display:block;margin-inline:auto;"></i>Phase 3: Live sparkline chart for temperature, humidity, and CO₂ over time</div>
+            </div>
+            <div class="info-box info-info" style="font-size:12px;">
+              Phase 3: Time-series sparklines will be rendered from stored telemetry, showing trends across proofing sessions and flagging out-of-range periods.
+            </div>
+            <div style="margin-top:12px;">
+              ${[['Temperature','Rising','warn'],['Humidity','Stable','ok'],['CO₂','Stable','ok']].map(([label,trend,cls])=>`
+              <div class="kv" style="padding:8px 0;border-bottom:1px solid var(--border);">
+                <span style="font-size:13px;font-weight:500;">${label}</span>
+                <span class="badge badge-${cls}">${trend}</span>
+              </div>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Control Systems tab -->
+    <div id="pf-panel-controls" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">HVAC &amp; Climate Control</div><span class="badge badge-neutral">Phase 3</span></div>
+          <div class="card-bd">
+            <div class="info-box info-warn" style="font-size:12.5px;margin-bottom:16px;">
+              <strong>Phase 3:</strong> Direct HVAC integration via serial/modbus. Parameters will be auto-adjusted when anomaly score exceeds threshold.
+            </div>
+            ${[
+              ['Compressor','Manual override','—'],
+              ['Humidifier','Auto balance','75%'],
+              ['CO₂ Vent','Auto vent','&gt; 1200 ppm'],
+              ['Fan Speed','Constant','1200 RPM'],
+              ['Air Exchange','Timed','Every 30 min'],
+            ].map(([ctrl,mode,val])=>`
+            <div class="kv" style="padding:9px 0;border-bottom:1px solid var(--border);">
+              <div><div style="font-size:13px;font-weight:500;">${ctrl}</div><div style="font-size:11px;color:var(--muted);">${mode}</div></div>
+              <span style="font-size:12px;color:var(--muted);font-family:ui-monospace,monospace;">${val}</span>
+            </div>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Weather Integration</div><span class="badge badge-neutral">Phase 3</span></div>
+          <div class="card-bd">
+            <div style="height:100px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--bg-secondary);border:1px dashed var(--border);color:var(--muted);font-size:12.5px;text-align:center;margin-bottom:14px;">
+              <div><span style="font-size:28px;">🌦</span><br>Phase 3: 2–3 km radius weather feed<br>for ambient compensation</div>
+            </div>
+            <div class="info-box info-info" style="font-size:12px;">
+              Outdoor humidity and temperature will be used to pre-adjust chamber targets before each proofing session, reducing operator intervention.
+            </div>
+            <div class="card" style="margin-top:14px;background:var(--bg-secondary);">
+              <div class="card-hd"><div class="card-title">Oven Camera</div><span class="badge badge-neutral">Phase 3</span></div>
+              <div class="card-bd" style="font-size:12px;color:var(--muted);">Live oven camera feed with AI crust-color detection will display here. Browning score will auto-trigger quality check.</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>`;
+
   lucide.createIcons();
+  _pfLoadDashboardCount();
+}
+
+function pfTab(active) {
+  ['pf-tab-chamber','pf-tab-trends','pf-tab-controls'].forEach(id => {
+    const btn = document.getElementById(id);
+    const panel = document.getElementById(id.replace('pf-tab-','pf-panel-'));
+    if (!btn) return;
+    if (id === active) { btn.className = 'btn btn-primary'; if (panel) panel.style.display = ''; }
+    else { btn.className = 'btn btn-outline'; if (panel) panel.style.display = 'none'; }
+  });
+}
+
+// in-memory session history for sparkline placeholder
+let _pfHistory = [];
+
+async function _pfLoadDashboardCount() {
+  try {
+    const data = await GET('/dashboard/summary');
+    const el = document.getElementById('pf-count');
+    if (el) el.textContent = data.proofing_readings ?? '—';
+  } catch(_) {}
 }
 
 async function doProofing() {
@@ -1170,8 +1430,37 @@ async function doProofing() {
       anomaly_score: document.getElementById('p-anomaly').value ? +document.getElementById('p-anomaly').value : null,
     };
     const data = await POST('/proofing/telemetry', payload);
-    renderProofResult(data, payload); toast('Telemetry logged');
+    renderProofResult(data, payload);
+    // update session history for Trends tab
+    _pfHistory.unshift({ ...payload, ts: new Date().toLocaleTimeString() });
+    if (_pfHistory.length > 10) _pfHistory.pop();
+    _pfRenderHistory();
+    // update KPI cards
+    const sEl = document.getElementById('pf-status');
+    const aEl = document.getElementById('pf-anomaly');
+    if (sEl) sEl.textContent = payload.status;
+    if (aEl) aEl.textContent = payload.anomaly_score != null ? payload.anomaly_score.toFixed(2) : '0.00';
+    toast('Telemetry logged');
   } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
+}
+
+function _pfRenderHistory() {
+  const el = document.getElementById('pf-history-table');
+  if (!el || _pfHistory.length === 0) return;
+  el.innerHTML = `
+    <table class="data-table">
+      <thead><tr><th>Time</th><th>Temp °C</th><th>Humidity %</th><th>CO₂ ppm</th><th>Status</th><th>Anomaly</th></tr></thead>
+      <tbody>${_pfHistory.map(r=>`
+        <tr>
+          <td style="color:var(--muted);font-size:11.5px;">${r.ts}</td>
+          <td>${r.temperature_c}</td>
+          <td>${r.humidity_percent}</td>
+          <td>${r.co2_ppm}</td>
+          <td><span class="badge badge-${r.status==='anomaly'?'err':r.status==='stable'?'ok':'warn'}">${r.status}</span></td>
+          <td style="color:${(r.anomaly_score||0)>0.35?'var(--err)':'var(--ok)'};">${r.anomaly_score??'0.00'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
 }
 
 function renderProofResult(data, payload) {
@@ -1748,40 +2037,260 @@ function sales(el) {
   el.innerHTML = `
     <div class="page-hd">
       <div class="page-title">Sales</div>
-      <div class="page-desc">Track items sold, incoming revenue, and profit per product and period.</div>
+      <div class="page-desc">Record sales, track daily revenue, and monitor per-product performance.</div>
     </div>
-    <div class="info-box info-info" style="margin-bottom:18px;font-size:12.5px;">
-      <strong>Phase 3 — coming soon.</strong> Sale recording, revenue dashboards, and profit reporting will be implemented here.
-      Data will link to Stock Management (ingredient consumption) and Cost Calculator (margin).
-    </div>
-    <div class="stats-grid">
+
+    <!-- KPI row -->
+    <div class="stats-grid" style="margin-bottom:18px;" id="sales-kpis">
       <div class="stat-card">
-        <div><div class="stat-lbl">Today's Revenue</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Record sales to populate</div></div>
+        <div><div class="stat-lbl">Today's Revenue</div><div class="stat-val" id="sl-rev" style="font-size:20px;margin-top:4px;">—</div></div>
         <div class="ico ico-green"><i data-lucide="trending-up"></i></div>
       </div>
       <div class="stat-card">
-        <div><div class="stat-lbl">Items Sold Today</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Sales log empty</div></div>
+        <div><div class="stat-lbl">Items Sold Today</div><div class="stat-val" id="sl-items" style="font-size:20px;margin-top:4px;">—</div></div>
         <div class="ico ico-amber"><i data-lucide="shopping-bag"></i></div>
       </div>
       <div class="stat-card">
-        <div><div class="stat-lbl">Gross Profit</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Needs cost data</div></div>
-        <div class="ico ico-blue"><i data-lucide="banknote"></i></div>
+        <div><div class="stat-lbl">Avg Unit Price</div><div class="stat-val" id="sl-avg" style="font-size:20px;margin-top:4px;">—</div></div>
+        <div class="ico ico-blue"><i data-lucide="indian-rupee"></i></div>
       </div>
       <div class="stat-card">
-        <div><div class="stat-lbl">Top Product</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Sales data required</div></div>
-        <div class="ico ico-purple"><i data-lucide="award"></i></div>
+        <div><div class="stat-lbl">Profit Summary</div><div class="stat-val" style="font-size:14px;margin-top:4px;color:var(--muted);">Phase 3</div></div>
+        <div class="ico ico-purple"><i data-lucide="banknote"></i></div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-hd"><div class="card-title">Planned views in this section</div></div>
-      <div class="card-bd">
-        <ul style="margin:0;padding-left:18px;display:grid;grid-template-columns:1fr 1fr;gap:5px 24px;">
-          ${['Daily / weekly / monthly revenue','Per-product performance dashboard','Profit margin per SKU','Recipe usage driven by sales','Ingredient consumption from sales','Cost saved via recommendations'].map(i =>
-            `<li style="font-size:12.5px;color:var(--muted);padding:3px 0;">${i}</li>`).join('')}
-        </ul>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+      ${[['sl-tab-record','Record Sale','plus-circle'],['sl-tab-daily','Daily Performance','bar-chart-2'],['sl-tab-profit','Profit Summary','trending-up']].map(([id,label,icon],i)=>`
+      <button id="${id}" onclick="slTab('${id}')" class="btn ${i===0?'btn-primary':'btn-outline'}" style="gap:6px;">
+        <i data-lucide="${icon}" style="width:14px;height:14px;"></i>${label}
+      </button>`).join('')}
+    </div>
+
+    <!-- Record Sale tab -->
+    <div id="sl-panel-record">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Record a Sale</div></div>
+          <div class="card-bd">
+            <div class="form-group">
+              <label class="form-label">Product Name</label>
+              <input class="form-input" id="sl-product" placeholder="e.g. Croissant, Sourdough Loaf">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Quantity Sold</label>
+              <input class="form-input" type="number" id="sl-qty" value="1" min="0.01" step="0.5">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Unit Price (₹)</label>
+              <input class="form-input" type="number" id="sl-price" value="45" min="0" step="0.5">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Total Amount (₹) <span class="form-hint">auto-calculated on submit</span></label>
+              <div style="padding:8px 12px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--muted);" id="sl-total-preview">—</div>
+            </div>
+            <button class="btn btn-primary btn-full" id="btn-sl" onclick="doRecordSale()">
+              <i data-lucide="check-circle"></i> Record Sale
+            </button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Today's Entries</div><button class="btn btn-secondary btn-sm" onclick="_slLoadDaily()"><i data-lucide="refresh-cw"></i> Refresh</button></div>
+          <div class="card-bd" style="padding:0;">
+            <div id="sl-entries-list" style="max-height:320px;overflow-y:auto;padding:12px 16px;">
+              <div style="text-align:center;color:var(--muted);font-size:12.5px;padding:24px 0;">No entries yet. Record a sale to begin.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daily Performance tab -->
+    <div id="sl-panel-daily" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Daily Revenue</div><button class="btn btn-secondary btn-sm" onclick="_slLoadDaily()"><i data-lucide="refresh-cw"></i> Load</button></div>
+          <div class="card-bd" style="padding:0;">
+            <div id="sl-daily-table" style="min-height:200px;padding:12px 16px;">
+              <div style="text-align:center;color:var(--muted);font-size:12.5px;padding:32px 0;">Click Load to fetch today's sales data.</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Product Performance</div></div>
+          <div class="card-bd" style="padding:12px 16px;">
+            <div id="sl-products-breakdown">
+              <div style="text-align:center;color:var(--muted);font-size:12.5px;padding:32px 0;">Load daily data to see per-product breakdown.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profit Summary tab -->
+    <div id="sl-panel-profit" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Gross Profit Analysis</div><span class="badge badge-neutral">Phase 3</span></div>
+          <div class="card-bd">
+            <div class="info-box info-warn" style="font-size:12.5px;">
+              <strong>Phase 3:</strong> Profit analysis will cross-reference Sales records with Cost Calculator outputs to show gross margin per product, per period.
+            </div>
+            ${[
+              ['Sales → Cost linkage','Maps each sale to its recipe cost computation so margin is auto-tracked.'],
+              ['Ingredient consumption tracking','Deducts sold quantities from Stock levels automatically.'],
+              ['Seasonal profitability','Identifies your best-margin products by time of day, week, and season.'],
+              ['Vendor cost vs. sell-price sensitivity','Shows how a 10% supplier price change affects your margins.'],
+            ].map(([title,desc])=>`
+            <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+              <div style="font-size:13px;font-weight:600;margin-bottom:4px;">${title}</div>
+              <div style="font-size:12px;color:var(--muted);line-height:1.5;">${desc}</div>
+            </div>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Revenue Targets</div><span class="badge badge-neutral">Sandbox</span></div>
+          <div class="card-bd" style="padding:12px 16px;">
+            ${[
+              ['Daily Target','₹8,000','—','—'],
+              ['Weekly Target','₹56,000','—','—'],
+              ['Monthly Target','₹2,40,000','—','—'],
+            ].map(([period,target,actual,pct])=>`
+            <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:13px;font-weight:500;">${period}</span>
+                <span style="font-size:12px;color:var(--muted);">Target: <strong>${target}</strong></span>
+              </div>
+              <div class="prog-bg"><div class="prog-fill prog-amber" style="width:0%"></div></div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">Actual: ${actual} · Attainment: ${pct}</div>
+            </div>`).join('')}
+            <div class="info-box info-info" style="margin-top:12px;font-size:12px;">Phase 3: Attainment bars will fill from live daily/monthly sales totals.</div>
+          </div>
+        </div>
       </div>
     </div>`;
+
+  // live preview total
+  const qEl = document.getElementById('sl-qty');
+  const pEl = document.getElementById('sl-price');
+  const prev = document.getElementById('sl-total-preview');
+  function updatePreview() {
+    const t = ((+qEl.value||0) * (+pEl.value||0)).toFixed(2);
+    if (prev) prev.textContent = '₹' + t;
+  }
+  if (qEl) qEl.addEventListener('input', updatePreview);
+  if (pEl) pEl.addEventListener('input', updatePreview);
+  updatePreview();
+
   lucide.createIcons();
+  _slLoadDaily();
+}
+
+function slTab(active) {
+  ['sl-tab-record','sl-tab-daily','sl-tab-profit'].forEach(id => {
+    const btn = document.getElementById(id);
+    const panel = document.getElementById(id.replace('sl-tab-','sl-panel-'));
+    if (!btn) return;
+    if (id === active) { btn.className = 'btn btn-primary'; if (panel) panel.style.display = ''; }
+    else { btn.className = 'btn btn-outline'; if (panel) panel.style.display = 'none'; }
+  });
+}
+
+async function doRecordSale() {
+  const btn = document.getElementById('btn-sl'); setLoad(btn, true);
+  const product = (document.getElementById('sl-product').value || '').trim();
+  const qty = +document.getElementById('sl-qty').value;
+  const price = +document.getElementById('sl-price').value;
+  if (!product) { toast('Product name is required', 'err'); setLoad(btn, false); return; }
+  if (!qty || qty <= 0) { toast('Quantity must be positive', 'err'); setLoad(btn, false); return; }
+  if (!price || price <= 0) { toast('Unit price must be positive', 'err'); setLoad(btn, false); return; }
+  try {
+    const data = await POST('/sales/record', { product_name: product, quantity_sold: qty, unit_price: price });
+    toast('Sale recorded — ₹' + parseFloat(data.total_amount).toFixed(2));
+    document.getElementById('sl-product').value = '';
+    document.getElementById('sl-qty').value = '1';
+    document.getElementById('sl-price').value = '45';
+    document.getElementById('sl-total-preview').textContent = '—';
+    _slLoadDaily();
+  } catch(e) { toast(e.message, 'err'); } finally { setLoad(btn, false); }
+}
+
+async function _slLoadDaily() {
+  try {
+    const data = await GET('/sales/daily');
+    // KPIs
+    const rev = document.getElementById('sl-rev');
+    const items = document.getElementById('sl-items');
+    const avg = document.getElementById('sl-avg');
+    if (rev) rev.textContent = '₹' + parseFloat(data.total_revenue||0).toFixed(2);
+    if (items) items.textContent = parseFloat(data.total_sales||0).toFixed(0);
+    if (avg) avg.textContent = data.total_sales > 0 ? '₹' + (data.total_revenue / data.total_sales).toFixed(2) : '—';
+    // Entries list
+    const entriesEl = document.getElementById('sl-entries-list');
+    if (entriesEl) {
+      if (!data.items || data.items.length === 0) {
+        entriesEl.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12.5px;padding:24px 0;">No sales recorded today.</div>';
+      } else {
+        entriesEl.innerHTML = data.items.map(s => `
+          <div class="kv" style="padding:9px 0;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-size:13px;font-weight:600;">${s.product_name}</div>
+              <div style="font-size:11.5px;color:var(--muted);">Qty: ${s.quantity_sold} × ₹${parseFloat(s.unit_price).toFixed(2)}</div>
+            </div>
+            <span style="font-size:14px;font-weight:700;color:var(--ok);">₹${parseFloat(s.total_amount).toFixed(2)}</span>
+          </div>`).join('');
+      }
+    }
+    // Daily table
+    const tableEl = document.getElementById('sl-daily-table');
+    if (tableEl) {
+      if (!data.items || data.items.length === 0) {
+        tableEl.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12.5px;padding:32px 0;">No sales for today yet.</div>';
+      } else {
+        tableEl.innerHTML = `
+          <table class="data-table">
+            <thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>Time</th></tr></thead>
+            <tbody>${data.items.map(s=>`
+              <tr>
+                <td>${s.product_name}</td>
+                <td>${s.quantity_sold}</td>
+                <td>₹${parseFloat(s.unit_price).toFixed(2)}</td>
+                <td style="font-weight:600;color:var(--ok);">₹${parseFloat(s.total_amount).toFixed(2)}</td>
+                <td style="color:var(--muted);font-size:11.5px;">${new Date(s.sold_at).toLocaleTimeString()}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+          <div class="kv" style="margin-top:12px;padding:10px 0;border-top:2px solid var(--border);">
+            <span style="font-size:13px;font-weight:600;">Daily Total</span>
+            <span style="font-size:16px;font-weight:700;color:var(--ok);">₹${parseFloat(data.total_revenue||0).toFixed(2)}</span>
+          </div>`;
+        // Product breakdown
+        const brkEl = document.getElementById('sl-products-breakdown');
+        if (brkEl) {
+          const byProduct = {};
+          data.items.forEach(s => {
+            if (!byProduct[s.product_name]) byProduct[s.product_name] = { qty: 0, rev: 0, count: 0 };
+            byProduct[s.product_name].qty += parseFloat(s.quantity_sold);
+            byProduct[s.product_name].rev += parseFloat(s.total_amount);
+            byProduct[s.product_name].count++;
+          });
+          const maxRev = Math.max(...Object.values(byProduct).map(v=>v.rev), 1);
+          brkEl.innerHTML = Object.entries(byProduct).sort((a,b)=>b[1].rev-a[1].rev).map(([name, v])=>`
+            <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+              <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                <span style="font-size:13px;font-weight:500;">${name}</span>
+                <span style="font-size:13px;font-weight:700;color:var(--ok);">₹${v.rev.toFixed(2)}</span>
+              </div>
+              <div class="prog-bg"><div class="prog-fill prog-green" style="width:${(v.rev/maxRev*100).toFixed(1)}%"></div></div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">${v.qty.toFixed(1)} units · ${v.count} transaction${v.count>1?'s':''}</div>
+            </div>`).join('');
+        }
+      }
+    }
+  } catch(e) {
+    const rev = document.getElementById('sl-rev'); if (rev) rev.textContent = 'Error';
+  }
 }
 
 /* ════════════════════════════════════

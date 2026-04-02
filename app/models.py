@@ -215,3 +215,14 @@ class AnomalyEvent(Base):
     succeeded: Mapped[bool] = mapped_column(Boolean, default=True)
     human_notified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SaleRecord(Base):
+    __tablename__ = "sale_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity_sold: Mapped[float] = mapped_column(Float, nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    sold_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

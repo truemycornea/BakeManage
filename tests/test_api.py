@@ -321,3 +321,61 @@ def test_stock_expiring_endpoint(client):
 def test_stock_list_ops_role(client):
     r = client.get("/stock/items", headers=OPS)
     assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# §10 Sales tests
+# ---------------------------------------------------------------------------
+
+def test_sales_record_and_list(client):
+    r = client.post("/sales/record", json={
+        "product_name": "Croissant",
+        "quantity_sold": 5,
+        "unit_price": 45.0,
+    }, headers=OWNER)
+    assert r.status_code == 200
+    d = r.json()
+    assert d["product_name"] == "Croissant"
+    assert float(d["total_amount"]) == pytest.approx(225.0)
+    assert "sold_at" in d
+
+    # daily summary should include this record
+    r2 = client.get("/sales/daily", headers=OWNER)
+    assert r2.status_code == 200
+    d2 = r2.json()
+    assert d2["total_sales"] >= 1
+    assert d2["total_revenue"] >= 225.0
+    assert any(i["product_name"] == "Croissant" for i in d2["items"])
+
+
+def test_sales_daily_summary(client):
+    r = client.get("/sales/daily", headers=OWNER)
+    assert r.status_code == 200
+    d = r.json()
+    assert "date" in d
+    assert "total_sales" in d
+    assert "total_revenue" in d
+    assert isinstance(d["items"], list)
+
+
+def test_sales_record_invalid(client):
+    # empty product name
+    r = client.post("/sales/record", json={
+        "product_name": "",
+        "quantity_sold": 1,
+        "unit_price": 10.0,
+    }, headers=OWNER)
+    assert r.status_code == 422
+
+    # zero quantity
+    r = client.post("/sales/record", json={
+        "product_name": "Bread",
+        "quantity_sold": 0,
+        "unit_price": 10.0,
+    }, headers=OWNER)
+    assert r.status_code == 422
+
+
+def test_sales_ops_role(client):
+    r = client.get("/sales/daily", headers=OPS)
+    assert r.status_code == 200
