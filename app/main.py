@@ -18,7 +18,8 @@ from PIL import Image, ImageStat
 from pydantic import BaseModel
 
 from .cache import cache_get, cache_set, get_redis_client
-from .cache import cache_inventory_snapshot, cached_inventory_state
+from .cache import cache_inventory_snapshot
+from .tasks import cached_inventory_state
 from .config import settings
 from .database import Base, engine, get_session
 from .ingestion import parse_excel_invoice, parse_structural_layout, persist_invoice, simulate_vlm_ocr

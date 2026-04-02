@@ -28,7 +28,9 @@ class Settings(BaseModel):
         default=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
     )
     environment: str = Field(default=os.getenv("ENVIRONMENT", "development"))
-    enforce_https: bool = Field(default=True)
+    enforce_https: bool = Field(
+        default=os.getenv("ENFORCE_HTTPS", "true").strip().lower() not in ("false", "0", "no")
+    )
     cache_ttl_seconds: int = Field(default=300)
     cache_namespace: str = Field(default="bakemanage")
     fernet_key: str = Field(default=os.getenv("FERNET_KEY", _default_fernet_key()))

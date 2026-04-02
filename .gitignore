@@ -1,7 +1,41 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Testing
 .pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
 .venv/
+venv/
+env/
+
+# Secrets — never commit
 .env
-.cache/
+*.key
+*.pem
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Logs
+*.log
+logs/

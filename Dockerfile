@@ -24,6 +24,10 @@ COPY --from=builder /root/.local /home/bakemanage/.local
 COPY requirements.txt .
 COPY app ./app
 COPY docs ./docs
+COPY tests ./tests
+COPY pytest.ini .
+
+ENV PYTHONPATH=/app
 
 EXPOSE 8000
 

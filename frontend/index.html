@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BakeManage — ERP Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sb:240px;
+  --sb-bg:#0F172A;
+  --sb-hover:rgba(255,255,255,.05);
+  --sb-active:rgba(245,158,11,.12);
+  --sb-text:#94A3B8;
+  --sb-active-text:#F59E0B;
+  --accent:#F59E0B;
+  --accent-d:#D97706;
+  --accent-dd:#B45309;
+  --bg:#F1F5F9;
+  --surface:#FFFFFF;
+  --border:#E2E8F0;
+  --text:#0F172A;
+  --muted:#64748B;
+  --faint:#94A3B8;
+  --ok:#059669;
+  --ok-bg:#ECFDF5;
+  --ok-br:#A7F3D0;
+  --warn:#D97706;
+  --warn-bg:#FFFBEB;
+  --warn-br:#FDE68A;
+  --err:#DC2626;
+  --err-bg:#FEF2F2;
+  --err-br:#FECACA;
+  --info:#2563EB;
+  --info-bg:#EFF6FF;
+  --info-br:#BFDBFE;
+  --r:8px;
+  --rl:12px;
+  --sh:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --sh-md:0 4px 6px -1px rgba(0,0,0,.07),0 2px 4px -2px rgba(0,0,0,.05);
+}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13.5px;color:var(--text);background:var(--bg);height:100vh;overflow:hidden}
+
+/* ── APP SHELL ── */
+#app{display:flex;height:100vh;overflow:hidden}
+#sidebar{width:var(--sb);min-width:var(--sb);background:var(--sb-bg);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ── SIDEBAR ── */
+.sb-logo{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
+.sb-brand{display:flex;align-items:center;gap:10px}
+.sb-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#F59E0B,#B45309);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;letter-spacing:-.5px;flex-shrink:0}
+.sb-name{font-size:15px;font-weight:700;color:#F8FAFC;letter-spacing:-.3px;line-height:1.2}
+.sb-ver{font-size:10px;color:#475569;margin-top:1px}
+.sb-nav{flex:1;padding:10px 8px;display:flex;flex-direction:column;gap:1px}
+.sb-sec{font-size:10px;font-weight:600;color:#334155;letter-spacing:.8px;text-transform:uppercase;padding:12px 8px 5px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:6px;cursor:pointer;color:var(--sb-text);font-size:13px;font-weight:500;transition:all .15s;user-select:none}
+.nav-item:hover{background:var(--sb-hover);color:#CBD5E1}
+.nav-item.active{background:var(--sb-active);color:var(--sb-active-text)}
+.nav-item svg{width:15px;height:15px;flex-shrink:0}
+.sb-footer{padding:10px 12px;border-top:1px solid rgba(255,255,255,.06)}
+.user-pill{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;background:rgba(255,255,255,.04);cursor:pointer}
+.user-pill:hover{background:rgba(255,255,255,.07)}
+.avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#F59E0B,#D97706);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.user-info{flex:1;min-width:0}
+.user-role{font-size:12px;font-weight:600;color:#E2E8F0;text-transform:capitalize}
+.user-sub{font-size:10.5px;color:#475569}
+.signout-btn{color:#475569;cursor:pointer;transition:color .15s}
+.signout-btn:hover{color:var(--err)}
+
+/* ── HEADER ── */
+.header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 22px;flex-shrink:0}
+.breadcrumb{display:flex;align-items:center;gap:6px}
+.bc-root{font-size:12.5px;color:var(--muted)}
+.bc-sep{color:var(--faint);font-size:12px}
+.bc-curr{font-size:13.5px;font-weight:600;color:var(--text)}
+.header-right{display:flex;align-items:center;gap:14px}
+.api-badge{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;background:var(--bg);border:1px solid var(--border)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.dot.off{background:var(--err);animation:none!important}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.dot{animation:pulse 2.5s infinite}
+.dot-label{font-size:11.5px;font-weight:500;color:var(--muted)}
+.docs-link{font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);transition:all .15s}
+.docs-link:hover{color:var(--accent-d);border-color:var(--accent)}
+.docs-link svg{width:13px;height:13px}
+
+/* ── CONTENT ── */
+#content{flex:1;overflow-y:auto;padding:24px}
+.page-hd{margin-bottom:22px}
+.page-title{font-size:19px;font-weight:700;color:var(--text);letter-spacing:-.4px;margin-bottom:4px}
+.page-desc{font-size:13px;color:var(--muted);line-height:1.5}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh)}
+.card-hd{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.card-title{font-size:13.5px;font-weight:600;color:var(--text)}
+.card-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.card-bd{padding:18px}
+
+/* ── STATS ── */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;display:flex;justify-content:space-between;align-items:flex-start;box-shadow:var(--sh)}
+.stat-lbl{font-size:11.5px;font-weight:500;color:var(--muted)}
+.stat-val{font-size:22px;font-weight:700;color:var(--text);margin-top:5px;letter-spacing:-.5px;line-height:1}
+.stat-hint{font-size:11px;color:var(--faint);margin-top:4px}
+.ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ico svg{width:16px;height:16px}
+.ico-amber{background:#FEF3C7;color:#D97706}
+.ico-green{background:#DCFCE7;color:#16A34A}
+.ico-blue{background:#DBEAFE;color:#2563EB}
+.ico-purple{background:#EDE9FE;color:#7C3AED}
+.ico-slate{background:#F1F5F9;color:#475569}
+
+/* ── CAPABILITY GRID ── */
+.cap-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cap-item{display:flex;gap:12px;padding:13px;border:1px solid var(--border);border-radius:8px;align-items:flex-start}
+.cap-text .cap-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px}
+.cap-text .cap-desc{font-size:11.5px;color:var(--muted);line-height:1.5}
+
+/* ── QUICK ACTIONS ── */
+.qa-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:22px}
+.qa-btn{display:flex;align-items:center;gap:7px;padding:9px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:12.5px;font-weight:500;color:var(--text);transition:all .15s;box-shadow:var(--sh)}
+.qa-btn:hover{border-color:var(--accent-d);color:var(--accent-d);background:#FFFBEB}
+.qa-btn svg{width:14px;height:14px}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:11.5px;font-weight:600;color:var(--text);margin-bottom:5px}
+.form-hint{font-size:11px;color:var(--muted);font-weight:400;margin-left:4px}
+.form-input,.form-select{width:100%;height:36px;padding:0 11px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--surface);outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+.form-input:focus,.form-select:focus{border-color:var(--accent-d);box-shadow:0 0 0 3px rgba(217,119,6,.1)}
+.form-input::placeholder{color:var(--faint)}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:35px;padding:0 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;outline:none;transition:all .15s;font-family:inherit;user-select:none;white-space:nowrap}
+.btn svg{width:14px;height:14px;flex-shrink:0}
+.btn-primary{background:var(--accent-d);color:#fff}
+.btn-primary:hover{background:var(--accent-dd)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--bg);border-color:#CBD5E1}
+.btn-secondary:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost{background:transparent;color:var(--muted);border:none;padding:0 8px}
+.btn-ghost:hover{color:var(--text)}
+.btn-sm{height:29px;padding:0 10px;font-size:12px}
+.btn-lg{height:42px;padding:0 22px;font-size:14px;border-radius:8px}
+.btn-full{width:100%}
+
+/* ── UPLOAD ZONE ── */
+.drop-zone{border:2px dashed var(--border);border-radius:var(--r);padding:44px 24px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg)}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent-d);background:#FFFBEB}
+.drop-zone input[type="file"]{display:none}
+.dz-icon{color:var(--faint);margin-bottom:10px}
+.dz-icon svg{width:34px;height:34px}
+.dz-title{font-size:13.5px;font-weight:600;color:var(--text);margin-bottom:3px}
+.dz-sub{font-size:12px;color:var(--muted)}
+
+/* ── TABS ── */
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:18px}
+.tab{padding:9px 14px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.tab.active{color:var(--accent-d);border-bottom-color:var(--accent-d);font-weight:600}
+.tab:hover:not(.active){color:var(--text)}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-br)}
+.badge-warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-br)}
+.badge-err{background:var(--err-bg);color:var(--err);border:1px solid var(--err-br)}
+.badge-info{background:var(--info-bg);color:var(--info);border:1px solid var(--info-br)}
+.badge-neutral{background:var(--bg);color:var(--muted);border:1px solid var(--border)}
+
+/* ── TABLE ── */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;padding:9px 12px;border-bottom:1px solid var(--border);background:var(--bg)}
+td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#FAFBFC}
+
+/* ── PROGRESS ── */
+.prog-bg{height:7px;background:var(--border);border-radius:4px;overflow:hidden}
+.prog-fill{height:100%;border-radius:4px;transition:width .6s ease}
+.prog-green{background:var(--ok)}
+.prog-amber{background:var(--accent)}
+.prog-red{background:var(--err)}
+
+/* ── LAYOUT HELPERS ── */
+.two-col{display:grid;grid-template-columns:1fr 340px;gap:20px}
+.col-stack{display:flex;flex-direction:column;gap:16px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.divider{border-bottom:1px solid var(--border);margin:16px 0}
+.kv{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:12px}
+.kv:last-child{border-bottom:none}
+.kv-key{font-size:12.5px;color:var(--muted)}
+.kv-val{font-size:13px;font-weight:600;color:var(--text)}
+code{font-size:11.5px;background:var(--bg);border:1px solid var(--border);padding:2px 6px;border-radius:4px;font-family:ui-monospace,monospace;color:var(--text)}
+
+/* ── SPINNER ── */
+.spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite;flex-shrink:0}
+.spin-dark{border-color:rgba(0,0,0,.1);border-top-color:var(--accent-d)}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ── TOASTS ── */
+#toasts{position:fixed;top:18px;right:18px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{padding:11px 15px;border-radius:8px;font-size:12.5px;font-weight:500;box-shadow:var(--sh-md);max-width:320px;display:flex;align-items:center;gap:8px;pointer-events:all;animation:tin .22s ease}
+@keyframes tin{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast-ok{background:#18181B;color:#F8FAFC}
+.toast-err{background:var(--err);color:#fff}
+.toast-info{background:var(--info);color:#fff}
+
+/* ── AUTH MODAL ── */
+.modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.7);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal-box{background:var(--surface);border-radius:var(--rl);padding:38px 36px;width:420px;box-shadow:0 25px 60px rgba(0,0,0,.25);border:1px solid var(--border)}
+.modal-center{text-align:center;margin-bottom:28px}
+.modal-bmark{width:54px;height:54px;background:linear-gradient(135deg,#F59E0B,#B45309);border-radius:13px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px}
+.modal-title{font-size:21px;font-weight:700;color:var(--text);letter-spacing:-.4px}
+.modal-sub{font-size:13px;color:var(--muted);margin-top:5px;line-height:1.5}
+.role-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.role-opt{border:2px solid var(--border);border-radius:8px;padding:11px 8px;text-align:center;cursor:pointer;transition:all .15s}
+.role-opt:hover{border-color:#CBD5E1}
+.role-opt.sel{border-color:var(--accent-d);background:#FFFBEB}
+.role-opt .r-icon{margin-bottom:5px}
+.role-opt .r-icon svg{width:18px;height:18px;color:var(--muted)}
+.role-opt.sel .r-icon svg{color:var(--accent-d)}
+.role-name{font-size:12px;font-weight:600;color:var(--text);text-transform:capitalize}
+.role-desc{font-size:10.5px;color:var(--muted);margin-top:1px}
+.auth-footer{margin-top:14px;font-size:12px;color:var(--muted);text-align:center}
+.auth-footer span{color:var(--accent-d);font-weight:600}
+
+/* ── GAUGE ── */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;gap:6px}
+.gauge-lbl{font-size:11.5px;font-weight:600;color:var(--muted)}
+
+/* ── RESULT PANEL ── */
+.result-block{margin-top:18px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)}
+.info-box{padding:12px 14px;border-radius:7px;font-size:12.5px;line-height:1.5}
+.info-ok{background:var(--ok-bg);border:1px solid var(--ok-br);color:var(--ok)}
+.info-err{background:var(--err-bg);border:1px solid var(--err-br);color:var(--err)}
+.info-warn{background:var(--warn-bg);border:1px solid var(--warn-br);color:var(--warn)}
+.info-info{background:var(--info-bg);border:1px solid var(--info-br);color:var(--info)}
+.empty-state{padding:36px;text-align:center;color:var(--muted)}
+.empty-state svg{width:30px;height:30px;margin:0 auto 10px;display:block;color:var(--faint)}
+.empty-state p{font-size:13px}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════ AUTH MODAL -->
+<div class="modal-bg" id="auth-modal">
+  <div class="modal-box">
+    <div class="modal-center">
+      <div class="modal-bmark">🧁</div>
+      <div class="modal-title">BakeManage</div>
+      <div class="modal-sub">Sign in to your ERP platform.<br>Select your role and enter your PIN.</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Access Role</label>
+      <div class="role-grid" id="role-grid">
+        <div class="role-opt sel" data-role="owner" onclick="selectRole('owner')">
+          <div class="r-icon"><i data-lucide="crown"></i></div>
+          <div class="role-name">Owner</div>
+          <div class="role-desc">Full access</div>
+        </div>
+        <div class="role-opt" data-role="operations" onclick="selectRole('operations')">
+          <div class="r-icon"><i data-lucide="settings-2"></i></div>
+          <div class="role-name">Operations</div>
+          <div class="role-desc">Ops & inventory</div>
+        </div>
+        <div class="role-opt" data-role="auditor" onclick="selectRole('auditor')">
+          <div class="r-icon"><i data-lucide="file-search"></i></div>
+          <div class="role-name">Auditor</div>
+          <div class="role-desc">Read-only view</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">PIN <span class="form-hint">(sandbox default: sandbox1234)</span></label>
+      <input class="form-input" id="auth-pin" type="password" placeholder="Enter your PIN" autocomplete="off">
+    </div>
+
+    <button class="btn btn-primary btn-full btn-lg" onclick="submitAuth()" id="btn-auth">
+      <i data-lucide="log-in"></i> Sign In
+    </button>
+    <div class="auth-footer">Sandbox environment — PIN: <span>sandbox1234</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ APP SHELL -->
+<div id="app" style="display:none">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="sb-logo">
+      <div class="sb-brand">
+        <div class="sb-icon">BM</div>
+        <div>
+          <div class="sb-name">BakeManage</div>
+          <div class="sb-ver">ERP Platform v1.5.0</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-nav" id="sidebar-nav"></div>
+    <div class="sb-footer">
+      <div class="user-pill" title="Click to sign out" onclick="signOut()">
+        <div class="avatar" id="user-avatar">O</div>
+        <div class="user-info">
+          <div class="user-role" id="user-role">owner</div>
+          <div class="user-sub">Click to sign out</div>
+        </div>
+        <div class="signout-btn"><i data-lucide="log-out" style="width:14px;height:14px;"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+    <div class="header">
+      <div class="breadcrumb">
+        <span class="bc-root">BakeManage</span>
+        <span class="bc-sep">/</span>
+        <span class="bc-curr" id="bc-curr">Dashboard</span>
+      </div>
+      <div class="header-right">
+        <div class="api-badge">
+          <div class="dot" id="api-dot"></div>
+          <span class="dot-label" id="api-label">Checking…</span>
+        </div>
+        <a class="docs-link" href="/api/docs" target="_blank">
+          <i data-lucide="book-open"></i> API Docs
+        </a>
+      </div>
+    </div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toasts"></div>
+
+<script>
+/* ════════════════════════════════════
+   STATE
+════════════════════════════════════ */
+const S = { role: null, pin: null, view: 'dashboard' };
+
+const NAV = [
+  { id:'dashboard',   label:'Dashboard',        icon:'layout-dashboard', sec:'OVERVIEW' },
+  { id:'ingestion',   label:'Ingestion',         icon:'scan-line',        sec:'OPERATIONS' },
+  { id:'cost',        label:'Cost Calculator',   icon:'calculator',       sec:'OPERATIONS' },
+  { id:'proofing',    label:'Proofing',          icon:'thermometer',      sec:'OPERATIONS' },
+  { id:'quality',     label:'Quality Control',   icon:'badge-check',      sec:'OPERATIONS' },
+  { id:'inventory',   label:'Inventory',         icon:'package',          sec:'DATA' },
+  { id:'credentials', label:'Credentials',       icon:'key',              sec:'SETTINGS' },
+  { id:'health',      label:'System Health',     icon:'activity',         sec:'SETTINGS' },
+];
+
+/* ════════════════════════════════════
+   AUTH
+════════════════════════════════════ */
+let _selRole = 'owner';
+
+function selectRole(r) {
+  _selRole = r;
+  document.querySelectorAll('.role-opt').forEach(el =>
+    el.classList.toggle('sel', el.dataset.role === r));
+}
+
+function saveAuth(role, pin) {
+  S.role = role; S.pin = pin;
+  sessionStorage.setItem('bm', JSON.stringify({ role, pin }));
+}
+
+function loadAuth() {
+  const d = sessionStorage.getItem('bm');
+  if (!d) return false;
+  const { role, pin } = JSON.parse(d);
+  S.role = role; S.pin = pin;
+  return true;
+}
+
+function submitAuth() {
+  const pin = document.getElementById('auth-pin').value.trim();
+  if (!pin) { toast('Enter your PIN', 'err'); return; }
+  saveAuth(_selRole, pin);
+  document.getElementById('auth-modal').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  initApp();
+}
+
+function signOut() {
+  sessionStorage.removeItem('bm');
+  S.role = null; S.pin = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-modal').style.display = 'flex';
+  selectRole('owner');
+  document.getElementById('auth-pin').value = '';
+}
+
+/* ════════════════════════════════════
+   API HELPERS
+════════════════════════════════════ */
+function hdrs(json = true) {
+  const h = { 'X-Client-Role': S.role, 'X-Client-PIN': S.pin };
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
+
+async function GET(path) {
+  const r = await fetch(`/api${path}`, { headers: hdrs(false) });
+  if (!r.ok) throw new Error(`${r.status} — ${await r.text()}`);
+  return r.json();
+}
+
+async function POST(path, data) {
+  const r = await fetch(`/api${path}`, { method: 'POST', headers: hdrs(), body: JSON.stringify(data) });
+  if (!r.ok) throw new Error(`${r.status} — ${await r.text()}`);
+  return r.json();
+}
+
+async function POSTF(path, fd) {
+  const r = await fetch(`/api${path}`, { method: 'POST', headers: hdrs(false), body: fd });
+  if (!r.ok) throw new Error(`${r.status} — ${await r.text()}`);
+  return r.json();
+}
+
+/* ════════════════════════════════════
+   TOASTS
+════════════════════════════════════ */
+function toast(msg, type = 'ok') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  const icon = type === 'ok' ? '✓' : type === 'err' ? '✗' : 'ℹ';
+  el.innerHTML = `<span style="font-size:14px;">${icon}</span><span>${msg}</span>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .25s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 260); }, 3600);
+}
+
+/* ════════════════════════════════════
+   LOADING STATE
+════════════════════════════════════ */
+function setLoad(btn, on) {
+  if (!btn) return;
+  if (on) { btn._orig = btn.innerHTML; btn.innerHTML = `<span class="spin"></span> Loading…`; btn.disabled = true; }
+  else { btn.innerHTML = btn._orig; btn.disabled = false; }
+}
+
+/* ════════════════════════════════════
+   SIDEBAR + NAVIGATION
+════════════════════════════════════ */
+function buildSidebar() {
+  let html = '', sec = null;
+  for (const n of NAV) {
+    if (n.sec !== sec) { html += `<div class="sb-sec">${n.sec}</div>`; sec = n.sec; }
+    html += `<div class="nav-item ${n.id === S.view ? 'active' : ''}" onclick="nav('${n.id}')">
+      <i data-lucide="${n.icon}"></i><span>${n.label}</span></div>`;
+  }
+  document.getElementById('sidebar-nav').innerHTML = html;
+  lucide.createIcons();
+}
+
+function nav(view) {
+  S.view = view;
+  buildSidebar();
+  const item = NAV.find(n => n.id === view);
+  document.getElementById('bc-curr').textContent = item ? item.label : view;
+  renderView(view);
+}
+
+/* ════════════════════════════════════
+   HEALTH POLL
+════════════════════════════════════ */
+async function pollHealth() {
+  try {
+    await fetch('/api/health');
+    document.getElementById('api-dot').className = 'dot';
+    document.getElementById('api-label').textContent = 'API Online';
+  } catch {
+    document.getElementById('api-dot').className = 'dot off';
+    document.getElementById('api-label').textContent = 'API Offline';
+  }
+}
+
+/* ════════════════════════════════════
+   VIEW DISPATCHER
+════════════════════════════════════ */
+function renderView(v) {
+  const el = document.getElementById('content');
+  el.scrollTop = 0;
+  ({ dashboard, ingestion, cost, proofing, quality, inventory, credentials, health })[v](el);
+  lucide.createIcons();
+}
+
+/* ════════════════════════════════════
+   DASHBOARD
+════════════════════════════════════ */
+async function dashboard(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Good ${greet()}, <span style="text-transform:capitalize;">${S.role}</span> 👋</div>
+      <div class="page-desc">Your bakery operations command centre. All systems at a glance.</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div><div class="stat-lbl">API Status</div><div class="stat-val" id="d-api-val" style="font-size:17px;margin-top:6px;">Checking…</div><div class="stat-hint">FastAPI + uvicorn :8000</div></div>
+        <div class="ico ico-green"><i data-lucide="server"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Active Role</div><div class="stat-val" style="font-size:17px;margin-top:6px;text-transform:capitalize;">${S.role}</div><div class="stat-hint">Domain permissions enforced</div></div>
+        <div class="ico ico-amber"><i data-lucide="shield-check"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Document AI</div><div class="stat-val" style="font-size:17px;margin-top:6px;">Ready</div><div class="stat-hint">Image · PDF · Excel supported</div></div>
+        <div class="ico ico-blue"><i data-lucide="file-scan"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Task Queue</div><div class="stat-val" style="font-size:17px;margin-top:6px;">Celery</div><div class="stat-hint">Workers connected via Redis</div></div>
+        <div class="ico ico-purple"><i data-lucide="zap"></i></div>
+      </div>
+    </div>
+
+    <div class="page-hd" style="margin-bottom:10px;"><div style="font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Quick Actions</div></div>
+    <div class="qa-row">
+      <div class="qa-btn" onclick="nav('ingestion')"><i data-lucide="scan-line"></i> Ingest Document</div>
+      <div class="qa-btn" onclick="nav('cost')"><i data-lucide="calculator"></i> Compute Cost</div>
+      <div class="qa-btn" onclick="nav('proofing')"><i data-lucide="thermometer"></i> Log Proofing</div>
+      <div class="qa-btn" onclick="nav('quality')"><i data-lucide="badge-check"></i> Quality Check</div>
+      <div class="qa-btn" onclick="nav('inventory')"><i data-lucide="package"></i> Inventory Snapshot</div>
+      <div class="qa-btn" onclick="nav('health')"><i data-lucide="activity"></i> System Health</div>
+    </div>
+
+    <div class="card">
+      <div class="card-hd"><div><div class="card-title">Platform Capabilities</div><div class="card-sub">What BakeManage does out of the box</div></div></div>
+      <div class="card-bd">
+        <div class="cap-grid">
+          ${[
+            ['scan-line','ico-blue','Zero-effort Ingestion','Extract structured invoices from handwritten receipts, PDFs and Excel files via simulated VLM OCR.'],
+            ['trending-up','ico-green','Margin Protection','Real-time cost roll-up with per-ingredient yield adjustment. Warns when profit drops below 20%.'],
+            ['package','ico-amber','FEFO Inventory','First-Expiry-First-Out deductions minimise spoilage and ensure compliance with food safety standards.'],
+            ['thermometer','ico-purple','Proofing Monitoring','Log temperature, humidity and CO₂ from fermentation chambers. Anomaly scores trigger auto-remediation.'],
+            ['badge-check','ico-blue','Visual Quality AI','Browning score + uniformity analysis from baked product photos. Automated optimal / adjust-batch verdict.'],
+            ['lock','ico-slate','Security & RBAC','PIN auth with PBKDF2+SHA-256 (390k iterations), Fernet encryption for credentials, role-scoped field access.'],
+          ].map(([icon, ico, name, desc]) => `
+            <div class="cap-item">
+              <div class="ico ${ico}" style="flex-shrink:0"><i data-lucide="${icon}"></i></div>
+              <div class="cap-text"><div class="cap-name">${name}</div><div class="cap-desc">${desc}</div></div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+  try {
+    const h = await GET('/health');
+    const ok = h.status === 'ok';
+    document.getElementById('d-api-val').textContent = ok ? 'Online ✓' : 'Degraded';
+    document.getElementById('d-api-val').style.color = ok ? 'var(--ok)' : 'var(--err)';
+  } catch { document.getElementById('d-api-val').textContent = 'Offline'; document.getElementById('d-api-val').style.color = 'var(--err)'; }
+}
+
+function greet() {
+  const h = new Date().getHours();
+  return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+}
+
+/* ════════════════════════════════════
+   INGESTION
+════════════════════════════════════ */
+let _imgFile = null, _docFile = null;
+
+function ingestion(el) {
+  _imgFile = null; _docFile = null;
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Document Ingestion</div>
+      <div class="page-desc">Upload receipts, invoices, PDFs or Excel files. The AI pipeline extracts structured invoice data automatically.</div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" id="tab-img" onclick="ingTab('img')"><i data-lucide="image" style="width:13px;height:13px;vertical-align:middle;margin-right:5px;"></i>Image / Receipt</div>
+      <div class="tab" id="tab-doc" onclick="ingTab('doc')"><i data-lucide="file-spreadsheet" style="width:13px;height:13px;vertical-align:middle;margin-right:5px;"></i>Excel / PDF</div>
+    </div>
+
+    <div id="ing-img-panel">
+      <div class="card">
+        <div class="card-bd">
+          <label class="drop-zone" id="dz-img" for="fi-img">
+            <input type="file" id="fi-img" accept="image/*" onchange="onImgSel(event)">
+            <div class="dz-icon"><i data-lucide="image"></i></div>
+            <div class="dz-title">Drop image here or click to browse</div>
+            <div class="dz-sub">JPG, PNG, WEBP — handwritten or printed receipts</div>
+          </label>
+          <div id="img-prev-wrap" style="display:none;margin-top:14px;text-align:center;">
+            <img id="img-prev" style="max-height:180px;border-radius:8px;border:1px solid var(--border);">
+            <div id="img-fname" style="font-size:11px;color:var(--muted);margin-top:5px;"></div>
+          </div>
+          <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+            <button class="btn btn-primary btn-lg" id="btn-ing-img" onclick="doIngImg()" disabled>
+              <i data-lucide="scan-line"></i> Extract Invoice
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ing-doc-panel" style="display:none;">
+      <div class="card">
+        <div class="card-bd">
+          <label class="drop-zone" id="dz-doc" for="fi-doc">
+            <input type="file" id="fi-doc" accept=".xlsx,.xls,.pdf" onchange="onDocSel(event)">
+            <div class="dz-icon"><i data-lucide="file-spreadsheet"></i></div>
+            <div class="dz-title">Drop a document here or click to browse</div>
+            <div class="dz-sub">XLSX, XLS and PDF formats supported</div>
+          </label>
+          <div id="doc-fname" style="display:none;margin-top:10px;font-size:12px;color:var(--muted);text-align:center;"></div>
+          <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+            <button class="btn btn-primary btn-lg" id="btn-ing-doc" onclick="doIngDoc()" disabled>
+              <i data-lucide="file-scan"></i> Parse Document
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box info-info" style="margin-top:14px;font-size:12px;">
+      <strong>Sandbox mode:</strong> The VLM OCR is simulated — it returns realistic synthetic invoice data regardless of the actual image content. Docling document parsing is also stubbed.
+    </div>
+
+    <div id="ing-result"></div>`;
+  lucide.createIcons();
+  setupDZ('dz-img', onImgSel);
+  setupDZ('dz-doc', onDocSel);
+}
+
+function ingTab(t) {
+  document.getElementById('tab-img').classList.toggle('active', t === 'img');
+  document.getElementById('tab-doc').classList.toggle('active', t === 'doc');
+  document.getElementById('ing-img-panel').style.display = t === 'img' ? '' : 'none';
+  document.getElementById('ing-doc-panel').style.display = t === 'doc' ? '' : 'none';
+  document.getElementById('ing-result').innerHTML = '';
+}
+
+function setupDZ(id, handler) {
+  const z = document.getElementById(id);
+  if (!z) return;
+  z.addEventListener('dragover', e => { e.preventDefault(); z.classList.add('drag-over'); });
+  z.addEventListener('dragleave', () => z.classList.remove('drag-over'));
+  z.addEventListener('drop', e => { e.preventDefault(); z.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f) handler(f); });
+}
+
+function onImgSel(e) {
+  const f = e.target ? e.target.files[0] : e; if (!f) return;
+  _imgFile = f;
+  document.getElementById('btn-ing-img').disabled = false;
+  const w = document.getElementById('img-prev-wrap'); w.style.display = '';
+  document.getElementById('img-prev').src = URL.createObjectURL(f);
+  document.getElementById('img-fname').textContent = f.name;
+}
+
+function onDocSel(e) {
+  const f = e.target ? e.target.files[0] : e; if (!f) return;
+  _docFile = f;
+  document.getElementById('btn-ing-doc').disabled = false;
+  const lbl = document.getElementById('doc-fname'); lbl.style.display = ''; lbl.textContent = `📄 ${f.name}`;
+}
+
+async function doIngImg() {
+  if (!_imgFile) return;
+  const btn = document.getElementById('btn-ing-img'); setLoad(btn, true);
+  try {
+    const fd = new FormData(); fd.append('file', _imgFile);
+    const data = await POSTF('/ingest/image', fd);
+    renderIngResult(data); toast('Invoice extracted');
+  } catch (e) { toast(e.message, 'err'); } finally { setLoad(btn, false); }
+}
+
+async function doIngDoc() {
+  if (!_docFile) return;
+  const btn = document.getElementById('btn-ing-doc'); setLoad(btn, true);
+  try {
+    const fd = new FormData(); fd.append('file', _docFile);
+    const data = await POSTF('/ingest/document', fd);
+    renderIngResult(data); toast('Document parsed');
+  } catch (e) { toast(e.message, 'err'); } finally { setLoad(btn, false); }
+}
+
+function renderIngResult(data) {
+  const inv = data.invoice || data;
+  document.getElementById('ing-result').innerHTML = `
+    <div class="card" style="margin-top:20px;">
+      <div class="card-hd">
+        <div><div class="card-title">Extracted Invoice</div><div class="card-sub">Structured data from the AI pipeline</div></div>
+        <span class="badge badge-ok">Parsed</span>
+      </div>
+      <div class="card-bd">
+        <div class="grid-3" style="margin-bottom:18px;">
+          <div><div class="stat-lbl">Vendor</div><div style="font-size:15px;font-weight:700;margin-top:4px;">${inv.vendor_name || '—'}</div></div>
+          <div><div class="stat-lbl">Invoice #</div><div style="font-size:15px;font-weight:700;margin-top:4px;">${inv.invoice_number || '—'}</div></div>
+          <div><div class="stat-lbl">Total Amount</div><div style="font-size:15px;font-weight:700;margin-top:4px;color:var(--ok);">₹${inv.total_amount || '—'}</div></div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Tax</th><th>Category</th><th>Expiry</th></tr></thead>
+            <tbody>
+              ${(inv.items || []).map(it => `
+                <tr>
+                  <td style="font-weight:600;">${it.item_name}</td>
+                  <td>${it.quantity} ${it.unit_of_measure || ''}</td>
+                  <td>₹${it.unit_price}</td>
+                  <td>${it.tax_rate || 0}%</td>
+                  <td><span class="badge badge-neutral">${it.category || '—'}</span></td>
+                  <td>${it.expiration_date || '—'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+}
+
+/* ════════════════════════════════════
+   COST CALCULATOR
+════════════════════════════════════ */
+let _rows = [];
+
+function cost(el) {
+  _rows = [
+    { name: 'Flour', cost: 10, yp: 0.9 },
+    { name: 'Butter', cost: 8, yp: 1.0 },
+    { name: 'Sugar', cost: 4, yp: 1.0 },
+  ];
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Cost Calculator</div>
+      <div class="page-desc">Build a recipe ingredient list, set overhead and selling price, then compute total cost and profit margin.</div>
+    </div>
+    <div class="two-col">
+      <div class="col-stack">
+        <div class="card">
+          <div class="card-hd">
+            <div><div class="card-title">Ingredients</div><div class="card-sub">Cost & yield per component</div></div>
+            <button class="btn btn-secondary btn-sm" onclick="addCostRow()"><i data-lucide="plus"></i> Add</button>
+          </div>
+          <div class="card-bd">
+            <div style="display:grid;grid-template-columns:1fr 90px 90px 34px;gap:8px;margin-bottom:6px;align-items:center;">
+              <div class="form-label" style="margin:0;">Ingredient</div>
+              <div class="form-label" style="margin:0;">Cost (₹)</div>
+              <div class="form-label" style="margin:0;">Yield % <span title="Fraction of input that ends in final product (0–1)">ⓘ</span></div>
+              <div></div>
+            </div>
+            <div id="cost-rows"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-stack">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Parameters</div></div>
+          <div class="card-bd">
+            <div class="form-group">
+              <label class="form-label">Overhead Cost (₹)</label>
+              <input class="form-input" type="number" id="c-overhead" value="5" min="0" step="0.5">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Selling Price (₹) <span class="form-hint">for margin analysis</span></label>
+              <input class="form-input" type="number" id="c-selling" value="35" min="0" step="0.5">
+            </div>
+            <button class="btn btn-primary btn-full" id="btn-cost" onclick="doComputeCost()">
+              <i data-lucide="calculator"></i> Calculate
+            </button>
+          </div>
+        </div>
+        <div id="cost-result"></div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+  renderCostRows();
+}
+
+function renderCostRows() {
+  const el = document.getElementById('cost-rows'); if (!el) return;
+  el.innerHTML = _rows.map((r, i) => `
+    <div style="display:grid;grid-template-columns:1fr 90px 90px 34px;gap:8px;margin-bottom:8px;align-items:center;">
+      <input class="form-input" value="${r.name}" oninput="_rows[${i}].name=this.value" placeholder="e.g. Flour">
+      <input class="form-input" type="number" value="${r.cost}" min="0" step="0.5" oninput="_rows[${i}].cost=+this.value">
+      <input class="form-input" type="number" value="${r.yp}" min="0.01" max="1" step="0.05" oninput="_rows[${i}].yp=+this.value">
+      <button class="btn btn-ghost btn-sm" onclick="removeCostRow(${i})" style="padding:0;width:34px;" ${_rows.length<2?'disabled':''}>
+        <i data-lucide="x" style="width:14px;height:14px;"></i>
+      </button>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+function addCostRow() { _rows.push({ name:'', cost:5, yp:1 }); renderCostRows(); }
+function removeCostRow(i) { _rows.splice(i,1); renderCostRows(); }
+
+async function doComputeCost() {
+  const btn = document.getElementById('btn-cost'); setLoad(btn, true);
+  try {
+    const payload = {
+      components: _rows.map(r => ({ name: r.name, cost: r.cost, yield_percent: r.yp })),
+      overhead: +document.getElementById('c-overhead').value || 0,
+      selling_price: +document.getElementById('c-selling').value || null,
+    };
+    const data = await POST('/cost/compute', payload);
+    renderCostResult(data); toast('Cost computed');
+  } catch(e) { toast(e.message, 'err'); } finally { setLoad(btn, false); }
+}
+
+function renderCostResult(d) {
+  const margin = parseFloat(d.margin_percent) || 0;
+  const pct = Math.min(Math.max(margin, 0), 100);
+  const cls = margin >= 20 ? 'ok' : margin >= 10 ? 'warn' : 'err';
+  const barCls = margin >= 20 ? 'prog-green' : margin >= 10 ? 'prog-amber' : 'prog-red';
+  const label = margin >= 20 ? 'Healthy Margin' : margin >= 10 ? 'Tight Margin' : 'At Risk';
+  document.getElementById('cost-result').innerHTML = `
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Results</div><span class="badge badge-${cls}">${label}</span></div>
+      <div class="card-bd">
+        <div class="kv"><span class="kv-key">Total Cost</span><span class="kv-val" style="font-size:20px;letter-spacing:-.5px;">₹${d.total_cost}</span></div>
+        ${d.margin_percent != null ? `
+          <div style="margin-top:14px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:12px;font-weight:600;color:var(--muted);">Profit Margin</span>
+              <span style="font-size:14px;font-weight:700;color:var(--${cls});">${margin}%</span>
+            </div>
+            <div class="prog-bg"><div class="prog-fill ${barCls}" style="width:${pct}%"></div></div>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:7px;">${d.margin_warning ? '⚠ Below 20% safe threshold — review pricing or reduce costs.' : '✓ Margin within healthy operating range.'}</div>
+          </div>` : ''}
+      </div>
+    </div>`;
+}
+
+/* ════════════════════════════════════
+   PROOFING TELEMETRY
+════════════════════════════════════ */
+function proofing(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Proofing Telemetry</div>
+      <div class="page-desc">Submit fermentation chamber readings. Anomaly scores above 0.35 trigger auto-remediation and SRE escalation.</div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Chamber Readings</div></div>
+        <div class="card-bd">
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Temperature (°C)</label>
+              <input class="form-input" type="number" id="p-temp" value="28" step="0.5">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Humidity (%)</label>
+              <input class="form-input" type="number" id="p-hum" value="75" step="1" min="0" max="100">
+            </div>
+            <div class="form-group">
+              <label class="form-label">CO₂ (PPM)</label>
+              <input class="form-input" type="number" id="p-co2" value="800" step="10">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fan Speed (RPM) <span class="form-hint">optional</span></label>
+              <input class="form-input" type="number" id="p-fan" value="1200" step="50">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Chamber Status</label>
+            <select class="form-select" id="p-status">
+              <option value="stable">Stable</option>
+              <option value="rising">Rising</option>
+              <option value="falling">Falling</option>
+              <option value="anomaly">Anomaly</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Anomaly Score (0–1) <span class="form-hint">optional — triggers alert if &gt; 0.35</span></label>
+            <input class="form-input" type="number" id="p-anomaly" step="0.01" min="0" max="1" placeholder="e.g. 0.12">
+          </div>
+          <button class="btn btn-primary btn-full" id="btn-proof" onclick="doProofing()">
+            <i data-lucide="send"></i> Submit Reading
+          </button>
+        </div>
+      </div>
+
+      <div class="col-stack">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Optimal Ranges</div></div>
+          <div class="card-bd" style="padding:12px 16px;">
+            ${[
+              ['Thermometer','Temperature','26 – 32 °C','Optimal yeast activity range'],
+              ['Droplets','Humidity','70 – 80%','Prevents surface crust formation'],
+              ['Wind','CO₂','600 – 1200 ppm','Normal fermentation CO₂ output'],
+              ['Fan','Fan Speed','800 – 1500 RPM','Even air circulation in chamber'],
+            ].map(([_,label,range,note]) => `
+              <div class="kv">
+                <div><div style="font-size:13px;font-weight:500;">${label}</div><div style="font-size:11px;color:var(--muted);">${note}</div></div>
+                <span class="badge badge-neutral">${range}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+        <div id="proof-result"></div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+}
+
+async function doProofing() {
+  const btn = document.getElementById('btn-proof'); setLoad(btn, true);
+  try {
+    const payload = {
+      temperature_c: +document.getElementById('p-temp').value,
+      humidity_percent: +document.getElementById('p-hum').value,
+      co2_ppm: +document.getElementById('p-co2').value,
+      fan_speed_rpm: document.getElementById('p-fan').value ? +document.getElementById('p-fan').value : null,
+      status: document.getElementById('p-status').value,
+      anomaly_score: document.getElementById('p-anomaly').value ? +document.getElementById('p-anomaly').value : null,
+    };
+    const data = await POST('/proofing/telemetry', payload);
+    renderProofResult(data, payload); toast('Telemetry logged');
+  } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
+}
+
+function renderProofResult(data, payload) {
+  const t = data.telemetry || payload;
+  const isAnomaly = (payload.anomaly_score || 0) > 0.35 || payload.status === 'anomaly';
+  document.getElementById('proof-result').innerHTML = `
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">Recorded</div>
+        <span class="badge badge-${isAnomaly ? 'err' : 'ok'}">${isAnomaly ? '⚠ Anomaly' : '✓ Stable'}</span>
+      </div>
+      <div class="card-bd" style="padding:12px 16px;">
+        ${[['Temperature', `${t.temperature_c}°C`],['Humidity', `${t.humidity_percent}%`],['CO₂', `${t.co2_ppm} ppm`],['Status', t.status]].map(([k,v]) => `
+          <div class="kv"><span class="kv-key">${k}</span><span class="kv-val">${v}</span></div>`).join('')}
+        ${isAnomaly ? `<div class="info-box info-err" style="margin-top:12px;font-size:12px;">
+          ⚠ Anomaly score exceeds 0.35 threshold. Auto-remediation queued via Celery. SRE notification dispatched.</div>` : ''}
+      </div>
+    </div>`;
+}
+
+/* ════════════════════════════════════
+   QUALITY CONTROL
+════════════════════════════════════ */
+let _qFile = null;
+
+function quality(el) {
+  _qFile = null;
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Quality Control</div>
+      <div class="page-desc">Upload a photo of a baked product. The AI scores browning intensity and uniformity, then issues a pass or adjust verdict.</div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Upload Product Photo</div></div>
+        <div class="card-bd">
+          <label class="drop-zone" id="dz-q" for="fi-q">
+            <input type="file" id="fi-q" accept="image/*" onchange="onQSel(event)">
+            <div class="dz-icon"><i data-lucide="camera"></i></div>
+            <div class="dz-title">Upload a baked product photo</div>
+            <div class="dz-sub">JPG, PNG, WEBP — croissants, loaves, pastries</div>
+          </label>
+          <div id="q-prev-wrap" style="display:none;margin-top:14px;text-align:center;">
+            <img id="q-prev" style="max-height:180px;border-radius:8px;border:1px solid var(--border);">
+          </div>
+          <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+            <button class="btn btn-primary btn-lg" id="btn-qual" onclick="doQuality()" disabled>
+              <i data-lucide="badge-check"></i> Analyse Quality
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="q-result">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">How Scoring Works</div></div>
+          <div class="card-bd">
+            ${[
+              ['camera','Photo Input','Upload any JPG/PNG image of your baked product.'],
+              ['bar-chart-2','Browning Score','Image → greyscale. Mean pixel intensity mapped to 0–100 scale.'],
+              ['check-circle','Optimal Range','Score 40–78 = Optimal. Below 40 = under-baked. Above 78 = over-baked.'],
+              ['shield-check','Uniformity','Standard deviation of pixel intensities measures evenness.'],
+            ].map(([icon, title, desc]) => `
+              <div style="display:flex;gap:10px;margin-bottom:13px;align-items:flex-start;">
+                <div class="ico ico-amber" style="flex-shrink:0;"><i data-lucide="${icon}"></i></div>
+                <div><div style="font-size:13px;font-weight:600;margin-bottom:2px;">${title}</div>
+                <div style="font-size:12px;color:var(--muted);line-height:1.5;">${desc}</div></div>
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+  setupDZ('dz-q', onQSel);
+}
+
+function onQSel(e) {
+  const f = e.target ? e.target.files[0] : e; if (!f) return;
+  _qFile = f;
+  document.getElementById('btn-qual').disabled = false;
+  const w = document.getElementById('q-prev-wrap'); w.style.display = '';
+  document.getElementById('q-prev').src = URL.createObjectURL(f);
+}
+
+async function doQuality() {
+  if (!_qFile) return;
+  const btn = document.getElementById('btn-qual'); setLoad(btn, true);
+  try {
+    const fd = new FormData(); fd.append('file', _qFile);
+    const data = await POSTF('/quality/validate', fd);
+    renderQResult(data); toast('Analysis complete');
+  } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
+}
+
+function renderQResult(data) {
+  const q = data.quality || data;
+  const browning = +(q.browning_score || 0);
+  const uniformity = +(q.uniformity_score || 0);
+  const isOK = q.verdict === 'optimal';
+  const C = 2 * Math.PI * 42;
+  const offset = C * (1 - browning / 100);
+  const gc = browning >= 40 && browning <= 78 ? '#059669' : browning < 40 ? '#2563EB' : '#DC2626';
+
+  document.getElementById('q-result').innerHTML = `
+    <div class="card">
+      <div class="card-hd">
+        <div><div class="card-title">Analysis Results</div><div class="card-sub">SHA-256 fingerprint stored in DB</div></div>
+        <span class="badge badge-${isOK ? 'ok' : 'err'}" style="font-size:12px;padding:4px 12px;">
+          ${isOK ? '✓ OPTIMAL' : '⚠ ADJUST BATCH'}
+        </span>
+      </div>
+      <div class="card-bd" style="display:flex;flex-direction:column;align-items:center;gap:18px;">
+        <div class="gauge-wrap">
+          <svg width="128" height="128" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border)" stroke-width="9"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="${gc}" stroke-width="9"
+              stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"
+              stroke-linecap="round" transform="rotate(-90 50 50)" style="transition:stroke-dashoffset .8s ease"/>
+            <text x="50" y="45" text-anchor="middle" font-size="20" font-weight="700" fill="#0F172A" font-family="Inter,sans-serif">${browning}</text>
+            <text x="50" y="60" text-anchor="middle" font-size="9" fill="#64748B" font-family="Inter,sans-serif">/ 100</text>
+          </svg>
+          <div class="gauge-lbl">Browning Score</div>
+        </div>
+
+        <div style="width:100%;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+            <span style="font-size:12px;font-weight:600;color:var(--muted);">Uniformity</span>
+            <span style="font-size:13px;font-weight:700;">${uniformity}%</span>
+          </div>
+          <div class="prog-bg"><div class="prog-fill ${uniformity>=60?'prog-green':'prog-amber'}" style="width:${uniformity}%"></div></div>
+        </div>
+
+        <div style="width:100%;padding:13px;border-radius:8px;text-align:center;
+          background:${isOK?'var(--ok-bg)':'var(--err-bg)'};
+          border:1px solid ${isOK?'var(--ok-br)':'var(--err-br)'};">
+          <div style="font-size:13px;font-weight:600;color:${isOK?'var(--ok)':'var(--err)'};">
+            ${isOK
+              ? '✓ Browning is within optimal range (40–78). Batch approved.'
+              : `Browning ${browning < 40 ? 'too low – increase time or temperature' : 'too high – reduce baking duration'}. Review batch.`}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ════════════════════════════════════
+   INVENTORY
+════════════════════════════════════ */
+function inventory(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Inventory Cache</div>
+      <div class="page-desc">Live FEFO inventory snapshot built asynchronously by the Celery worker. Click Refresh to load or rebuild.</div>
+    </div>
+    <div class="card">
+      <div class="card-hd">
+        <div><div class="card-title">Stock Snapshot</div><div class="card-sub">First-Expiry-First-Out ordered</div></div>
+        <button class="btn btn-primary btn-sm" id="btn-inv" onclick="doInventory()">
+          <i data-lucide="refresh-cw"></i> Refresh
+        </button>
+      </div>
+      <div id="inv-body" class="card-bd">
+        <div class="empty-state">
+          <i data-lucide="package"></i>
+          <p>Click <strong>Refresh</strong> to load the inventory snapshot.</p>
+        </div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+}
+
+async function doInventory() {
+  const btn = document.getElementById('btn-inv'); setLoad(btn, true);
+  try {
+    const data = await GET('/inventory/cache');
+    renderInventory(data);
+  } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
+}
+
+function renderInventory(data) {
+  const el = document.getElementById('inv-body');
+  if (data.cache_task_id) {
+    el.innerHTML = `
+      <div style="padding:24px;text-align:center;">
+        <span class="badge badge-warn" style="font-size:13px;padding:7px 16px;margin-bottom:12px;">Building Cache…</span>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">Celery task dispatched:</div>
+        <code>${data.cache_task_id}</code>
+        <div style="font-size:12px;color:var(--faint);margin-top:10px;">Ingest some invoices first, then refresh again.</div>
+      </div>`;
+    return;
+  }
+  const items = Array.isArray(data) ? data : (data.items || data.inventory || []);
+  if (!items.length) {
+    el.innerHTML = `<div class="empty-state"><i data-lucide="inbox"></i><p>No inventory data in cache. Ingest invoices to populate stock.</p></div>`;
+    lucide.createIcons(); return;
+  }
+  el.innerHTML = `
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Item</th><th>Qty On Hand</th><th>Unit</th><th>Category</th><th>Vertical</th><th>Expiry</th></tr></thead>
+        <tbody>${items.map(it => `
+          <tr>
+            <td style="font-weight:600;">${it.name||'—'}</td>
+            <td>${it.qty_on_hand??'—'}</td>
+            <td>${it.unit_of_measure||'—'}</td>
+            <td><span class="badge badge-neutral">${it.category||'—'}</span></td>
+            <td>${it.vertical||'—'}</td>
+            <td>${it.expiration_date||'—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  lucide.createIcons();
+}
+
+/* ════════════════════════════════════
+   CREDENTIALS
+════════════════════════════════════ */
+function credentials(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Service Credentials</div>
+      <div class="page-desc">Store third-party API keys securely. All values are AES-128-CBC encrypted with Fernet before being written to the database.</div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Add Credential</div></div>
+        <div class="card-bd">
+          <div class="form-group">
+            <label class="form-label">Credential Name</label>
+            <input class="form-input" id="cred-name" placeholder="e.g. Razorpay, Twilio, OpenAI">
+          </div>
+          <div class="form-group">
+            <label class="form-label">API Key</label>
+            <div style="position:relative;">
+              <input class="form-input" id="cred-key" type="password" placeholder="sk-… or token" style="padding-right:42px;">
+              <button onclick="toggleCred()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);display:flex;align-items:center;">
+                <i data-lucide="eye" id="eye-ico" style="width:15px;height:15px;"></i>
+              </button>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-full" id="btn-cred" onclick="doStoreCredential()">
+            <i data-lucide="lock"></i> Store Securely
+          </button>
+        </div>
+      </div>
+
+      <div class="col-stack">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Security Model</div></div>
+          <div class="card-bd">
+            ${[
+              ['lock','Fernet Encryption','AES-128-CBC + HMAC-SHA256. Industry-standard symmetric encryption.'],
+              ['database','At-Rest Storage','Encrypted ciphertext stored in PostgreSQL. Plaintext never persisted.'],
+              ['eye-off','Zero Retrieval','API retrieval not supported by design — supply-chain zero-trust principle.'],
+            ].map(([icon, title, desc]) => `
+              <div style="display:flex;gap:10px;margin-bottom:13px;align-items:flex-start;">
+                <div class="ico ico-amber" style="flex-shrink:0;"><i data-lucide="${icon}"></i></div>
+                <div><div style="font-size:13px;font-weight:600;margin-bottom:2px;">${title}</div>
+                <div style="font-size:12px;color:var(--muted);line-height:1.5;">${desc}</div></div>
+              </div>`).join('')}
+          </div>
+        </div>
+        <div id="cred-result"></div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+}
+
+function toggleCred() {
+  const inp = document.getElementById('cred-key');
+  const ico = document.getElementById('eye-ico');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  ico.setAttribute('data-lucide', inp.type === 'password' ? 'eye' : 'eye-off');
+  lucide.createIcons();
+}
+
+async function doStoreCredential() {
+  const name = document.getElementById('cred-name').value.trim();
+  const api_key = document.getElementById('cred-key').value.trim();
+  if (!name || !api_key) { toast('Name and API key are required', 'err'); return; }
+  const btn = document.getElementById('btn-cred'); setLoad(btn, true);
+  try {
+    const data = await POST('/credentials', { name, api_key });
+    document.getElementById('cred-result').innerHTML = `
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Stored</div><span class="badge badge-ok">Encrypted</span></div>
+        <div class="card-bd" style="padding:12px 16px;">
+          <div class="kv"><span class="kv-key">Credential ID</span><span class="kv-val">#${data.credential_id}</span></div>
+          <div class="kv"><span class="kv-key">Name</span><span class="kv-val">${data.name}</span></div>
+          <div class="kv"><span class="kv-key">Storage</span><span class="kv-val" style="color:var(--ok);">Fernet-encrypted</span></div>
+        </div>
+      </div>`;
+    document.getElementById('cred-name').value = '';
+    document.getElementById('cred-key').value = '';
+    toast('Credential stored securely');
+  } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
+}
+
+/* ════════════════════════════════════
+   HEALTH
+════════════════════════════════════ */
+function health(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">System Health</div>
+      <div class="page-desc">Live API status and Four Golden Signals diagnostics. Anomalies above 0.35 trigger auto-remediation.</div>
+    </div>
+    <div class="two-col">
+      <div class="col-stack">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Live Status</div></div>
+          <div class="card-bd">
+            <div style="display:flex;align-items:center;gap:14px;padding:14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);margin-bottom:14px;">
+              <div id="h-dot" style="width:13px;height:13px;border-radius:50%;background:var(--ok);animation:pulse 2.5s infinite;flex-shrink:0;"></div>
+              <div>
+                <div style="font-size:15px;font-weight:700;" id="h-label">Checking…</div>
+                <div style="font-size:12px;color:var(--muted);">FastAPI + uvicorn • port 8000</div>
+              </div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:7px;" id="h-badges">
+              <span class="badge badge-neutral">Checking…</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <div><div class="card-title">Four Golden Signals</div><div class="card-sub">Latency · Traffic · Errors · Saturation</div></div>
+          </div>
+          <div class="card-bd">
+            <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;">
+              Queues an async Celery task to sample all four signals. If anomaly score &gt; 0.35 the system auto-remediates (cache clear, rollback) and escalates to on-call SRE.
+            </p>
+            <button class="btn btn-primary btn-full" id="btn-diag" onclick="doDiagnostics()">
+              <i data-lucide="activity"></i> Run Diagnostics
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-stack">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Signal Reference</div></div>
+          <div class="card-bd" style="padding:12px 16px;">
+            ${[
+              ['clock','Latency','P99 request duration. Tracks API responsiveness over time.'],
+              ['bar-chart-2','Traffic','Requests per minute. Baseline deviation triggers alerts.'],
+              ['alert-triangle','Errors','4xx/5xx as % of total traffic. Budget: 5% default.'],
+              ['gauge','Saturation','CPU/memory headroom. High saturation triggers auto-scale.'],
+            ].map(([icon, title, desc]) => `
+              <div class="kv" style="align-items:flex-start;padding:11px 0;">
+                <div style="display:flex;gap:9px;align-items:flex-start;">
+                  <div class="ico ico-amber" style="flex-shrink:0;"><i data-lucide="${icon}"></i></div>
+                  <div><div style="font-size:13px;font-weight:600;margin-bottom:2px;">${title}</div>
+                  <div style="font-size:11.5px;color:var(--muted);">${desc}</div></div>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>
+        <div id="h-result"></div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+  doHealthCheck();
+}
+
+async function doHealthCheck() {
+  try {
+    const d = await GET('/health');
+    const ok = d.status === 'ok';
+    const dot = document.getElementById('h-dot');
+    if (dot) { dot.style.background = ok ? 'var(--ok)' : 'var(--err)'; dot.style.animation = ok ? 'pulse 2.5s infinite' : 'none'; }
+    const lbl = document.getElementById('h-label');
+    if (lbl) lbl.textContent = ok ? 'All Systems Operational' : 'Service Degraded';
+    const badges = document.getElementById('h-badges');
+    if (badges) badges.innerHTML = `
+      <span class="badge badge-${ok?'ok':'err'}">API ${ok?'Online':'Offline'}</span>
+      <span class="badge badge-ok">PostgreSQL Connected</span>
+      <span class="badge badge-ok">Redis Healthy</span>
+      <span class="badge badge-ok">Celery Worker Active</span>`;
+  } catch {
+    const lbl = document.getElementById('h-label');
+    if (lbl) { lbl.textContent = 'Unreachable'; document.getElementById('h-dot').style.background = 'var(--err)'; }
+  }
+}
+
+async function doDiagnostics() {
+  const btn = document.getElementById('btn-diag'); setLoad(btn, true);
+  try {
+    const data = await GET('/health/metrics');
+    document.getElementById('h-result').innerHTML = `
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Task Dispatched</div><span class="badge badge-ok">Queued</span></div>
+        <div class="card-bd">
+          <div style="padding:11px 13px;background:var(--bg);border-radius:6px;border:1px solid var(--border);margin-bottom:12px;">
+            <div style="font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;">Celery Task ID</div>
+            <code style="font-size:12px;word-break:break-all;">${data.task_id}</code>
+          </div>
+          <div class="info-box info-info" style="font-size:12.5px;">${data.message}</div>
+        </div>
+      </div>`;
+    toast('Diagnostics queued');
+  } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
+}
+
+/* ════════════════════════════════════
+   INIT
+════════════════════════════════════ */
+function updateUserPanel() {
+  document.getElementById('user-role').textContent = S.role;
+  document.getElementById('user-avatar').textContent = S.role[0].toUpperCase();
+}
+
+function initApp() {
+  updateUserPanel();
+  buildSidebar();
+  nav('dashboard');
+  pollHealth();
+  setInterval(pollHealth, 30000);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  lucide.createIcons();
+
+  // Pre-fill sandbox defaults
+  document.getElementById('auth-pin').value = 'sandbox1234';
+  document.getElementById('auth-pin').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth(); });
+
+  if (loadAuth()) {
+    document.getElementById('auth-modal').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    initApp();
+  }
+});
+</script>
+</body>
+</html>

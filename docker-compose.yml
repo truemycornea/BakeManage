@@ -1,34 +1,78 @@
-version: "3.9"
-
 services:
-  app:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/bakemanage
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
-      JWT_SECRET: change-this-secret
-      JWT_EXPIRY_MINUTES: 60
-      DEFAULT_ADMIN_USERNAME: admin
-      DEFAULT_ADMIN_PIN: 1234
-    depends_on:
-      - db
-      - redis
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-
   db:
-    image: postgres:15
+    image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: bakemanage
+      POSTGRES_PASSWORD: bakemanage
       POSTGRES_DB: bakemanage
-    ports:
-      - "5432:5432"
+    volumes:
+      - bakemanage_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bakemanage -d bakemanage"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
-    image: redis:7
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bakemanage:sandbox
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      SERVICE: api
+    env_file:
+      - .env
     ports:
-      - "6379:6379"
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bakemanage:sandbox
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+    environment:
+      SERVICE: worker
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  frontend:
+    image: nginx:alpine
+    volumes:
+      - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "3001:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  bakemanage_pgdata:
