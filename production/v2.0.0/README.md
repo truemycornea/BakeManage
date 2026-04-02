@@ -1,12 +1,9 @@
-# BakeManage ERP — v2.0.0 Sandbox
+# BakeManage ERP - v1.5 Sandbox
 
-Enterprise-grade SaaS ERP for Indian bakeries — multimodal AI ingestion, recipe costing,
-inventory FEFO, proofing telemetry, quality control, supply chain automation, CRM loyalty
-programme, and ML-powered demand forecasting. Built on FastAPI + PostgreSQL + Redis + Celery,
-delivered as a single-page web application.
-
-**v2.0.0 additions:** Phase 2 hardening (rate-limit, GZip, Prometheus, health gate) + Phase 3
-enterprise ops (supply chain, AI insights, WhatsApp CRM, loyalty). 82/82 tests passing.
+Enterprise-grade SaaS ERP for Indian bakeries - multimodal AI ingestion, recipe costing,
+inventory FEFO, GST-ready compliance, proofing telemetry, quality control, and a full
+recipe + media library. Built on FastAPI + PostgreSQL + Redis + Celery, delivered as
+a single-page web application.
 
 ---
 
@@ -22,9 +19,8 @@ enterprise ops (supply chain, AI insights, WhatsApp CRM, loyalty). 82/82 tests p
 8. [Data Models](#8-data-models)
 9. [Running Tests](#9-running-tests)
 10. [Frontend SPA](#10-frontend-spa)
-11. [Production Backup](#11-production-backup)
-12. [Release History](#12-release-history)
-13. [Roadmap](#13-roadmap)
+11. [Release History](#11-release-history)
+12. [Roadmap](#12-roadmap)
 
 ---
 
@@ -36,7 +32,6 @@ enterprise ops (supply chain, AI insights, WhatsApp CRM, loyalty). 82/82 tests p
           |   http://api:8000
     FastAPI API  (port 8000)
       JWT+PIN RBAC  |  Redis cache  |  Celery dispatch  |  Ingestion pipeline
-      GZip middleware | Rate-limit (120/min) | Prometheus /health/metrics
           |                |                |
      PostgreSQL        Redis 7         Celery Worker
      (port 5432)     (port 6379)      (FEFO/COGS tasks)
@@ -55,45 +50,21 @@ enterprise ops (supply chain, AI insights, WhatsApp CRM, loyalty). 82/82 tests p
 
 ## 2. Feature Map
 
-### Phase 1 — MVP Core
-
 | # | Module | Status | Description |
 |---|---|---|---|
-| 1 | Authentication | ✅ done | PIN-based JWT login, role-gated endpoints |
-| 2 | Multimodal Ingestion | ✅ done | Images, PDFs, Excel via VLM OCR simulation |
-| 3 | Inventory Management | ✅ done | 158 SKUs, FEFO-ready, expiry alerting, Redis hot-cache |
-| 4 | Cost Computing | ✅ done | Component roll-up, overhead, yield %, margin guardrail |
-| 5 | Proofing Telemetry | ✅ done | Temperature / humidity / CO2 ingest + anomaly scoring |
-| 6 | Quality Control | ✅ done | AI browning index, visual quality validation |
-| 7 | Sales Recording | ✅ done | Daily sales log, revenue totals, per-product history |
-| 8 | Dashboard | ✅ done | KPIs: stock count, quality pass rate, expiry alerts |
-| 9 | Stock Management | ✅ done | Add stock, list with expiry days, expiring-soon filter |
-| 10 | Compliance | ✅ done | Fernet-encrypted credentials, PBKDF2 PIN hashing, TLS hook |
-| 11 | Recipe Library | ✅ done | 13 bakery recipes, 98 ingredients, cost KPIs, BOM drawer |
-| 12 | Media Library | ✅ done | 23 assets (13 PDF cards + 10 training videos) |
-
-### Phase 2 — Hardening & Observability
-
-| # | Module | Status | Description |
-|---|---|---|---|
-| 13 | Rate Limiting | ✅ done | slowapi — 120 req/min per IP, configurable |
-| 14 | Response Compression | ✅ done | GZip for responses ≥ 1 KB |
-| 15 | Prometheus Metrics | ✅ done | `/health/metrics` — uptime, request counters, Redis stats |
-| 16 | Health Gate | ✅ done | `/health` returns 503 if DB or Redis unreachable |
-| 17 | Extended Health | ✅ done | `/health/extended` — per-component deep checks |
-
-### Phase 3 — Enterprise Operations
-
-| # | Module | Status | Description |
-|---|---|---|---|
-| 18 | Supply Chain Indent | ✅ done | Auto-generate POs for low-stock items |
-| 19 | Stock Transfer | ✅ done | Multi-location inventory transfers with deduction |
-| 20 | Supplier Lead Times | ✅ done | CRUD for vendor lead-day and price-per-unit SLAs |
-| 21 | Menu Engineering | ✅ done | Star/Plow-Horse/Puzzle/Dog quadrant analysis |
-| 22 | Vendor Optimization | ✅ done | Best vendor per ingredient (price + lead days) |
-| 23 | Demand Forecast | ✅ done | Linear regression via scikit-learn, configurable lookahead |
-| 24 | WhatsApp CRM | ✅ done | Sandboxed Twilio dispatch stub with template support |
-| 25 | Loyalty Programme | ✅ done | Bronze/Silver/Gold tiers, birthday triggers, spend tracking |
+| 1 | Authentication | done | PIN-based JWT login, role-gated endpoints |
+| 2 | Multimodal Ingestion | done | Images, PDFs, Excel via Docling + VLM OCR simulation |
+| 3 | Inventory Management | done | 105 SKUs, FEFO-ready, expiry alerting, Redis hot-cache |
+| 4 | Cost Computing | done | Component roll-up, overhead, yield %, margin guardrail |
+| 5 | Proofing Telemetry | done | Temperature / humidity / CO2 ingest + anomaly scoring |
+| 6 | Quality Control | done | AI browning index, visual quality validation |
+| 7 | Sales Recording | done | Daily sales log, revenue totals, per-product history |
+| 8 | SRE / Health | done | Golden Signal monitoring, auto cache-clear, metrics |
+| 9 | Dashboard | done | KPIs: stock count, quality pass rate, expiry alerts |
+| 10 | Stock Management | done | Add stock, list with expiry days, expiring-soon filter |
+| 11 | Compliance | done | Fernet-encrypted credentials, PBKDF2 PIN hashing, TLS hook |
+| 12 | Recipe Library | done | 13 bakery recipes, 98 ingredients, cost KPIs, BOM drawer |
+| 13 | Media Library | done | 23 assets (13 PDF cards + 10 training videos) |
 
 ---
 
@@ -111,11 +82,9 @@ enterprise ops (supply chain, AI insights, WhatsApp CRM, loyalty). 82/82 tests p
 | Data Validation | Pydantic | 2.11.3 |
 | Auth Tokens | PyJWT | 2.9.0 |
 | Cryptography | cryptography | 44.0.3 |
-| Image Processing | Pillow | 11.2.1 |
-| Rate Limiting | slowapi | 0.1.9 |
-| ML Forecasting | scikit-learn | 1.6.1 |
+| Document OCR | Docling | 2.31.0 |
+| Image Generation | Pillow | 11.2.1 |
 | Tests | pytest | 8.3.5 |
-| HTTP Client (Tests) | httpx | 0.28.1 |
 
 Full pinned dependency list: [requirements.txt](requirements.txt)
 
@@ -452,48 +421,25 @@ curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
 ## 9. Running Tests
 
 ```bash
-# All 82 tests — inside container (recommended)
-docker compose exec api pytest --tb=short -q
+# All tests - inside container (recommended)
+docker compose exec api pytest --tb=short -v
 
 # With coverage report
 docker compose exec api pytest --cov=app --cov-report=term-missing
 
-# Unit tests only
-docker compose exec api pytest tests/test_controls.py tests/test_costing.py tests/test_ingestion.py -v
-
-# Integration tests only (all phases)
-docker compose exec api pytest tests/test_api_all_phases.py -v
-
-# Individual unit modules
+# Individual test modules
 docker compose exec api pytest tests/test_controls.py -v   # 15 tests: RBAC + security
 docker compose exec api pytest tests/test_costing.py -v    # 10 tests: cost roll-up math
 docker compose exec api pytest tests/test_ingestion.py -v  # 10 tests: ingestion pipeline
 ```
 
-> **First time setup:** copy the integration test file into the container before running:
-> ```bash
-> docker compose cp tests/test_api_all_phases.py api:/app/tests/
-> ```
-
-### Current Status: 82/82 passed
+### Current Status: 35/35 passed
 
 | Test File | Tests | Coverage Area |
 |---|---|---|
 | test_controls.py | 15 | Auth, RBAC, HTTPS enforcement, Fernet, field-level filtering |
 | test_costing.py | 10 | Cost roll-up, margin computation, guardrail trigger |
-| test_ingestion.py | 10 | Image/doc ingestion, invoice persistence |
-| test_api_all_phases.py | 47 | Full API integration: all Phase 1/2/3 endpoints, security boundaries |
-
-#### Seeding Demo Data
-
-```bash
-# Phase 1 data (stock, recipes, sales, QC, media) — run inside container
-docker compose exec api python /app/scripts/seed_data.py
-
-# Phase 3 data (supplier lead-times, loyalty CRM, auto-indent) — copy then run
-docker compose cp scripts/seed_phase3.py api:/tmp/
-docker compose exec api python /tmp/seed_phase3.py
-```
+| test_ingestion.py | 10 | Image/doc ingestion, Docling parsing, invoice persistence |
 
 ---
 
@@ -530,43 +476,16 @@ SYSTEM
 
 ---
 
-## 11. Production Backup
-
-A versioned snapshot is stored alongside the repository for quick restore and audit purposes.
-
-| Artifact | Path | Size |
-|---|---|---|
-| Source snapshot | `production/v2.0.0/` | — |
-| Compressed archive | `production/bakemanage-v2.0.0-production-20260402.tar.gz` | 322 KB |
-
-**Restore from snapshot:**
-```bash
-cd production/v2.0.0
-docker compose up --build -d
-```
-
-**Restore from archive:**
-```bash
-tar -xzf production/bakemanage-v2.0.0-production-20260402.tar.gz -C /tmp/restore/
-cd /tmp/restore
-docker compose up --build -d
-```
-
-Full endpoint listing, environment reference, and runbook: `production/v2.0.0/PRODUCTION_README.md`
-
----
-
-## 12. Release History
+## 11. Release History
 
 | Version | Date | Changes |
 |---|---|---|
-| v2.0.0 | 2026-04-02 | Phase 2 hardening (rate-limit 120 req/min, GZip, Prometheus /metrics, health gate) + Phase 3 enterprise ops (supply-chain indent/transfer/lead-time, menu engineering, vendor optimisation, ML demand forecast, WhatsApp CRM, loyalty programme); drop-zone CSS breakpoint fix (720 px → 960 px); 47 API integration tests; 82/82 tests passing; production backup archive |
 | v1.5 | 2026-04-02 | Recipe Library, Media Library, 13 seeded recipes, 23 media assets, drop-zone CSS fix (display:block), responsive grid breakpoints at 720px, REDIS_URL env fix, co2_ppm schema fix, 35/35 tests |
 | v1.0 | 2026-04-01 | Core FastAPI, multimodal ingestion, FEFO inventory, cost engine, proofing telemetry, quality control, SRE golden signals, dashboard KPIs, Redis caching, Celery workers |
 
 ---
 
-## 13. Roadmap
+## 12. Roadmap
 
 Full strategic blueprint: [bakemanagerootv2.5.md](bakemanagerootv2.5.md)
 

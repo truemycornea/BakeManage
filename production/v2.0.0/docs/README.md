@@ -29,11 +29,11 @@
 - **Ingestion**: Multimodal pipeline — Docling for structured docs, VLM simulation for handwritten receipts
 - **Verticals**: Proofing telemetry, AI browning index, FEFO FIFO, Recipe BOM, Media library
 
-## Platform Status (v2.0.0 — 2026-04-02)
+## Platform Status (v1.5 — 2026-04-02)
 
-- 16 modules implemented and tested (Phase 1 + Phase 2 hardening + Phase 3 enterprise ops)
-- 82/82 tests passing (35 unit + 47 API integration)
+- 13 modules implemented and tested
+- 35/35 tests passing
 - 5 Docker containers healthy
-- 158 inventory SKUs, 13 recipes, 23 media assets, 12 loyalty customers, 12 supplier lead-time records seeded
+- 105 inventory SKUs, 13 recipes, 23 media assets seeded
 - Live at http://localhost:3001 (sandbox)
 
