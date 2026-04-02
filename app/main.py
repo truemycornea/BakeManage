@@ -3,17 +3,24 @@ from __future__ import annotations
 
 import hashlib
 import random
+import time
+import threading
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, Request
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from PIL import Image, ImageStat
 from sqlalchemy.orm import Session
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from .cache import cache_get, cache_set, get_redis_client
 from .cache import cache_inventory_snapshot
@@ -31,6 +38,10 @@ from .models import (
     RecipeIngredient,
     SaleRecord,
     ServiceCredential,
+    StockIndent,
+    StockTransfer,
+    SupplierLeadTime,
+    LoyaltyRecord,
     User,
 )
 from .schemas import (
@@ -74,6 +85,12 @@ from .tasks import (
 
 redis_client = get_redis_client()
 
+# Prometheus-style in-memory counters (thread-safe, reset on restart)
+_prom_lock = threading.Lock()
+_prom_requests: dict[str, int] = defaultdict(int)   # key: "method:path:status"
+_prom_cache_hits: int = 0
+_prom_start_time: float = time.time()
+
 
 def _ensure_requirements_locked() -> None:
     req_path = "requirements.txt"
@@ -105,7 +122,15 @@ class CredentialRequest(BaseModel):
     api_key: str
 
 
-app = FastAPI(title="BakeManage Platform API", version="1.5.0")
+app = FastAPI(title="BakeManage Platform API", version="2.0.0")
+
+# Rate limiter — 120 req/min per IP by default  (Phase 2 v2.1)
+limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# GZip compression for all responses ≥ 1 KB  (Phase 2 v2.1)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 app.add_middleware(
     CORSMiddleware,
@@ -128,6 +153,16 @@ def _create_schema() -> None:
         _seed_admin_user(session)
     finally:
         session.close()
+
+
+@app.middleware("http")
+async def _track_requests(request: Request, call_next):
+    """Record request counters for /metrics Prometheus endpoint."""
+    response = await call_next(request)
+    key = f"{request.method}:{request.url.path}:{response.status_code}"
+    with _prom_lock:
+        _prom_requests[key] += 1
+    return response
 
 
 @app.middleware("http")
@@ -168,7 +203,24 @@ def _analyze_browning(image_bytes: bytes) -> QualityAssessment:
 # ---------------------------------------------------------------------------
 
 @app.get("/health")
-async def health() -> dict[str, str]:
+async def health(session: Session = Depends(get_session)) -> dict[str, str]:
+    """Liveness probe — returns 503 if DB or Redis is unreachable (Phase 2 health gate)."""
+    errors: list[str] = []
+    # DB check
+    try:
+        session.execute(__import__("sqlalchemy").text("SELECT 1"))
+    except Exception:
+        errors.append("db")
+    # Redis check
+    try:
+        redis_client.ping()
+    except Exception:
+        errors.append("redis")
+    if errors:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "unhealthy": errors},
+        )
     return {"status": "ok"}
 
 
@@ -671,11 +723,44 @@ async def store_credentials(
     return {"credential_id": record.id, "name": record.name}
 
 
-@app.get("/health/metrics", response_model=dict)
-async def health_metrics(role: str = Depends(authorize_request)) -> dict:
+@app.get("/health/metrics")
+async def health_metrics(role: str = Depends(authorize_request)) -> PlainTextResponse:
+    """Native Prometheus text-format metrics endpoint (Phase 2 v2.1)."""
     require_domain(role, "health")
-    task = monitor_four_signals.delay()
-    return {"task_id": task.id, "message": "health sampling queued"}
+    uptime_seconds = time.time() - _prom_start_time
+    lines: list[str] = []
+
+    # Uptime gauge
+    lines.append("# HELP bakemanage_uptime_seconds Seconds since API process started")
+    lines.append("# TYPE bakemanage_uptime_seconds gauge")
+    lines.append(f"bakemanage_uptime_seconds {uptime_seconds:.1f}")
+
+    # Request counter
+    lines.append("# HELP bakemanage_requests_total Total HTTP requests handled")
+    lines.append("# TYPE bakemanage_requests_total counter")
+    with _prom_lock:
+        snapshot = dict(_prom_requests)
+    for label_key, count in sorted(snapshot.items()):
+        method, path, status = label_key.split(":", 2)
+        lines.append(
+            f'bakemanage_requests_total{{method="{method}",path="{path}",status="{status}"}} {count}'
+        )
+
+    # Redis cache hits gauge (read via OBJECT_ENCODING approximation)
+    try:
+        info = redis_client.info("stats")
+        cache_hits = info.get("keyspace_hits", 0)
+        cache_misses = info.get("keyspace_misses", 0)
+    except Exception:
+        cache_hits, cache_misses = 0, 0
+    lines.append("# HELP bakemanage_redis_cache_hits_total Redis keyspace hits since server start")
+    lines.append("# TYPE bakemanage_redis_cache_hits_total counter")
+    lines.append(f"bakemanage_redis_cache_hits_total {cache_hits}")
+    lines.append("# HELP bakemanage_redis_cache_misses_total Redis keyspace misses since server start")
+    lines.append("# TYPE bakemanage_redis_cache_misses_total counter")
+    lines.append(f"bakemanage_redis_cache_misses_total {cache_misses}")
+
+    return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
 
 
 # ---------------------------------------------------------------------------
@@ -892,4 +977,530 @@ async def get_media_asset(
         "thumbnail_data": a.thumbnail_data,
         "pdf_data": a.pdf_data,
         "created_at": a.created_at.isoformat(),
+    }
+
+
+# ===========================================================================
+# Phase 3 — v3.1: Supply Chain & Central Kitchen
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Request models  (Phase 3)
+# ---------------------------------------------------------------------------
+
+class IndentRequest(BaseModel):
+    threshold_quantity: float = 10.0   # raise indent for items below this quantity
+    raised_by: str = "system"
+
+
+class StockTransferRequest(BaseModel):
+    inventory_item_id: int
+    from_location: str
+    to_location: str
+    quantity: float
+    unit_of_measure: str = "kg"
+    notes: str | None = None
+
+
+class LeadTimeRequest(BaseModel):
+    vendor_name: str
+    ingredient_name: str
+    lead_days: int
+    last_price_per_unit: float | None = None
+    notes: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Supply chain endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/supply-chain/indent", response_model=dict)
+async def generate_indent(
+    payload: IndentRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Auto-generate purchase indents for all items below threshold quantity (Phase 3 v3.1)."""
+    require_domain(role, "inventory")
+    low_stock = (
+        session.query(InventoryItem)
+        .filter(InventoryItem.quantity_on_hand < payload.threshold_quantity)
+        .order_by(InventoryItem.quantity_on_hand.asc())
+        .all()
+    )
+    indents = []
+    for item in low_stock:
+        qty_needed = round(payload.threshold_quantity - item.quantity_on_hand, 3)
+        # Check lead-time record for preferred vendor
+        lead = (
+            session.query(SupplierLeadTime)
+            .filter(SupplierLeadTime.ingredient_name == item.name)
+            .order_by(SupplierLeadTime.lead_days.asc())
+            .first()
+        )
+        indent = StockIndent(
+            ingredient_name=item.name,
+            quantity_required=qty_needed,
+            unit_of_measure=item.unit_of_measure,
+            vendor_name=lead.vendor_name if lead else None,
+            status="pending",
+            raised_by=payload.raised_by,
+        )
+        session.add(indent)
+        indents.append({
+            "ingredient_name": item.name,
+            "current_qty": float(item.quantity_on_hand),
+            "threshold_qty": payload.threshold_quantity,
+            "quantity_required": qty_needed,
+            "unit_of_measure": item.unit_of_measure,
+            "preferred_vendor": lead.vendor_name if lead else None,
+            "lead_days": lead.lead_days if lead else None,
+        })
+    session.commit()
+    return {
+        "indents_raised": len(indents),
+        "threshold_quantity": payload.threshold_quantity,
+        "items": indents,
+    }
+
+
+@app.post("/stock/transfer", response_model=dict)
+async def transfer_stock(
+    payload: StockTransferRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Transfer stock quantity between locations (Phase 3 v3.1)."""
+    require_domain(role, "inventory")
+    item = session.query(InventoryItem).filter(InventoryItem.id == payload.inventory_item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=422, detail="Transfer quantity must be positive")
+    if item.quantity_on_hand < payload.quantity:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Insufficient stock: {item.quantity_on_hand} {item.unit_of_measure} available",
+        )
+    if payload.from_location.strip() == payload.to_location.strip():
+        raise HTTPException(status_code=422, detail="from_location and to_location must differ")
+
+    # Deduct from source (inventory is treated as single-location; transfer is logged)
+    item.quantity_on_hand -= payload.quantity
+    transfer = StockTransfer(
+        inventory_item_id=item.id,
+        from_location=payload.from_location.strip(),
+        to_location=payload.to_location.strip(),
+        quantity=payload.quantity,
+        unit_of_measure=payload.unit_of_measure,
+        notes=payload.notes,
+    )
+    session.add(transfer)
+    session.commit()
+    return {
+        "transfer_id": transfer.id,
+        "ingredient_name": item.name,
+        "from_location": transfer.from_location,
+        "to_location": transfer.to_location,
+        "quantity_transferred": payload.quantity,
+        "unit_of_measure": payload.unit_of_measure,
+        "remaining_on_hand": float(item.quantity_on_hand),
+        "transferred_at": transfer.transferred_at.isoformat(),
+    }
+
+
+@app.get("/supply-chain/lead-times", response_model=dict)
+async def list_lead_times(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """List all supplier lead-time records (Phase 3 v3.1)."""
+    require_domain(role, "inventory")
+    records = session.query(SupplierLeadTime).order_by(SupplierLeadTime.vendor_name.asc()).all()
+    items = [
+        {
+            "id": r.id,
+            "vendor_name": r.vendor_name,
+            "ingredient_name": r.ingredient_name,
+            "lead_days": r.lead_days,
+            "last_price_per_unit": float(r.last_price_per_unit) if r.last_price_per_unit else None,
+            "notes": r.notes,
+            "updated_at": r.updated_at.isoformat(),
+        }
+        for r in records
+    ]
+    return {"total": len(items), "lead_times": items}
+
+
+@app.post("/supply-chain/lead-times", response_model=dict)
+async def upsert_lead_time(
+    payload: LeadTimeRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Create or update a supplier lead-time record (Phase 3 v3.1)."""
+    require_domain(role, "inventory")
+    existing = (
+        session.query(SupplierLeadTime)
+        .filter(
+            SupplierLeadTime.vendor_name == payload.vendor_name,
+            SupplierLeadTime.ingredient_name == payload.ingredient_name,
+        )
+        .first()
+    )
+    if existing:
+        existing.lead_days = payload.lead_days
+        existing.last_price_per_unit = (
+            Decimal(str(payload.last_price_per_unit)) if payload.last_price_per_unit else None
+        )
+        existing.notes = payload.notes
+        existing.updated_at = datetime.utcnow()
+        record = existing
+    else:
+        record = SupplierLeadTime(
+            vendor_name=payload.vendor_name,
+            ingredient_name=payload.ingredient_name,
+            lead_days=payload.lead_days,
+            last_price_per_unit=(
+                Decimal(str(payload.last_price_per_unit)) if payload.last_price_per_unit else None
+            ),
+            notes=payload.notes,
+        )
+        session.add(record)
+    session.commit()
+    return {
+        "id": record.id,
+        "vendor_name": record.vendor_name,
+        "ingredient_name": record.ingredient_name,
+        "lead_days": record.lead_days,
+        "updated_at": record.updated_at.isoformat(),
+    }
+
+
+# ===========================================================================
+# Phase 3 — v3.2: Advanced Data Monetization (Insights)
+# ===========================================================================
+
+@app.get("/insights/menu-engineering", response_model=dict)
+async def menu_engineering(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Dynamic menu engineering — margin × sales velocity scoring (Phase 3 v3.2)."""
+    require_domain(role, "costing")
+    from datetime import date as _date, timedelta
+    # Sales velocity: units sold in last 30 days by product name
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    sales = session.query(SaleRecord).filter(SaleRecord.sold_at >= cutoff).all()
+    velocity_map: dict[str, float] = defaultdict(float)
+    revenue_map: dict[str, float] = defaultdict(float)
+    for s in sales:
+        velocity_map[s.product_name] += s.quantity_sold
+        revenue_map[s.product_name] += float(s.total_amount)
+
+    # Match sales product names to recipes to get COGS
+    recipes = session.query(Recipe).all()
+    recipe_cost_map: dict[str, float] = {}
+    for r in recipes:
+        total_cogs = sum(float(ing.cost) for ing in r.components) + float(r.overhead_cost)
+        recipe_cost_map[r.name.lower()] = round(total_cogs, 2)
+
+    # Build engineering matrix
+    results = []
+    for product_name, velocity in velocity_map.items():
+        revenue = revenue_map[product_name]
+        avg_price = round(revenue / velocity, 2) if velocity > 0 else 0
+        cogs = recipe_cost_map.get(product_name.lower())
+        margin_pct: float | None = None
+        if cogs is not None and avg_price > 0:
+            margin_pct = round((avg_price - cogs) / avg_price * 100, 1)
+        # Classify quadrant: Star / Plow-Horse / Puzzle / Dog
+        med_velocity = sum(velocity_map.values()) / max(len(velocity_map), 1)
+        is_high_volume = velocity >= med_velocity
+        is_high_margin = margin_pct is not None and margin_pct >= 60
+        if is_high_volume and is_high_margin:
+            quadrant = "star"
+        elif is_high_volume and not is_high_margin:
+            quadrant = "plow_horse"
+        elif not is_high_volume and is_high_margin:
+            quadrant = "puzzle"
+        else:
+            quadrant = "dog"
+        results.append({
+            "product_name": product_name,
+            "units_sold_30d": velocity,
+            "revenue_30d": round(revenue, 2),
+            "avg_selling_price": avg_price,
+            "cogs": cogs,
+            "margin_pct": margin_pct,
+            "quadrant": quadrant,
+        })
+
+    results.sort(key=lambda x: (x["revenue_30d"]), reverse=True)
+    return {
+        "period_days": 30,
+        "total_products": len(results),
+        "items": results,
+    }
+
+
+@app.get("/insights/vendor-optimization", response_model=dict)
+async def vendor_optimization(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Best-vendor recommendation per ingredient based on lead-time and price (Phase 3 v3.2)."""
+    require_domain(role, "inventory")
+    records = session.query(SupplierLeadTime).all()
+    # Group by ingredient
+    by_ingredient: dict[str, list] = defaultdict(list)
+    for r in records:
+        by_ingredient[r.ingredient_name].append({
+            "vendor_name": r.vendor_name,
+            "lead_days": r.lead_days,
+            "last_price_per_unit": float(r.last_price_per_unit) if r.last_price_per_unit else None,
+        })
+
+    recommendations = []
+    for ingredient, vendors in by_ingredient.items():
+        # Rank by price first (if available), then lead_days
+        vendors_priced = [v for v in vendors if v["last_price_per_unit"] is not None]
+        vendors_unpriced = [v for v in vendors if v["last_price_per_unit"] is None]
+        ranked = sorted(vendors_priced, key=lambda v: (v["last_price_per_unit"], v["lead_days"]))
+        ranked += sorted(vendors_unpriced, key=lambda v: v["lead_days"])
+        best = ranked[0] if ranked else None
+        recommendations.append({
+            "ingredient_name": ingredient,
+            "recommended_vendor": best["vendor_name"] if best else None,
+            "best_price": best["last_price_per_unit"] if best else None,
+            "best_lead_days": best["lead_days"] if best else None,
+            "alternatives_count": len(ranked) - 1,
+            "all_vendors": ranked,
+        })
+
+    recommendations.sort(key=lambda x: x["ingredient_name"])
+    return {
+        "total_ingredients": len(recommendations),
+        "recommendations": recommendations,
+    }
+
+
+@app.get("/insights/demand-forecast", response_model=dict)
+async def demand_forecast(
+    days_ahead: int = 7,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Linear regression demand forecast per product for next N days (Phase 3 v3.2)."""
+    require_domain(role, "costing")
+    from datetime import date as _date, timedelta
+    import math
+
+    # Fetch last 60 days of sales
+    cutoff = datetime.utcnow() - timedelta(days=60)
+    sales = session.query(SaleRecord).filter(SaleRecord.sold_at >= cutoff).order_by(SaleRecord.sold_at).all()
+
+    # Aggregate daily quantities per product
+    daily_qty: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    for s in sales:
+        day_key = s.sold_at.strftime("%Y-%m-%d")
+        daily_qty[s.product_name][day_key] += s.quantity_sold
+
+    today = _date.today()
+    forecasts = []
+    for product_name, day_map in daily_qty.items():
+        days = sorted(day_map.keys())
+        if len(days) < 2:
+            # Not enough data — use simple average
+            avg = sum(day_map.values()) / len(day_map)
+            forecasts.append({
+                "product_name": product_name,
+                "method": "average",
+                "data_points": len(days),
+                "forecast": [
+                    {"date": (today + timedelta(days=i + 1)).isoformat(), "predicted_qty": round(avg, 2)}
+                    for i in range(days_ahead)
+                ],
+            })
+            continue
+
+        # Simple linear regression: x = day index, y = qty
+        xs = list(range(len(days)))
+        ys = [day_map[d] for d in days]
+        n = len(xs)
+        mean_x = sum(xs) / n
+        mean_y = sum(ys) / n
+        num = sum((xs[i] - mean_x) * (ys[i] - mean_y) for i in range(n))
+        den = sum((xs[i] - mean_x) ** 2 for i in range(n))
+        slope = num / den if den != 0 else 0
+        intercept = mean_y - slope * mean_x
+        next_x_start = len(days)
+        forecast_items = []
+        for i in range(days_ahead):
+            x = next_x_start + i
+            predicted = max(0.0, round(intercept + slope * x, 2))
+            forecast_items.append({
+                "date": (today + timedelta(days=i + 1)).isoformat(),
+                "predicted_qty": predicted,
+            })
+        forecasts.append({
+            "product_name": product_name,
+            "method": "linear_regression",
+            "data_points": n,
+            "slope": round(slope, 4),
+            "forecast": forecast_items,
+        })
+
+    forecasts.sort(key=lambda x: x["product_name"])
+    return {
+        "days_ahead": days_ahead,
+        "total_products": len(forecasts),
+        "forecasts": forecasts,
+    }
+
+
+# ===========================================================================
+# Phase 3 — v3.3: Niche CRM Features
+# ===========================================================================
+
+class WhatsAppNotifyRequest(BaseModel):
+    customer_name: str
+    phone: str
+    message: str
+    order_id: str | None = None
+
+
+class LoyaltyUpsertRequest(BaseModel):
+    customer_name: str
+    phone: str | None = None
+    birthday: str | None = None   # ISO date YYYY-MM-DD
+    purchase_amount_inr: float = 0.0
+
+
+@app.post("/crm/whatsapp-notify", response_model=dict)
+async def whatsapp_notify(
+    payload: WhatsAppNotifyRequest,
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Simulated WhatsApp CRM notification dispatch (Phase 3 v3.3).
+
+    In production this would call the WhatsApp Business API; this sandbox
+    returns a structured simulation of the outbound message payload.
+    """
+    require_domain(role, "costing")
+    if not payload.phone.strip():
+        raise HTTPException(status_code=422, detail="phone is required")
+    simulated_message_id = hashlib.sha256(
+        f"{payload.phone}{payload.message}{datetime.utcnow()}".encode()
+    ).hexdigest()[:12]
+    return {
+        "status": "queued",
+        "message_id": simulated_message_id,
+        "recipient": payload.customer_name,
+        "phone": payload.phone,
+        "message_preview": payload.message[:80] + ("…" if len(payload.message) > 80 else ""),
+        "order_id": payload.order_id,
+        "channel": "whatsapp_business_api",
+        "note": "sandbox simulation — no actual message sent",
+    }
+
+
+@app.post("/crm/loyalty/upsert", response_model=dict)
+async def upsert_loyalty(
+    payload: LoyaltyUpsertRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Create or update a customer loyalty record (Phase 3 v3.3)."""
+    require_domain(role, "costing")
+    existing = (
+        session.query(LoyaltyRecord)
+        .filter(LoyaltyRecord.customer_name == payload.customer_name.strip())
+        .first()
+    )
+    from datetime import date as _date
+    bday: _date | None = None
+    if payload.birthday:
+        try:
+            bday = _date.fromisoformat(payload.birthday)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="birthday must be YYYY-MM-DD") from exc
+
+    points_earned = int(payload.purchase_amount_inr // 10)  # 1 point per ₹10
+    if existing:
+        existing.phone = payload.phone or existing.phone
+        existing.birthday = bday or existing.birthday
+        existing.total_purchases += 1
+        existing.total_spend_inr += Decimal(str(payload.purchase_amount_inr))
+        existing.loyalty_points += points_earned
+        total_spend = float(existing.total_spend_inr)
+        existing.tier = "gold" if total_spend >= 5000 else "silver" if total_spend >= 1000 else "bronze"
+        record = existing
+    else:
+        total_spend = payload.purchase_amount_inr
+        tier = "gold" if total_spend >= 5000 else "silver" if total_spend >= 1000 else "bronze"
+        record = LoyaltyRecord(
+            customer_name=payload.customer_name.strip(),
+            phone=payload.phone,
+            birthday=bday,
+            total_purchases=1 if payload.purchase_amount_inr > 0 else 0,
+            total_spend_inr=Decimal(str(payload.purchase_amount_inr)),
+            loyalty_points=points_earned,
+            tier=tier,
+        )
+        session.add(record)
+    session.commit()
+    return {
+        "id": record.id,
+        "customer_name": record.customer_name,
+        "phone": record.phone,
+        "tier": record.tier,
+        "loyalty_points": record.loyalty_points,
+        "total_spend_inr": float(record.total_spend_inr),
+        "total_purchases": record.total_purchases,
+    }
+
+
+@app.get("/crm/loyalty", response_model=dict)
+async def crm_loyalty(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Loyalty analysis — tier breakdown, top customers, birthday triggers (Phase 3 v3.3)."""
+    require_domain(role, "costing")
+    from datetime import date as _date, timedelta
+    records = session.query(LoyaltyRecord).order_by(LoyaltyRecord.total_spend_inr.desc()).all()
+    today = _date.today()
+    upcoming_window = today + timedelta(days=30)
+
+    birthday_triggers = []
+    tier_counts: dict[str, int] = defaultdict(int)
+    items = []
+    for r in records:
+        tier_counts[r.tier] += 1
+        # Birthday trigger: birthday in next 30 days (any year)
+        if r.birthday:
+            bday_this_year = r.birthday.replace(year=today.year)
+            if today <= bday_this_year <= upcoming_window:
+                birthday_triggers.append({
+                    "customer_name": r.customer_name,
+                    "phone": r.phone,
+                    "birthday": r.birthday.isoformat(),
+                    "days_until": (bday_this_year - today).days,
+                })
+        items.append({
+            "id": r.id,
+            "customer_name": r.customer_name,
+            "tier": r.tier,
+            "loyalty_points": r.loyalty_points,
+            "total_spend_inr": float(r.total_spend_inr),
+            "total_purchases": r.total_purchases,
+        })
+
+    return {
+        "total_customers": len(records),
+        "tier_breakdown": dict(tier_counts),
+        "birthday_triggers_next_30d": birthday_triggers,
+        "top_customers": items[:10],
+        "all_customers": items,
     }

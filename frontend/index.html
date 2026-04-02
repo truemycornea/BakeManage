@@ -395,6 +395,17 @@ const NAV = [
   // LIBRARY
   { id:'recipes',      label:'Recipe Library',     icon:'chef-hat',         sec:'LIBRARY',     ownerOnly:false },
   { id:'media',        label:'Media Library',      icon:'film',             sec:'LIBRARY',     ownerOnly:false },
+  // SUPPLY CHAIN  (Phase 3 v3.1)
+  { id:'supply_indent',label:'Purchase Indents',   icon:'clipboard-list',   sec:'SUPPLY CHAIN',ownerOnly:false },
+  { id:'stock_transfer',label:'Stock Transfer',    icon:'arrow-left-right', sec:'SUPPLY CHAIN',ownerOnly:false },
+  { id:'lead_times',   label:'Lead Times',         icon:'clock',            sec:'SUPPLY CHAIN',ownerOnly:false },
+  // INTELLIGENCE  (Phase 3 v3.2)
+  { id:'menu_engineering',label:'Menu Engineering',icon:'bar-chart-2',      sec:'INTELLIGENCE',ownerOnly:false },
+  { id:'vendor_opt',   label:'Vendor Optimizer',   icon:'truck',            sec:'INTELLIGENCE',ownerOnly:false },
+  { id:'demand_forecast',label:'Demand Forecast',  icon:'activity',         sec:'INTELLIGENCE',ownerOnly:false },
+  // CRM  (Phase 3 v3.3)
+  { id:'whatsapp_crm', label:'WhatsApp Notify',    icon:'message-circle',   sec:'CRM',         ownerOnly:false },
+  { id:'loyalty',      label:'Loyalty Program',    icon:'award',            sec:'CRM',         ownerOnly:false },
   // SETTINGS — owner/admin only
   { id:'sys_monitor',  label:'System Monitoring',  icon:'activity',         sec:'SETTINGS',    ownerOnly:true  },
   { id:'auth_access',  label:'Auth & Access',      icon:'shield-check',     sec:'SETTINGS',    ownerOnly:true  },
@@ -552,6 +563,12 @@ function renderView(v) {
     recipes, media,
     sys_monitor, auth_access, app_config,
     credits, roadmap,
+    // Phase 3 — Supply Chain
+    supply_indent, stock_transfer, lead_times,
+    // Phase 3 — Intelligence
+    menu_engineering, vendor_opt, demand_forecast,
+    // Phase 3 — CRM
+    whatsapp_crm, loyalty,
     // legacy aliases (backward-compat deep links)
     inventory, credentials, health,
   };
@@ -3014,6 +3031,471 @@ function roadmap(el) {
           </ul>
         </div>
       </div>`).join('')}`;
+  lucide.createIcons();
+}
+
+/* ════════════════════════════════════
+   PHASE 3 — SUPPLY CHAIN  (v3.1)
+════════════════════════════════════ */
+
+async function supply_indent(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Purchase Indents</div>
+      <div class="page-desc">Auto-generate purchase orders for stock items falling below threshold quantity.</div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-hd"><div class="card-title">Raise New Indent</div></div>
+      <div class="card-bd">
+        <div class="two-col" style="gap:12px;margin-bottom:12px;">
+          <div><label class="form-label">Threshold Qty (below this = indent raised)</label>
+            <input class="form-input" id="si-threshold" type="number" value="10" min="0.1" step="0.5"></div>
+          <div><label class="form-label">Raised By</label>
+            <input class="form-input" id="si-raised-by" value="owner"></div>
+        </div>
+        <button class="btn btn-primary" onclick="_raiseIndent()">
+          <i data-lucide="clipboard-list" style="width:14px;height:14px;"></i> Generate Indents
+        </button>
+      </div>
+    </div>
+    <div id="si-results"></div>`;
+  lucide.createIcons();
+}
+
+async function _raiseIndent() {
+  const threshold = parseFloat(document.getElementById('si-threshold').value) || 10;
+  const raisedBy  = document.getElementById('si-raised-by').value || 'owner';
+  const res = document.getElementById('si-results');
+  res.innerHTML = `<div class="empty-state"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Generating…</p></div>`;
+  lucide.createIcons();
+  try {
+    const data = await POST('/supply-chain/indent', { threshold_quantity: threshold, raised_by: raisedBy });
+    if (!data.indents_raised) {
+      res.innerHTML = `<div class="card"><div class="card-bd" style="padding:20px;text-align:center;color:var(--muted);">✅ All stock above threshold — no indents required.</div></div>`;
+      return;
+    }
+    res.innerHTML = `
+      <div class="card">
+        <div class="card-hd"><div class="card-title">${data.indents_raised} indent${data.indents_raised > 1 ? 's' : ''} raised</div></div>
+        <div class="card-bd" style="padding:0;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="border-bottom:1px solid var(--border);">
+              <th style="padding:8px 12px;text-align:left;color:var(--muted);font-weight:600;">Ingredient</th>
+              <th style="padding:8px 12px;text-align:right;color:var(--muted);font-weight:600;">Current</th>
+              <th style="padding:8px 12px;text-align:right;color:var(--muted);font-weight:600;">Required</th>
+              <th style="padding:8px 12px;text-align:left;color:var(--muted);font-weight:600;">Vendor</th>
+              <th style="padding:8px 12px;text-align:right;color:var(--muted);font-weight:600;">Lead Days</th>
+            </tr></thead>
+            <tbody>${data.items.map(i => `
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 12px;font-weight:500;">${i.ingredient_name}</td>
+                <td style="padding:8px 12px;text-align:right;color:#DC2626;">${i.current_qty} ${i.unit_of_measure}</td>
+                <td style="padding:8px 12px;text-align:right;font-weight:600;">${i.quantity_required} ${i.unit_of_measure}</td>
+                <td style="padding:8px 12px;color:var(--muted);">${i.preferred_vendor || '—'}</td>
+                <td style="padding:8px 12px;text-align:right;">${i.lead_days != null ? i.lead_days + 'd' : '—'}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>`;
+  } catch(e) { res.innerHTML = `<div class="empty-state"><i data-lucide="alert-circle"></i><p>${e.message}</p></div>`; lucide.createIcons(); }
+  lucide.createIcons();
+}
+
+async function stock_transfer(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Stock Transfer</div>
+      <div class="page-desc">Transfer stock quantities between locations (outlet, central kitchen, warehouse).</div>
+    </div>
+    <div class="card" style="max-width:560px;">
+      <div class="card-hd"><div class="card-title">New Transfer</div></div>
+      <div class="card-bd" style="display:flex;flex-direction:column;gap:12px;">
+        <div><label class="form-label">Inventory Item ID</label>
+          <input class="form-input" id="st-item-id" type="number" min="1" placeholder="e.g. 5"></div>
+        <div class="two-col" style="gap:10px;">
+          <div><label class="form-label">From Location</label>
+            <input class="form-input" id="st-from" placeholder="Central Kitchen"></div>
+          <div><label class="form-label">To Location</label>
+            <input class="form-input" id="st-to" placeholder="Outlet A"></div>
+        </div>
+        <div class="two-col" style="gap:10px;">
+          <div><label class="form-label">Quantity</label>
+            <input class="form-input" id="st-qty" type="number" min="0.01" step="0.01" placeholder="5.0"></div>
+          <div><label class="form-label">Unit</label>
+            <input class="form-input" id="st-unit" value="kg"></div>
+        </div>
+        <div><label class="form-label">Notes (optional)</label>
+          <input class="form-input" id="st-notes" placeholder="Weekly replenishment"></div>
+        <button class="btn btn-primary" onclick="_submitTransfer()">
+          <i data-lucide="arrow-left-right" style="width:14px;height:14px;"></i> Submit Transfer
+        </button>
+        <div id="st-result"></div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+}
+
+async function _submitTransfer() {
+  const payload = {
+    inventory_item_id: parseInt(document.getElementById('st-item-id').value),
+    from_location: document.getElementById('st-from').value.trim(),
+    to_location: document.getElementById('st-to').value.trim(),
+    quantity: parseFloat(document.getElementById('st-qty').value),
+    unit_of_measure: document.getElementById('st-unit').value.trim() || 'kg',
+    notes: document.getElementById('st-notes').value.trim() || null,
+  };
+  const res = document.getElementById('st-result');
+  try {
+    const data = await POST('/stock/transfer', payload);
+    res.innerHTML = `<div class="card" style="background:#F0FDF4;border-color:#86EFAC;margin-top:10px;">
+      <div class="card-bd"><p style="margin:0;color:#15803D;font-weight:600;">✅ Transfer #${data.transfer_id} recorded</p>
+      <p style="margin:4px 0 0;font-size:12.5px;color:var(--muted);">${data.quantity_transferred} ${data.unit_of_measure} — ${data.from_location} → ${data.to_location}<br>Remaining on hand: <strong>${data.remaining_on_hand}</strong></p></div></div>`;
+  } catch(e) {
+    res.innerHTML = `<div class="card" style="background:#FEF2F2;border-color:#FCA5A5;margin-top:10px;"><div class="card-bd"><p style="margin:0;color:#DC2626;">${e.message}</p></div></div>`;
+  }
+  lucide.createIcons();
+}
+
+async function lead_times(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Supplier Lead Times</div>
+      <div class="page-desc">Track expected delivery lead-times and last known prices per vendor and ingredient.</div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-hd"><div class="card-title">Add / Update Lead Time</div></div>
+      <div class="card-bd" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div><label class="form-label">Vendor Name</label><input class="form-input" id="lt-vendor" placeholder="Raj Flour Mills"></div>
+        <div><label class="form-label">Ingredient Name</label><input class="form-input" id="lt-ingredient" placeholder="Wheat Flour"></div>
+        <div><label class="form-label">Lead Days</label><input class="form-input" id="lt-days" type="number" min="1" value="3"></div>
+        <div><label class="form-label">Last Price/Unit (₹)</label><input class="form-input" id="lt-price" type="number" step="0.01" placeholder="45.50"></div>
+        <div style="grid-column:1/-1;"><label class="form-label">Notes</label><input class="form-input" id="lt-notes" placeholder="Delivery on Tuesdays only"></div>
+        <div style="grid-column:1/-1;">
+          <button class="btn btn-primary btn-sm" onclick="_saveLT()"><i data-lucide="save" style="width:13px;height:13px;"></i> Save</button>
+        </div>
+      </div>
+    </div>
+    <div id="lt-result" style="margin-bottom:12px;"></div>
+    <div id="lt-table"><div class="empty-state"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Loading…</p></div></div>`;
+  lucide.createIcons();
+  await _loadLTs();
+}
+
+async function _saveLT() {
+  const payload = {
+    vendor_name: document.getElementById('lt-vendor').value.trim(),
+    ingredient_name: document.getElementById('lt-ingredient').value.trim(),
+    lead_days: parseInt(document.getElementById('lt-days').value) || 3,
+    last_price_per_unit: parseFloat(document.getElementById('lt-price').value) || null,
+    notes: document.getElementById('lt-notes').value.trim() || null,
+  };
+  if (!payload.vendor_name || !payload.ingredient_name) { toast('Vendor and ingredient name required', 'err'); return; }
+  try {
+    await POST('/supply-chain/lead-times', payload);
+    toast('Lead time saved', 'ok');
+    await _loadLTs();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function _loadLTs() {
+  const el = document.getElementById('lt-table');
+  try {
+    const data = await GET('/supply-chain/lead-times');
+    if (!data.total) { el.innerHTML = `<div class="empty-state"><i data-lucide="clock"></i><p>No lead times recorded yet.</p></div>`; lucide.createIcons(); return; }
+    el.innerHTML = `<div class="card"><div class="card-bd" style="padding:0;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="border-bottom:1px solid var(--border);">
+          <th style="padding:8px 12px;text-align:left;color:var(--muted);">Vendor</th>
+          <th style="padding:8px 12px;text-align:left;color:var(--muted);">Ingredient</th>
+          <th style="padding:8px 12px;text-align:right;color:var(--muted);">Lead Days</th>
+          <th style="padding:8px 12px;text-align:right;color:var(--muted);">Last Price (₹)</th>
+          <th style="padding:8px 12px;text-align:left;color:var(--muted);">Notes</th>
+        </tr></thead>
+        <tbody>${data.lead_times.map(r => `<tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 12px;font-weight:500;">${r.vendor_name}</td>
+          <td style="padding:8px 12px;">${r.ingredient_name}</td>
+          <td style="padding:8px 12px;text-align:right;">${r.lead_days}d</td>
+          <td style="padding:8px 12px;text-align:right;">${r.last_price_per_unit != null ? '₹' + r.last_price_per_unit : '—'}</td>
+          <td style="padding:8px 12px;color:var(--muted);font-size:12px;">${r.notes || '—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div></div>`;
+  } catch(e) { el.innerHTML = `<div class="empty-state"><i data-lucide="alert-circle"></i><p>${e.message}</p></div>`; }
+  lucide.createIcons();
+}
+
+/* ════════════════════════════════════
+   PHASE 3 — INTELLIGENCE  (v3.2)
+════════════════════════════════════ */
+
+async function menu_engineering(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Menu Engineering</div>
+      <div class="page-desc">Margin × sales velocity analysis — classify every product as Star, Plow-Horse, Puzzle or Dog.</div>
+    </div>
+    <div id="me-body"><div class="empty-state"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Running analysis…</p></div></div>`;
+  lucide.createIcons();
+  try {
+    const data = await GET('/insights/menu-engineering');
+    if (!data.total_products) {
+      document.getElementById('me-body').innerHTML = `<div class="empty-state"><i data-lucide="bar-chart-2"></i><p>No sales data in the last 30 days.</p></div>`;
+      lucide.createIcons(); return;
+    }
+    const quadrantColor = { star:'#CA8A04', plow_horse:'#2563EB', puzzle:'#7C3AED', dog:'#6B7280' };
+    const quadrantBg   = { star:'#FEF9C3', plow_horse:'#DBEAFE', puzzle:'#EDE9FE', dog:'#F3F4F6' };
+    document.getElementById('me-body').innerHTML = `
+      <div class="stats-grid" style="margin-bottom:18px;">
+        ${['star','plow_horse','puzzle','dog'].map(q => {
+          const count = data.items.filter(i => i.quadrant === q).length;
+          const labels = { star:'⭐ Stars', plow_horse:'🐴 Plow-Horses', puzzle:'❓ Puzzles', dog:'🐕 Dogs' };
+          return `<div class="stat-card"><div><div class="stat-lbl">${labels[q]}</div><div class="stat-val" style="font-size:22px;margin-top:4px;">${count}</div></div></div>`;
+        }).join('')}
+      </div>
+      <div class="card"><div class="card-bd" style="padding:0;">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+          <thead><tr style="border-bottom:1px solid var(--border);">
+            <th style="padding:8px 12px;text-align:left;color:var(--muted);">Product</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">Units/30d</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">Revenue</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">Avg Price</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">COGS</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">Margin %</th>
+            <th style="padding:8px 12px;text-align:center;color:var(--muted);">Quadrant</th>
+          </tr></thead>
+          <tbody>${data.items.map(i => `
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:8px 12px;font-weight:500;">${i.product_name}</td>
+              <td style="padding:8px 12px;text-align:right;">${i.units_sold_30d}</td>
+              <td style="padding:8px 12px;text-align:right;">₹${i.revenue_30d.toFixed(2)}</td>
+              <td style="padding:8px 12px;text-align:right;">₹${i.avg_selling_price.toFixed(2)}</td>
+              <td style="padding:8px 12px;text-align:right;">${i.cogs != null ? '₹'+i.cogs : '—'}</td>
+              <td style="padding:8px 12px;text-align:right;${i.margin_pct != null && i.margin_pct < 30 ? 'color:#DC2626;' : 'color:#16A34A;'}">${i.margin_pct != null ? i.margin_pct+'%' : '—'}</td>
+              <td style="padding:8px 12px;text-align:center;"><span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${quadrantBg[i.quadrant]};color:${quadrantColor[i.quadrant]};">${i.quadrant.replace('_',' ').toUpperCase()}</span></td>
+            </tr>`).join('')}</tbody>
+        </table>
+      </div></div>`;
+  } catch(e) { document.getElementById('me-body').innerHTML = `<div class="empty-state"><i data-lucide="alert-circle"></i><p>${e.message}</p></div>`; }
+  lucide.createIcons();
+}
+
+async function vendor_opt(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Vendor Optimizer</div>
+      <div class="page-desc">Best-vendor recommendation per ingredient based on lead-time and last known price.</div>
+    </div>
+    <div id="vo-body"><div class="empty-state"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Analysing vendors…</p></div></div>`;
+  lucide.createIcons();
+  try {
+    const data = await GET('/insights/vendor-optimization');
+    if (!data.total_ingredients) {
+      document.getElementById('vo-body').innerHTML = `<div class="empty-state"><i data-lucide="truck"></i><p>No lead-time data found. Add supplier lead times first.</p><button class="btn btn-outline btn-sm" style="margin-top:10px;" onclick="nav('lead_times')">Go to Lead Times</button></div>`;
+      lucide.createIcons(); return;
+    }
+    document.getElementById('vo-body').innerHTML = `
+      <div class="card"><div class="card-bd" style="padding:0;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="border-bottom:1px solid var(--border);">
+            <th style="padding:8px 12px;text-align:left;color:var(--muted);">Ingredient</th>
+            <th style="padding:8px 12px;text-align:left;color:var(--muted);">Recommended Vendor</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">Best Price (₹)</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">Lead Days</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">Alternatives</th>
+          </tr></thead>
+          <tbody>${data.recommendations.map(r => `
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:8px 12px;font-weight:500;">${r.ingredient_name}</td>
+              <td style="padding:8px 12px;color:#15803D;font-weight:600;">${r.recommended_vendor || '—'}</td>
+              <td style="padding:8px 12px;text-align:right;">${r.best_price != null ? '₹'+r.best_price : '—'}</td>
+              <td style="padding:8px 12px;text-align:right;">${r.best_lead_days != null ? r.best_lead_days+'d' : '—'}</td>
+              <td style="padding:8px 12px;text-align:right;color:var(--muted);">${r.alternatives_count}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+      </div></div>`;
+  } catch(e) { document.getElementById('vo-body').innerHTML = `<div class="empty-state"><i data-lucide="alert-circle"></i><p>${e.message}</p></div>`; }
+  lucide.createIcons();
+}
+
+async function demand_forecast(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Demand Forecast</div>
+      <div class="page-desc">Linear regression forecast of product demand for upcoming days, built from sales history.</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <label class="form-label" style="margin:0;">Days ahead:</label>
+      <input class="form-input" id="df-days" type="number" min="1" max="30" value="7" style="width:80px;">
+      <button class="btn btn-primary btn-sm" onclick="_runForecast()"><i data-lucide="activity" style="width:13px;height:13px;"></i> Run Forecast</button>
+    </div>
+    <div id="df-body"></div>`;
+  lucide.createIcons();
+  await _runForecast();
+}
+
+async function _runForecast() {
+  const days = parseInt(document.getElementById('df-days').value) || 7;
+  const el = document.getElementById('df-body');
+  el.innerHTML = `<div class="empty-state"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Forecasting…</p></div>`;
+  lucide.createIcons();
+  try {
+    const data = await GET('/insights/demand-forecast?days_ahead=' + days);
+    if (!data.total_products) {
+      el.innerHTML = `<div class="empty-state"><i data-lucide="activity"></i><p>No sales history found. Record some sales first.</p></div>`;
+      lucide.createIcons(); return;
+    }
+    el.innerHTML = data.forecasts.map(f => `
+      <div class="card" style="margin-bottom:14px;">
+        <div class="card-hd">
+          <div><div class="card-title">${f.product_name}</div>
+            <div class="card-sub">Method: ${f.method} · ${f.data_points} data points${f.slope != null ? ' · trend: ' + (f.slope > 0 ? '▲' : f.slope < 0 ? '▼' : '→') + ' ' + f.slope : ''}</div></div>
+        </div>
+        <div class="card-bd" style="padding:0;">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+            <thead><tr style="border-bottom:1px solid var(--border);">
+              <th style="padding:6px 12px;text-align:left;color:var(--muted);">Date</th>
+              <th style="padding:6px 12px;text-align:right;color:var(--muted);">Predicted Qty</th>
+            </tr></thead>
+            <tbody>${f.forecast.map(d => `<tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:6px 12px;">${d.date}</td>
+              <td style="padding:6px 12px;text-align:right;font-weight:600;">${d.predicted_qty}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<div class="empty-state"><i data-lucide="alert-circle"></i><p>${e.message}</p></div>`; }
+  lucide.createIcons();
+}
+
+/* ════════════════════════════════════
+   PHASE 3 — CRM  (v3.3)
+════════════════════════════════════ */
+
+async function whatsapp_crm(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">WhatsApp Notify</div>
+      <div class="page-desc">Simulate dispatching an order update or loyalty message via WhatsApp Business API.</div>
+    </div>
+    <div class="card" style="max-width:540px;">
+      <div class="card-hd"><div class="card-title">Send Notification</div><span class="badge badge-neutral">Sandbox Simulation</span></div>
+      <div class="card-bd" style="display:flex;flex-direction:column;gap:12px;">
+        <div><label class="form-label">Customer Name</label><input class="form-input" id="wa-name" placeholder="Priya Nair"></div>
+        <div><label class="form-label">Phone Number</label><input class="form-input" id="wa-phone" placeholder="+919876543210"></div>
+        <div><label class="form-label">Order ID (optional)</label><input class="form-input" id="wa-order" placeholder="ORD-2025-001"></div>
+        <div><label class="form-label">Message</label>
+          <textarea class="form-input" id="wa-msg" rows="3" placeholder="Your order is ready for pickup! 🎂"></textarea></div>
+        <button class="btn btn-primary" onclick="_sendWA()">
+          <i data-lucide="message-circle" style="width:14px;height:14px;"></i> Dispatch Message
+        </button>
+        <div id="wa-result"></div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+}
+
+async function _sendWA() {
+  const payload = {
+    customer_name: document.getElementById('wa-name').value.trim(),
+    phone: document.getElementById('wa-phone').value.trim(),
+    message: document.getElementById('wa-msg').value.trim(),
+    order_id: document.getElementById('wa-order').value.trim() || null,
+  };
+  const res = document.getElementById('wa-result');
+  if (!payload.customer_name || !payload.phone || !payload.message) { toast('Name, phone, and message required', 'err'); return; }
+  try {
+    const data = await POST('/crm/whatsapp-notify', payload);
+    res.innerHTML = `<div class="card" style="background:#F0FDF4;border-color:#86EFAC;">
+      <div class="card-bd">
+        <p style="margin:0;font-weight:600;color:#15803D;">✅ Message queued (${data.status})</p>
+        <p style="margin:4px 0 0;font-size:12px;color:var(--muted);">ID: ${data.message_id} · To: ${data.phone}</p>
+        <p style="margin:4px 0 0;font-size:12px;font-style:italic;">Preview: "${data.message_preview}"</p>
+        <p style="margin:6px 0 0;font-size:11px;color:var(--muted);">${data.note}</p>
+      </div></div>`;
+  } catch(e) {
+    res.innerHTML = `<div class="card" style="background:#FEF2F2;border-color:#FCA5A5;"><div class="card-bd"><p style="margin:0;color:#DC2626;">${e.message}</p></div></div>`;
+  }
+  lucide.createIcons();
+}
+
+async function loyalty(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Loyalty Program</div>
+      <div class="page-desc">Customer tier management, loyalty points, and birthday trigger analysis.</div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-hd"><div class="card-title">Add / Update Customer</div></div>
+      <div class="card-bd" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div><label class="form-label">Customer Name</label><input class="form-input" id="lc-name" placeholder="Anita Sharma"></div>
+        <div><label class="form-label">Phone</label><input class="form-input" id="lc-phone" placeholder="+919876543210"></div>
+        <div><label class="form-label">Birthday (YYYY-MM-DD)</label><input class="form-input" id="lc-bday" placeholder="1988-03-15"></div>
+        <div><label class="form-label">Purchase Amount (₹)</label><input class="form-input" id="lc-spend" type="number" min="0" step="0.01" value="0"></div>
+        <div style="grid-column:1/-1;">
+          <button class="btn btn-primary btn-sm" onclick="_upsertLoyalty()"><i data-lucide="save" style="width:13px;height:13px;"></i> Save</button>
+        </div>
+      </div>
+    </div>
+    <div id="lc-body"><div class="empty-state"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Loading loyalty data…</p></div></div>`;
+  lucide.createIcons();
+  await _loadLoyalty();
+}
+
+async function _upsertLoyalty() {
+  const payload = {
+    customer_name: document.getElementById('lc-name').value.trim(),
+    phone: document.getElementById('lc-phone').value.trim() || null,
+    birthday: document.getElementById('lc-bday').value.trim() || null,
+    purchase_amount_inr: parseFloat(document.getElementById('lc-spend').value) || 0,
+  };
+  if (!payload.customer_name) { toast('Customer name required', 'err'); return; }
+  try {
+    const data = await POST('/crm/loyalty/upsert', payload);
+    toast(`${data.customer_name} — ${data.tier.toUpperCase()} (${data.loyalty_points} pts)`, 'ok');
+    await _loadLoyalty();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function _loadLoyalty() {
+  const el = document.getElementById('lc-body');
+  try {
+    const data = await GET('/crm/loyalty');
+    const tierBadge = { gold:'#CA8A04', silver:'#6B7280', bronze:'#92400E' };
+    const tierBg = { gold:'#FEF9C3', silver:'#F3F4F6', bronze:'#FEF3C7' };
+    const bd = data.birthday_triggers_next_30d || [];
+    el.innerHTML = `
+      <div class="stats-grid" style="margin-bottom:16px;">
+        <div class="stat-card"><div><div class="stat-lbl">Total Customers</div><div class="stat-val" style="font-size:22px;margin-top:4px;">${data.total_customers}</div></div><div class="ico ico-blue"><i data-lucide="users"></i></div></div>
+        <div class="stat-card"><div><div class="stat-lbl">Gold Tier</div><div class="stat-val" style="font-size:22px;margin-top:4px;">${(data.tier_breakdown.gold||0)}</div></div><div class="ico ico-amber"><i data-lucide="award"></i></div></div>
+        <div class="stat-card"><div><div class="stat-lbl">Silver Tier</div><div class="stat-val" style="font-size:22px;margin-top:4px;">${(data.tier_breakdown.silver||0)}</div></div><div class="ico" style="background:#F3F4F6;color:#6B7280;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-lucide="award"></i></div></div>
+        <div class="stat-card"><div><div class="stat-lbl">Birthdays (30d)</div><div class="stat-val" style="font-size:22px;margin-top:4px;">${bd.length}</div></div><div class="ico ico-green"><i data-lucide="cake"></i></div></div>
+      </div>
+      ${bd.length ? `<div class="card" style="margin-bottom:14px;border-color:#FDE68A;background:#FFFBEB;">
+        <div class="card-hd"><div class="card-title">🎂 Upcoming Birthdays</div></div>
+        <div class="card-bd" style="padding:0;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="border-bottom:1px solid var(--border);"><th style="padding:7px 12px;text-align:left;color:var(--muted);">Customer</th><th style="padding:7px 12px;text-align:left;color:var(--muted);">Phone</th><th style="padding:7px 12px;text-align:right;color:var(--muted);">Birthday</th><th style="padding:7px 12px;text-align:right;color:var(--muted);">Days Away</th></tr></thead>
+            <tbody>${bd.map(b => `<tr style="border-bottom:1px solid var(--border);"><td style="padding:7px 12px;font-weight:500;">${b.customer_name}</td><td style="padding:7px 12px;color:var(--muted);">${b.phone||'—'}</td><td style="padding:7px 12px;text-align:right;">${b.birthday}</td><td style="padding:7px 12px;text-align:right;font-weight:600;color:#CA8A04;">${b.days_until}d</td></tr>`).join('')}</tbody>
+          </table>
+        </div></div></div>` : ''}
+      <div class="card"><div class="card-bd" style="padding:0;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="border-bottom:1px solid var(--border);">
+            <th style="padding:8px 12px;text-align:left;color:var(--muted);">Customer</th>
+            <th style="padding:8px 12px;text-align:center;color:var(--muted);">Tier</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">Points</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">Total Spend</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--muted);">Visits</th>
+          </tr></thead>
+          <tbody>${data.all_customers.map(c => `<tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;font-weight:500;">${c.customer_name}</td>
+            <td style="padding:8px 12px;text-align:center;"><span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${tierBg[c.tier]||'#F3F4F6'};color:${tierBadge[c.tier]||'#6B7280'};">${c.tier.toUpperCase()}</span></td>
+            <td style="padding:8px 12px;text-align:right;">${c.loyalty_points}</td>
+            <td style="padding:8px 12px;text-align:right;">₹${c.total_spend_inr.toFixed(2)}</td>
+            <td style="padding:8px 12px;text-align:right;">${c.total_purchases}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div></div>`;
+  } catch(e) { el.innerHTML = `<div class="empty-state"><i data-lucide="alert-circle"></i><p>${e.message}</p></div>`; }
   lucide.createIcons();
 }
 

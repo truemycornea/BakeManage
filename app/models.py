@@ -246,3 +246,69 @@ class MediaAsset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     recipe: Mapped["Recipe | None"] = relationship("Recipe")
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — Supply Chain models
+# ---------------------------------------------------------------------------
+
+class SupplierLeadTime(Base):
+    """Tracks expected delivery lead-times per vendor and ingredient."""
+    __tablename__ = "supplier_lead_times"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    vendor_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    ingredient_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    lead_days: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    last_price_per_unit: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class StockIndent(Base):
+    """Auto-generated purchase indent raised for low-stock items."""
+    __tablename__ = "stock_indents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    ingredient_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity_required: Mapped[float] = mapped_column(Float, nullable=False)
+    unit_of_measure: Mapped[str] = mapped_column(String(32), default="kg")
+    vendor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="pending")  # pending | approved | fulfilled
+    raised_by: Mapped[str] = mapped_column(String(64), default="system")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class StockTransfer(Base):
+    """Records multi-location stock transfer between outlets/central kitchen."""
+    __tablename__ = "stock_transfers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    inventory_item_id: Mapped[int] = mapped_column(ForeignKey("inventory_items.id"), nullable=False)
+    from_location: Mapped[str] = mapped_column(String(128), nullable=False)
+    to_location: Mapped[str] = mapped_column(String(128), nullable=False)
+    quantity: Mapped[float] = mapped_column(Float, nullable=False)
+    unit_of_measure: Mapped[str] = mapped_column(String(32), default="kg")
+    notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    transferred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    inventory_item: Mapped["InventoryItem"] = relationship("InventoryItem")
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — CRM models
+# ---------------------------------------------------------------------------
+
+class LoyaltyRecord(Base):
+    """Customer loyalty tracking — purchase counts, points, birthday triggers."""
+    __tablename__ = "loyalty_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    customer_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    birthday: Mapped[date | None] = mapped_column(Date, nullable=True)
+    total_purchases: Mapped[int] = mapped_column(Integer, default=0)
+    total_spend_inr: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    loyalty_points: Mapped[int] = mapped_column(Integer, default=0)
+    tier: Mapped[str] = mapped_column(String(32), default="bronze")  # bronze | silver | gold
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

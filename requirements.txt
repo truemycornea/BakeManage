@@ -12,3 +12,6 @@ cryptography==44.0.3
 pytest==9.0.2
 httpx==0.28.1
 pyjwt==2.9.0
+slowapi==0.1.9
+limits==3.14.0
+scikit-learn==1.6.1
