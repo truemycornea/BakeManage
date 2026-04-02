@@ -350,15 +350,25 @@ code{font-size:11.5px;background:var(--bg);border:1px solid var(--border);paddin
 ════════════════════════════════════ */
 const S = { role: null, pin: null, view: 'dashboard' };
 
+// ── Information Architecture (Section 1 of OptimisedPPv1) ──────────────────
+// ownerOnly: true items are dimmed and blocked for non-owner roles.
 const NAV = [
-  { id:'dashboard',   label:'Dashboard',        icon:'layout-dashboard', sec:'OVERVIEW' },
-  { id:'ingestion',   label:'Ingestion',         icon:'scan-line',        sec:'OPERATIONS' },
-  { id:'cost',        label:'Cost Calculator',   icon:'calculator',       sec:'OPERATIONS' },
-  { id:'proofing',    label:'Proofing',          icon:'thermometer',      sec:'OPERATIONS' },
-  { id:'quality',     label:'Quality Control',   icon:'badge-check',      sec:'OPERATIONS' },
-  { id:'inventory',   label:'Inventory',         icon:'package',          sec:'DATA' },
-  { id:'credentials', label:'Credentials',       icon:'key',              sec:'SETTINGS' },
-  { id:'health',      label:'System Health',     icon:'activity',         sec:'SETTINGS' },
+  // OVERVIEW
+  { id:'dashboard',    label:'Dashboard',          icon:'layout-dashboard', sec:'OVERVIEW',    ownerOnly:false },
+  { id:'sales',        label:'Sales',              icon:'trending-up',      sec:'OVERVIEW',    ownerOnly:false },
+  // OPERATIONS
+  { id:'stock',        label:'Stock Management',   icon:'package',          sec:'OPERATIONS',  ownerOnly:false },
+  { id:'ingestion',    label:'Injection',           icon:'scan-line',        sec:'OPERATIONS',  ownerOnly:false },
+  { id:'quality',      label:'Quality Control',    icon:'badge-check',      sec:'OPERATIONS',  ownerOnly:false },
+  { id:'cost',         label:'Cost Calculator',    icon:'calculator',       sec:'OPERATIONS',  ownerOnly:false },
+  { id:'proofing',     label:'Proofing',           icon:'thermometer',      sec:'OPERATIONS',  ownerOnly:false },
+  // SETTINGS — owner/admin only
+  { id:'sys_monitor',  label:'System Monitoring',  icon:'activity',         sec:'SETTINGS',    ownerOnly:true  },
+  { id:'auth_access',  label:'Auth & Access',      icon:'shield-check',     sec:'SETTINGS',    ownerOnly:true  },
+  { id:'app_config',   label:'App Configuration',  icon:'settings',         sec:'SETTINGS',    ownerOnly:true  },
+  // PLATFORM
+  { id:'credits',      label:'Credits',            icon:'star',             sec:'PLATFORM',    ownerOnly:false },
+  { id:'roadmap',      label:'Roadmap',            icon:'map',              sec:'PLATFORM',    ownerOnly:false },
 ];
 
 /* ════════════════════════════════════
@@ -458,17 +468,26 @@ function buildSidebar() {
   let html = '', sec = null;
   for (const n of NAV) {
     if (n.sec !== sec) { html += `<div class="sb-sec">${n.sec}</div>`; sec = n.sec; }
-    html += `<div class="nav-item ${n.id === S.view ? 'active' : ''}" onclick="nav('${n.id}')">
-      <i data-lucide="${n.icon}"></i><span>${n.label}</span></div>`;
+    const locked = n.ownerOnly && S.role !== 'owner';
+    const active = n.id === S.view ? 'active' : '';
+    const dim    = locked ? 'opacity:.42;' : '';
+    const lock   = locked ? `<i data-lucide="lock" style="width:10px;height:10px;margin-left:auto;opacity:.5;"></i>` : '';
+    html += `<div class="nav-item ${active}" onclick="nav('${n.id}')" style="${dim}">
+      <i data-lucide="${n.icon}"></i><span>${n.label}</span>${lock}</div>`;
   }
   document.getElementById('sidebar-nav').innerHTML = html;
   lucide.createIcons();
 }
 
 function nav(view) {
+  const item = NAV.find(n => n.id === view);
+  // Owner-only guard — show toast and abort navigation
+  if (item && item.ownerOnly && S.role !== 'owner') {
+    toast('This section requires owner access', 'err');
+    return;
+  }
   S.view = view;
   buildSidebar();
-  const item = NAV.find(n => n.id === view);
   document.getElementById('bc-curr').textContent = item ? item.label : view;
   renderView(view);
 }
@@ -493,7 +512,21 @@ async function pollHealth() {
 function renderView(v) {
   const el = document.getElementById('content');
   el.scrollTop = 0;
-  ({ dashboard, ingestion, cost, proofing, quality, inventory, credentials, health })[v](el);
+  // Extended dispatcher — new IA sections plus legacy entries kept for compatibility
+  const views = {
+    dashboard, sales, stock,
+    ingestion, quality, cost, proofing,
+    sys_monitor, auth_access, app_config,
+    credits, roadmap,
+    // legacy aliases (backward-compat deep links)
+    inventory, credentials, health,
+  };
+  const fn = views[v];
+  if (!fn) {
+    el.innerHTML = `<div class="empty-state"><i data-lucide="alert-circle"></i><p>Section not found: <code>${v}</code></p></div>`;
+    lucide.createIcons(); return;
+  }
+  fn(el);
   lucide.createIcons();
 }
 
@@ -528,33 +561,12 @@ async function dashboard(el) {
 
     <div class="page-hd" style="margin-bottom:10px;"><div style="font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Quick Actions</div></div>
     <div class="qa-row">
-      <div class="qa-btn" onclick="nav('ingestion')"><i data-lucide="scan-line"></i> Ingest Document</div>
+      <div class="qa-btn" onclick="nav('stock')"><i data-lucide="package"></i> Stock Management</div>
+      <div class="qa-btn" onclick="nav('ingestion')"><i data-lucide="scan-line"></i> Inject Document</div>
       <div class="qa-btn" onclick="nav('cost')"><i data-lucide="calculator"></i> Compute Cost</div>
-      <div class="qa-btn" onclick="nav('proofing')"><i data-lucide="thermometer"></i> Log Proofing</div>
       <div class="qa-btn" onclick="nav('quality')"><i data-lucide="badge-check"></i> Quality Check</div>
-      <div class="qa-btn" onclick="nav('inventory')"><i data-lucide="package"></i> Inventory Snapshot</div>
-      <div class="qa-btn" onclick="nav('health')"><i data-lucide="activity"></i> System Health</div>
-    </div>
-
-    <div class="card">
-      <div class="card-hd"><div><div class="card-title">Platform Capabilities</div><div class="card-sub">What BakeManage does out of the box</div></div></div>
-      <div class="card-bd">
-        <div class="cap-grid">
-          ${[
-            ['scan-line','ico-blue','Zero-effort Ingestion','Extract structured invoices from handwritten receipts, PDFs and Excel files via simulated VLM OCR.'],
-            ['trending-up','ico-green','Margin Protection','Real-time cost roll-up with per-ingredient yield adjustment. Warns when profit drops below 20%.'],
-            ['package','ico-amber','FEFO Inventory','First-Expiry-First-Out deductions minimise spoilage and ensure compliance with food safety standards.'],
-            ['thermometer','ico-purple','Proofing Monitoring','Log temperature, humidity and CO₂ from fermentation chambers. Anomaly scores trigger auto-remediation.'],
-            ['badge-check','ico-blue','Visual Quality AI','Browning score + uniformity analysis from baked product photos. Automated optimal / adjust-batch verdict.'],
-            ['lock','ico-slate','Security & RBAC','PIN auth with PBKDF2+SHA-256 (390k iterations), Fernet encryption for credentials, role-scoped field access.'],
-          ].map(([icon, ico, name, desc]) => `
-            <div class="cap-item">
-              <div class="ico ${ico}" style="flex-shrink:0"><i data-lucide="${icon}"></i></div>
-              <div class="cap-text"><div class="cap-name">${name}</div><div class="cap-desc">${desc}</div></div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
+      <div class="qa-btn" onclick="nav('sales')"><i data-lucide="trending-up"></i> Sales Log</div>
+      <div class="qa-btn" onclick="nav('proofing')"><i data-lucide="thermometer"></i> Log Proofing</div>
     </div>`;
   lucide.createIcons();
   try {
@@ -1328,6 +1340,286 @@ async function doDiagnostics() {
       </div>`;
     toast('Diagnostics queued');
   } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
+}
+
+/* ════════════════════════════════════
+   SALES  (TODO: Phase 3 — backend + recording UI)
+════════════════════════════════════ */
+function sales(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Sales</div>
+      <div class="page-desc">Track items sold, incoming revenue, and profit per product and period.</div>
+    </div>
+    <div class="info-box info-info" style="margin-bottom:18px;font-size:12.5px;">
+      <strong>Phase 3 — coming soon.</strong> Sale recording, revenue dashboards, and profit reporting will be implemented here.
+      Data will link to Stock Management (ingredient consumption) and Cost Calculator (margin).
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div><div class="stat-lbl">Today's Revenue</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Record sales to populate</div></div>
+        <div class="ico ico-green"><i data-lucide="trending-up"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Items Sold Today</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Sales log empty</div></div>
+        <div class="ico ico-amber"><i data-lucide="shopping-bag"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Gross Profit</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Needs cost data</div></div>
+        <div class="ico ico-blue"><i data-lucide="banknote"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Top Product</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Sales data required</div></div>
+        <div class="ico ico-purple"><i data-lucide="award"></i></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Planned views in this section</div></div>
+      <div class="card-bd">
+        <ul style="margin:0;padding-left:18px;display:grid;grid-template-columns:1fr 1fr;gap:5px 24px;">
+          ${['Daily / weekly / monthly revenue','Per-product performance dashboard','Profit margin per SKU','Recipe usage driven by sales','Ingredient consumption from sales','Cost saved via recommendations'].map(i =>
+            `<li style="font-size:12.5px;color:var(--muted);padding:3px 0;">${i}</li>`).join('')}
+        </ul>
+      </div>
+    </div>`;
+  lucide.createIcons();
+}
+
+/* ════════════════════════════════════
+   STOCK MANAGEMENT  (TODO: Phase 2)
+════════════════════════════════════ */
+function stock(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Stock Management</div>
+      <div class="page-desc">Inventory, vendors, multi-vendor pricing, expiry tracking, and cost-saving recommendations — all in one place.</div>
+    </div>
+    <div class="info-box info-info" style="margin-bottom:18px;font-size:12.5px;">
+      <strong>Phase 2 — coming soon.</strong> Barcode entry, photo-based stock addition, vendor pricing comparison, and expiry management will be implemented here.
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div><div class="stat-lbl">Items In Stock</div><div class="stat-val" id="stk-items" style="font-size:17px;margin-top:6px;">…</div><div class="stat-hint">From inventory cache</div></div>
+        <div class="ico ico-amber"><i data-lucide="package"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Expiring ≤ 7 days</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Expiry extraction: Phase 2</div></div>
+        <div class="ico" style="background:#FEF2F2;color:#DC2626;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;"><i data-lucide="alert-triangle"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Active Vendors</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Vendor records</div></div>
+        <div class="ico ico-blue"><i data-lucide="truck"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Potential Savings</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Cross-vendor analysis: Phase 2</div></div>
+        <div class="ico ico-green"><i data-lucide="piggy-bank"></i></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Current Inventory Snapshot</div><div class="card-sub">Live from cache — full Stock Management UI arrives in Phase 2</div></div>
+      <div id="stk-inv-body" class="card-bd">
+        <div class="empty-state"><i data-lucide="package"></i><p>Loading inventory…</p></div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+  // Re-use existing inventory cache endpoint as a live data preview
+  GET('/inventory/cache').then(data => {
+    const items = Array.isArray(data) ? data : (data.items || data.inventory || []);
+    const cnt = document.getElementById('stk-items');
+    if (cnt) cnt.textContent = items.length || '0';
+    const body = document.getElementById('stk-inv-body');
+    if (!body) return;
+    if (!items.length) {
+      body.innerHTML = `<div class="empty-state"><i data-lucide="inbox"></i><p>No inventory data. Inject invoices to populate stock.</p></div>`;
+      lucide.createIcons(); return;
+    }
+    body.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Item</th><th>Qty On Hand</th><th>Unit</th><th>Category</th><th>Expiry</th></tr></thead>
+      <tbody>${items.map(it => `<tr>
+        <td style="font-weight:600;">${it.name||'—'}</td>
+        <td>${it.qty_on_hand??it.quantity_on_hand??'—'}</td>
+        <td>${it.unit_of_measure||'—'}</td>
+        <td><span class="badge badge-neutral">${it.category||'—'}</span></td>
+        <td>${it.expiration_date||'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+    lucide.createIcons();
+  }).catch(() => {
+    const body = document.getElementById('stk-inv-body');
+    if (body) body.innerHTML = `<div class="info-box info-warn">Could not load inventory cache. Inject invoices first.</div>`;
+  });
+}
+
+/* ════════════════════════════════════
+   SETTINGS: SYSTEM MONITORING  (TODO: Phase 4 — CPU/RAM/AI metrics)
+   Delegates to existing health() for Phase 1.
+════════════════════════════════════ */
+function sys_monitor(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">System Monitoring</div>
+      <div class="page-desc">Owner-only. Infrastructure health, service status, AI token usage, and queue metrics.</div>
+    </div>
+    <div class="info-box info-warn" style="margin-bottom:18px;font-size:12.5px;">
+      <strong>Phase 4</strong> will expand this into a full system dashboard (CPU, RAM, AI token usage, Celery queue depth).
+      The <em>Four Golden Signals</em> panel below is active now.
+    </div>`;
+  // Append the existing health content below the banner
+  const sub = document.createElement('div');
+  el.appendChild(sub);
+  health(sub);
+}
+
+/* ════════════════════════════════════
+   SETTINGS: AUTH & ACCESS  (TODO: Phase 5 — RBAC, user management, API tokens)
+   Delegates to existing credentials() for Phase 1.
+════════════════════════════════════ */
+function auth_access(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Auth & Access</div>
+      <div class="page-desc">Owner-only. RBAC roles, user management, API tokens, and vaulted service credentials.</div>
+    </div>
+    <div class="info-box info-warn" style="margin-bottom:18px;font-size:12.5px;">
+      <strong>Phase 5</strong> will add full RBAC management, user lists, and API token management.
+      Credential vaulting (Fernet) is active now — use the panel below.
+    </div>`;
+  const sub = document.createElement('div');
+  el.appendChild(sub);
+  credentials(sub);
+}
+
+/* ════════════════════════════════════
+   SETTINGS: APP CONFIGURATION  (TODO: Phase 5)
+════════════════════════════════════ */
+function app_config(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">App Configuration</div>
+      <div class="page-desc">Owner-only. Per-section settings, API integrations, dashboard preferences, and feature flags.</div>
+    </div>
+    <div class="info-box info-info" style="margin-bottom:18px;font-size:12.5px;">
+      <strong>Phase 5 — coming soon.</strong> Per-section configuration (API endpoints, thresholds, feature toggles) will be managed here.
+      All section and application-level settings live in this area — not in the business sections themselves.
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Runtime Configuration (read-only)</div></div>
+      <div class="card-bd" style="padding:12px 16px;">
+        ${[
+          ['Auth Mode',         'PIN + PBKDF2-SHA256 (390 000 iterations)'],
+          ['Credential Encryption', 'Fernet AES-128-CBC + HMAC-SHA256'],
+          ['HTTPS Enforcement', window.location.protocol === 'https:' ? 'Active' : 'Off — sandbox mode'],
+          ['Cache TTL',         '300 seconds (Redis)'],
+          ['Supply Chain Guard','Enabled — pinned requirements enforced'],
+          ['Task Broker',       'Celery + Redis (internal)'],
+          ['Database',          'PostgreSQL 16 (internal — no host port)'],
+        ].map(([k, v]) => `
+          <div class="kv">
+            <span class="kv-key">${k}</span>
+            <span class="kv-val" style="font-family:ui-monospace,monospace;font-size:11.5px;">${v}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <div class="card-hd"><div class="card-title">Planned configuration areas</div></div>
+      <div class="card-bd">
+        <ul style="margin:0;padding-left:18px;display:grid;grid-template-columns:1fr 1fr;gap:5px 24px;">
+          ${[
+            'Dashboard KPI thresholds','Stock low-quantity alerts',
+            'Quality score pass/fail band','Proofing anomaly threshold',
+            'AI OCR endpoint URL','Weather API key & radius',
+            'Barcode scanner config','Notification webhooks',
+          ].map(i => `<li style="font-size:12.5px;color:var(--muted);padding:3px 0;">${i}</li>`).join('')}
+        </ul>
+      </div>
+    </div>`;
+  lucide.createIcons();
+}
+
+/* ════════════════════════════════════
+   CREDITS  — Platform Capabilities live only here
+════════════════════════════════════ */
+function credits(el) {
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Platform Credits</div>
+      <div class="page-desc">BakeManage ERP — built for artisanal Indian bakeries. Full capability listing, stack attributions, and open-source licenses.</div>
+    </div>
+    <div class="card" style="margin-bottom:18px;">
+      <div class="card-hd">
+        <div><div class="card-title">Platform Capabilities</div><div class="card-sub">What BakeManage provides out of the box</div></div>
+      </div>
+      <div class="card-bd">
+        <div class="cap-grid">
+          ${[
+            ['scan-line',   'ico-blue',   'Zero-effort Injection',   'Extract structured invoices from handwritten receipts, PDFs, and Excel files via AI-simulated OCR.'],
+            ['trending-up', 'ico-green',  'Margin Protection',       'Real-time cost roll-up with per-ingredient yield adjustment. Warns when profit drops below 20%.'],
+            ['package',     'ico-amber',  'Stock Management',        'FEFO inventory, multi-vendor pricing comparison, expiry tracking, and cost-saving recommendations.'],
+            ['thermometer', 'ico-purple', 'Proofing Telemetry',      'Log temperature, humidity, CO\u2082 from fermentation chambers. Anomaly scores trigger auto-remediation.'],
+            ['badge-check', 'ico-blue',   'Visual Quality Control',  'Browning score + uniformity from baked product photos, plus structured tester Q\u0026A scoring.'],
+            ['trending-up', 'ico-green',  'Sales Analytics',         'Track items sold, revenue, and profit per product and time period. Links to recipe and cost data.'],
+            ['lock',        'ico-slate',  'Security & RBAC',         'PIN auth with PBKDF2+SHA-256 (390k iterations), Fernet encryption for credentials, role-scoped field access.'],
+            ['calculator',  'ico-amber',  'Cost Intelligence',       'Recipe-driven cost breakdown using vendor pricing history and purchase pattern analysis.'],
+          ].map(([icon, ico, name, desc]) => `
+            <div class="cap-item">
+              <div class="ico ${ico}" style="flex-shrink:0"><i data-lucide="${icon}"></i></div>
+              <div class="cap-text"><div class="cap-name">${name}</div><div class="cap-desc">${desc}</div></div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Stack & Attributions</div></div>
+      <div class="card-bd" style="padding:12px 16px;">
+        ${[
+          ['FastAPI 0.135',       'Python async web framework \u2014 MIT License'],
+          ['PostgreSQL 16',       'Relational database \u2014 PostgreSQL License'],
+          ['Redis 7 + Celery 5', 'Task broker and async worker \u2014 MIT / BSD'],
+          ['Pillow 12',           'Image analysis \u2014 HPND License'],
+          ['Lucide Icons',        'Icon system \u2014 ISC License'],
+          ['Inter Font',          'Typography \u2014 SIL Open Font License 1.1'],
+          ['Nginx Alpine',        'Static file server \u2014 BSD 2-Clause'],
+        ].map(([k, v]) => `
+          <div class="kv">
+            <span class="kv-key">${k}</span>
+            <span class="kv-val" style="font-size:12px;color:var(--muted);">${v}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  lucide.createIcons();
+}
+
+/* ════════════════════════════════════
+   ROADMAP  — future integrations
+════════════════════════════════════ */
+function roadmap(el) {
+  const phases = [
+    { phase:'Phase 2', label:'Stock Management',        badge:'In design', items:['Barcode scanning & entry','Photo-based stock addition (apple box, coke bottles)','Multi-vendor pricing comparison & recommendations','Expiry extraction from packaging visuals','Ingredient price history charts'] },
+    { phase:'Phase 3', label:'Sales & Revenue',         badge:'Planned',   items:['Sale recording by product & quantity','Daily / weekly / monthly revenue dashboards','Profit per product (revenue minus COGS)','Recipe usage driven by sale events','Ingredient consumption linkage'] },
+    { phase:'Phase 4', label:'Quality Control Upgrade', badge:'Planned',   items:['Short video upload (< 40 s)','Structured 4\u20138 question tester interview','Blended AI + tester quality score','Food-artsy lighter color redesign'] },
+    { phase:'Phase 5', label:'Settings & Admin',        badge:'Planned',   items:['Full RBAC management UI','API token management','User credential management','Per-section app configuration'] },
+    { phase:'Phase 6', label:'Injection Intelligence',  badge:'Planned',   items:['Video ingestion (< 40 s)','5\u201310 question context wizard','Smart document categorisation','Cross-section data linking'] },
+    { phase:'Phase 7', label:'Cost Intelligence',       badge:'Planned',   items:['Scanned recipe ingredient auto-detection','Market rate integration','Vendor recommendation engine','Cost savings reporting dashboard'] },
+    { phase:'Phase 8', label:'Proofing & IoT',          badge:'Planned',   items:['Sparkline telemetry charts (last 7 readings)','Local weather (2\u20133 km radius)','HVAC API contract stubs','Oven camera interface placeholders','Thermostat and temperature controller APIs'] },
+  ];
+  el.innerHTML = `
+    <div class="page-hd">
+      <div class="page-title">Roadmap & Future Integrations</div>
+      <div class="page-desc">Planned features, hardware integrations, and API contracts currently in design or development.</div>
+    </div>
+    ${phases.map(p => `
+      <div class="card" style="margin-bottom:14px;">
+        <div class="card-hd">
+          <div><div class="card-title">${p.label}</div><div class="card-sub">${p.phase}</div></div>
+          <span class="badge badge-neutral">${p.badge}</span>
+        </div>
+        <div class="card-bd">
+          <ul style="margin:0;padding-left:18px;display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;">
+            ${p.items.map(i => `<li style="font-size:12.5px;color:var(--muted);padding:2px 0;">${i}</li>`).join('')}
+          </ul>
+        </div>
+      </div>`).join('')}`;
+  lucide.createIcons();
 }
 
 /* ════════════════════════════════════
