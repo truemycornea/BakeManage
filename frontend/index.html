@@ -722,13 +722,15 @@ function ingestion(el) {
   _imgFile = null; _docFile = null;
   el.innerHTML = `
     <div class="page-hd">
-      <div class="page-title">Document Ingestion</div>
-      <div class="page-desc">Upload receipts, invoices, PDFs or Excel files. The AI pipeline extracts structured invoice data automatically.</div>
+      <div class="page-title">Injection — Data Capture</div>
+      <div class="page-desc">Upload receipts, invoices, PDFs, images or short videos. The pipeline extracts structured data and lets you classify context before saving.</div>
     </div>
 
     <div class="tabs">
       <div class="tab active" id="tab-img" onclick="ingTab('img')"><i data-lucide="image" style="width:13px;height:13px;vertical-align:middle;margin-right:5px;"></i>Image / Receipt</div>
       <div class="tab" id="tab-doc" onclick="ingTab('doc')"><i data-lucide="file-spreadsheet" style="width:13px;height:13px;vertical-align:middle;margin-right:5px;"></i>Excel / PDF</div>
+      <div class="tab" id="tab-vid" onclick="ingTab('vid')"><i data-lucide="video" style="width:13px;height:13px;vertical-align:middle;margin-right:5px;"></i>Short Video</div>
+      <div class="tab" id="tab-wizard" onclick="ingTab('wizard')"><i data-lucide="list-checks" style="width:13px;height:13px;vertical-align:middle;margin-right:5px;"></i>Context Wizard</div>
     </div>
 
     <div id="ing-img-panel">
@@ -772,8 +774,85 @@ function ingestion(el) {
       </div>
     </div>
 
+    <!-- Video tab -->
+    <div id="ing-vid-panel" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Short Video Upload</div><span class="badge badge-neutral">Planned</span></div>
+          <div class="card-bd">
+            <label class="drop-zone" style="cursor:default;opacity:0.7;">
+              <div class="dz-icon"><i data-lucide="video"></i></div>
+              <div class="dz-title">Short videos under 40 seconds</div>
+              <div class="dz-sub">MP4, MOV — oven cam, product visual</div>
+            </label>
+            <div class="info-box info-warn" style="margin-top:14px;font-size:12.5px;">
+              <strong>Phase 3:</strong> Video frame extraction + visual OCR on frames will be added. Temporal quality trending across a bake session will feed into Quality Control.
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">What video injection enables</div></div>
+          <div class="card-bd">
+            ${[
+              ['video','Oven Camera Feed','Capture bake progression frame-by-frame for browning trend.'],
+              ['thermometer','Proofing Visual','Monitor dough rise via time-lapse from overhead camera.'],
+              ['package','Delivery Video','Record box contents on delivery for auto-stock counting.'],
+              ['bar-chart-2','Trend Analysis','Cross-session quality patterns from repeated bake recordings.'],
+            ].map(([icon,title,desc])=>`
+            <div style="display:flex;gap:10px;margin-bottom:12px;">
+              <div class="ico ico-amber" style="flex-shrink:0;"><i data-lucide="${icon}"></i></div>
+              <div><div style="font-size:13px;font-weight:600;margin-bottom:2px;">${title}</div>
+              <div style="font-size:12px;color:var(--muted);">${desc}</div></div>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Context Wizard tab -->
+    <div id="ing-wizard-panel" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Context Classification</div><div class="card-sub">Answer 5 questions to help classify your upload</div></div>
+          <div class="card-bd">
+            ${[
+              ['wiz-doc-type', 'What type of document is this?', ['Vendor Invoice','Sales Bill','Recipe PDF','Delivery Note','Goods Received Note','Other']],
+              ['wiz-vendor', 'Which vendor / source?', ['Local Market','Branded Supplier','Online Platform','Internal Transfer','Unknown']],
+              ['wiz-period', 'Which period does this cover?', ['Today','This Week','This Month','Last Month','Older']],
+              ['wiz-category', 'Primary ingredient category?', ['Flour/Grain','Sugar/Sweetener','Dairy/Fat','Packaging','Produce','Mixed','N/A']],
+              ['wiz-action', 'What should happen after ingestion?', ['Update Stock','Record Purchase','Log Vendor Price','Save as Reference','Alert on Expiry']],
+            ].map(([id,label,opts])=>`
+            <div class="form-group">
+              <label class="form-label">${label}</label>
+              <select class="form-input" id="${id}">
+                ${opts.map(o=>`<option>${o}</option>`).join('')}
+              </select>
+            </div>`).join('')}
+            <div class="form-group">
+              <label class="form-label">Notes (optional)</label>
+              <input class="form-input" id="wiz-notes" placeholder="e.g. seasonal order, discounted batch">
+            </div>
+            <button class="btn btn-primary btn-full" onclick="doWizardSave()">
+              <i data-lucide="save"></i> Save Classification
+            </button>
+          </div>
+        </div>
+        <div class="col-stack">
+          <div class="card">
+            <div class="card-hd"><div class="card-title">Why context matters</div></div>
+            <div class="card-bd">
+              <p style="font-size:13px;color:var(--muted);line-height:1.7;margin:0;">
+                Classifying each upload tells the system how to link data across sections. A vendor invoice classified as "Update Stock" will flow into Stock Management. A recipe PDF classified as "Save as Reference" feeds the Cost Calculator. Context tags enable cross-section intelligence.
+              </p>
+            </div>
+          </div>
+          <div id="wiz-result"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="info-box info-info" style="margin-top:14px;font-size:12px;">
-      <strong>Sandbox mode:</strong> The VLM OCR is simulated — it returns realistic synthetic invoice data regardless of the actual image content. Docling document parsing is also stubbed.
+      <strong>Sandbox mode:</strong> VLM OCR is simulated — returns realistic synthetic invoice data. Document parsing is stubbed. Context Wizard classification is saved locally for Phase 3 cross-linking.
     </div>
 
     <div id="ing-result"></div>`;
@@ -783,11 +862,37 @@ function ingestion(el) {
 }
 
 function ingTab(t) {
-  document.getElementById('tab-img').classList.toggle('active', t === 'img');
-  document.getElementById('tab-doc').classList.toggle('active', t === 'doc');
-  document.getElementById('ing-img-panel').style.display = t === 'img' ? '' : 'none';
-  document.getElementById('ing-doc-panel').style.display = t === 'doc' ? '' : 'none';
+  ['img','doc','vid','wizard'].forEach(id => {
+    const tab = document.getElementById('tab-' + id);
+    const panel = document.getElementById('ing-' + id + '-panel');
+    if (tab) tab.classList.toggle('active', id === t);
+    if (panel) panel.style.display = id === t ? '' : 'none';
+  });
   document.getElementById('ing-result').innerHTML = '';
+}
+
+function doWizardSave() {
+  const get = id => document.getElementById(id)?.value || '';
+  const summary = {
+    'Document Type': get('wiz-doc-type'),
+    'Vendor / Source': get('wiz-vendor'),
+    'Period': get('wiz-period'),
+    'Category': get('wiz-category'),
+    'Action': get('wiz-action'),
+    'Notes': get('wiz-notes') || '—',
+  };
+  document.getElementById('wiz-result').innerHTML = `
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Classification Saved</div><span class="badge badge-ok">Recorded</span></div>
+      <div class="card-bd" style="padding:12px 16px;">
+        ${Object.entries(summary).map(([k,v])=>`<div class="kv"><span class="kv-key">${k}</span><span class="kv-val">${v}</span></div>`).join('')}
+        <div class="info-box info-info" style="margin-top:12px;font-size:12px;">
+          <strong>Phase 3:</strong> This classification will be cross-linked to the uploaded document and used to route data to Stock, Cost, and Sales sections automatically.
+        </div>
+      </div>
+    </div>`;
+  lucide.createIcons();
+  toast('Context classification saved');
 }
 
 function setupDZ(id, handler) {
@@ -1097,50 +1202,209 @@ function quality(el) {
   el.innerHTML = `
     <div class="page-hd">
       <div class="page-title">Quality Control</div>
-      <div class="page-desc">Upload a photo of a baked product. The AI scores browning intensity and uniformity, then issues a pass or adjust verdict.</div>
+      <div class="page-desc">Photo &amp; visual analysis, chef questions, blended quality score, and historical trends.</div>
     </div>
-    <div class="two-col">
-      <div class="card">
-        <div class="card-hd"><div class="card-title">Upload Product Photo</div></div>
-        <div class="card-bd">
-          <label class="drop-zone" id="dz-q" for="fi-q">
-            <input type="file" id="fi-q" accept="image/*" onchange="onQSel(event)">
-            <div class="dz-icon"><i data-lucide="camera"></i></div>
-            <div class="dz-title">Upload a baked product photo</div>
-            <div class="dz-sub">JPG, PNG, WEBP — croissants, loaves, pastries</div>
-          </label>
-          <div id="q-prev-wrap" style="display:none;margin-top:14px;text-align:center;">
-            <img id="q-prev" style="max-height:180px;border-radius:8px;border:1px solid var(--border);">
+
+    <!-- KPI row -->
+    <div class="stats-grid" style="margin-bottom:18px;">
+      <div class="stat-card">
+        <div><div class="stat-lbl">Inspections Run</div><div class="stat-val" id="qc-total" style="font-size:20px;margin-top:4px;">…</div></div>
+        <div class="ico ico-amber"><i data-lucide="badge-check"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Pass Rate</div><div class="stat-val" id="qc-pass" style="font-size:20px;margin-top:4px;">…</div></div>
+        <div class="ico ico-green"><i data-lucide="check-circle"></i></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-lbl">Blended Score</div><div class="stat-val" style="font-size:20px;margin-top:4px;">—</div><div class="stat-hint">After interview: Phase 3</div></div>
+        <div class="ico ico-blue"><i data-lucide="activity"></i></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+      ${[['qc-tab-photo','Photo Analysis','camera'],['qc-tab-chef','Chef Questions','message-circle'],['qc-tab-trends','Trends','bar-chart-2']].map(([id,label,icon],i)=>`
+      <button id="${id}" onclick="qcTab('${id}')" class="btn ${i===0?'btn-primary':'btn-outline'}" style="gap:6px;">
+        <i data-lucide="${icon}" style="width:14px;height:14px;"></i>${label}
+      </button>`).join('')}
+    </div>
+
+    <!-- Photo Analysis tab -->
+    <div id="qc-panel-photo">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Upload Product Photo</div></div>
+          <div class="card-bd">
+            <label class="drop-zone" id="dz-q" for="fi-q">
+              <input type="file" id="fi-q" accept="image/*" onchange="onQSel(event)">
+              <div class="dz-icon"><i data-lucide="camera"></i></div>
+              <div class="dz-title">Drop a baked product photo here</div>
+              <div class="dz-sub">JPG, PNG, WEBP — croissants, loaves, pastries</div>
+            </label>
+            <div id="q-prev-wrap" style="display:none;margin-top:14px;text-align:center;">
+              <img id="q-prev" style="max-height:180px;border-radius:8px;border:1px solid var(--border);">
+            </div>
+            <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+              <button class="btn btn-primary btn-lg" id="btn-qual" onclick="doQuality()" disabled>
+                <i data-lucide="badge-check"></i> Analyse Quality
+              </button>
+            </div>
           </div>
-          <div style="margin-top:14px;display:flex;justify-content:flex-end;">
-            <button class="btn btn-primary btn-lg" id="btn-qual" onclick="doQuality()" disabled>
-              <i data-lucide="badge-check"></i> Analyse Quality
-            </button>
+        </div>
+
+        <div id="q-result">
+          <div class="card" style="background:linear-gradient(135deg,#FFFBEB,#FEF3C7);border-color:#FDE68A;">
+            <div class="card-hd"><div class="card-title" style="color:#78350F;">How Scoring Works</div></div>
+            <div class="card-bd">
+              ${[
+                ['camera','Photo Input','Upload any JPG/PNG image of your baked product.'],
+                ['bar-chart-2','Browning Score','Greyscale mean pixel intensity → 0–100 scale.'],
+                ['check-circle','Optimal Band','Score 40–78 = Optimal. Below = under-baked. Above = over-baked.'],
+                ['shield-check','Uniformity','Pixel std-dev measures bake evenness.'],
+              ].map(([icon, title, desc]) => `
+                <div style="display:flex;gap:10px;margin-bottom:13px;align-items:flex-start;">
+                  <div class="ico ico-amber" style="flex-shrink:0;"><i data-lucide="${icon}"></i></div>
+                  <div><div style="font-size:13px;font-weight:600;margin-bottom:2px;color:#3A1F08;">${title}</div>
+                  <div style="font-size:12px;color:#8B5E30;line-height:1.5;">${desc}</div></div>
+                </div>`).join('')}
+            </div>
           </div>
         </div>
       </div>
+    </div>
 
-      <div id="q-result">
+    <!-- Chef Questions tab -->
+    <div id="qc-panel-chef" style="display:none;">
+      <div class="two-col">
         <div class="card">
-          <div class="card-hd"><div class="card-title">How Scoring Works</div></div>
+          <div class="card-hd"><div class="card-title">Chef Quality Interview</div><div class="card-sub">4–8 structured questions for blended score</div></div>
           <div class="card-bd">
             ${[
-              ['camera','Photo Input','Upload any JPG/PNG image of your baked product.'],
-              ['bar-chart-2','Browning Score','Image → greyscale. Mean pixel intensity mapped to 0–100 scale.'],
-              ['check-circle','Optimal Range','Score 40–78 = Optimal. Below 40 = under-baked. Above 78 = over-baked.'],
-              ['shield-check','Uniformity','Standard deviation of pixel intensities measures evenness.'],
-            ].map(([icon, title, desc]) => `
-              <div style="display:flex;gap:10px;margin-bottom:13px;align-items:flex-start;">
-                <div class="ico ico-amber" style="flex-shrink:0;"><i data-lucide="${icon}"></i></div>
-                <div><div style="font-size:13px;font-weight:600;margin-bottom:2px;">${title}</div>
-                <div style="font-size:12px;color:var(--muted);line-height:1.5;">${desc}</div></div>
-              </div>`).join('')}
+              ['qc-crust','Crust colour?', ['Golden brown (ideal)','Pale / under-baked','Dark / over-baked','Patchy / uneven']],
+              ['qc-texture','Crumb texture?', ['Open & airy (ideal)','Dense / tight','Gummy / wet inside','Too dry / crumbly']],
+              ['qc-aroma','Aroma?', ['Rich & nutty (ideal)','Bland / weak','Slightly burnt','Off / yeasty']],
+              ['qc-shape','Shape & rise?', ['Uniform & well-risen','Flat / under-risen','Collapsed','Irregular / asymmetric']],
+              ['qc-surface','Surface finish?', ['Smooth & even (ideal)','Cracked','Blistered','Dull / matte']],
+              ['qc-taste','Post-bake taste test?', ['Excellent','Good','Acceptable','Needs adjustment','Not tested']],
+            ].map(([id,label,opts])=>`
+            <div class="form-group">
+              <label class="form-label">${label}</label>
+              <select class="form-input" id="${id}">
+                ${opts.map((o,i)=>`<option value="${4-i}">${o}</option>`).join('')}
+              </select>
+            </div>`).join('')}
+            <button class="btn btn-primary btn-full" onclick="doChefScore()">
+              <i data-lucide="calculator"></i> Calculate Blended Score
+            </button>
           </div>
+        </div>
+        <div class="col-stack">
+          <div class="card" style="background:linear-gradient(135deg,#FFFBEB,#FEF3C7);border-color:#FDE68A;">
+            <div class="card-hd"><div class="card-title" style="color:#78350F;">Scoring Logic</div></div>
+            <div class="card-bd" style="font-size:13px;color:#8B5E30;line-height:1.7;">
+              <p>Each answer is scored 1–4 (4 = ideal). The 6-question mean (×25) gives a 0–100 blended quality score.</p>
+              <p>Photo analysis (browning/uniformity) + chef interview = <strong style="color:#78350F;">composite score</strong>. In Phase 3, this feeds into trend charts and recipe recommendations.</p>
+            </div>
+          </div>
+          <div id="qc-chef-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trends tab -->
+    <div id="qc-panel-trends" style="display:none;">
+      <div class="card">
+        <div class="card-hd">
+          <div><div class="card-title">Inspection History</div><div class="card-sub">Pass / fail trend from DB</div></div>
+          <button class="btn btn-outline" onclick="_qcLoadTrends()" style="gap:5px;font-size:12px;"><i data-lucide="refresh-cw" style="width:13px;height:13px;"></i>Refresh</button>
+        </div>
+        <div id="qc-trends-body" class="card-bd">
+          <div class="empty-state"><i data-lucide="bar-chart-2"></i><p>Loading inspection history…</p></div>
+        </div>
+      </div>
+    </div>`;
+
+  lucide.createIcons();
+  setupDZ('dz-q', onQSel);
+  _qcLoadKpis();
+}
+
+function qcTab(active) {
+  ['qc-tab-photo','qc-tab-chef','qc-tab-trends'].forEach(id => {
+    const btn = document.getElementById(id);
+    const panel = document.getElementById(id.replace('qc-tab-','qc-panel-'));
+    if (!btn) return;
+    if (id === active) { btn.className = 'btn btn-primary'; if (panel) panel.style.display = ''; }
+    else { btn.className = 'btn btn-outline'; if (panel) panel.style.display = 'none'; }
+  });
+  if (active === 'qc-tab-trends') _qcLoadTrends();
+}
+
+async function _qcLoadKpis() {
+  try {
+    const d = await GET('/dashboard/summary');
+    const t = document.getElementById('qc-total'); if (t) t.textContent = d.quality_inspections ?? '—';
+    const p = document.getElementById('qc-pass'); if (p) p.textContent = (d.quality_pass_rate ?? '—') + '%';
+  } catch {}
+}
+
+async function _qcLoadTrends() {
+  const body = document.getElementById('qc-trends-body');
+  if (!body) return;
+  try {
+    const d = await GET('/dashboard/summary');
+    const total = d.quality_inspections || 0;
+    const passRate = d.quality_pass_rate || 0;
+    const passed = Math.round(total * passRate / 100);
+    const failed = total - passed;
+    body.innerHTML = total === 0
+      ? `<div class="empty-state"><i data-lucide="inbox"></i><p>No inspections yet. Run photo analysis to build history.</p></div>`
+      : `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;">
+          <div style="text-align:center;padding:16px;background:var(--ok-bg);border-radius:8px;border:1px solid var(--ok-br);">
+            <div style="font-size:28px;font-weight:700;color:var(--ok);">${total}</div>
+            <div style="font-size:12px;color:var(--muted);">Total Inspections</div>
+          </div>
+          <div style="text-align:center;padding:16px;background:var(--ok-bg);border-radius:8px;border:1px solid var(--ok-br);">
+            <div style="font-size:28px;font-weight:700;color:var(--ok);">${passed}</div>
+            <div style="font-size:12px;color:var(--muted);">Passed (optimal)</div>
+          </div>
+          <div style="text-align:center;padding:16px;background:var(--err-bg);border-radius:8px;border:1px solid var(--err-br);">
+            <div style="font-size:28px;font-weight:700;color:var(--err);">${failed}</div>
+            <div style="font-size:12px;color:var(--muted);">Needs Adjustment</div>
+          </div>
+        </div>
+        <div class="info-box info-info" style="font-size:12.5px;">
+          <strong>Phase 3:</strong> Per-product trend charts, time-series browning history, and anomaly detection across batches will appear here.
+        </div>`;
+    lucide.createIcons();
+  } catch(e) {
+    body.innerHTML = `<div class="info-box info-warn">Could not load trend data: ${e.message}</div>`;
+  }
+}
+
+function doChefScore() {
+  const ids = ['qc-crust','qc-texture','qc-aroma','qc-shape','qc-surface','qc-taste'];
+  const scores = ids.map(id => parseInt(document.getElementById(id)?.value || '2'));
+  const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
+  const blended = Math.round(avg * 25);
+  const isOK = blended >= 75;
+  document.getElementById('qc-chef-result').innerHTML = `
+    <div class="card" style="background:${isOK?'linear-gradient(135deg,#ECFDF5,#D1FAE5)':'linear-gradient(135deg,#FFF1F2,#FFE4E6)'};border-color:${isOK?'var(--ok-br)':'var(--err-br)'};">
+      <div class="card-hd">
+        <div class="card-title" style="color:${isOK?'#065F46':'#9F1239'};">Chef Score</div>
+        <span class="badge badge-${isOK?'ok':'err'}">${isOK?'✓ Pass':'⚠ Review'}</span>
+      </div>
+      <div class="card-bd" style="text-align:center;padding:18px;">
+        <div style="font-size:48px;font-weight:800;color:${isOK?'var(--ok)':'var(--err)'};">${blended}</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px;">Blended Quality Score / 100</div>
+        <div style="margin-top:14px;font-size:12.5px;color:${isOK?'#065F46':'#9F1239'};">
+          ${isOK ? 'All quality dimensions are satisfactory. Batch approved for sale.' : 'One or more quality dimensions need attention. Review the weakest scores.'}
         </div>
       </div>
     </div>`;
   lucide.createIcons();
-  setupDZ('dz-q', onQSel);
+  toast('Blended score: ' + blended + '/100');
 }
 
 function onQSel(e) {
@@ -1171,9 +1435,9 @@ function renderQResult(data) {
   const gc = browning >= 40 && browning <= 78 ? '#059669' : browning < 40 ? '#2563EB' : '#DC2626';
 
   document.getElementById('q-result').innerHTML = `
-    <div class="card">
+    <div class="card" style="background:${isOK?'linear-gradient(135deg,#ECFDF5,#D1FAE5)':'linear-gradient(135deg,#FFF1F2,#FECDD3)'};border-color:${isOK?'var(--ok-br)':'var(--err-br)'};">
       <div class="card-hd">
-        <div><div class="card-title">Analysis Results</div><div class="card-sub">SHA-256 fingerprint stored in DB</div></div>
+        <div><div class="card-title" style="color:${isOK?'#065F46':'#9F1239'};">Analysis Results</div><div class="card-sub">SHA-256 fingerprint stored</div></div>
         <span class="badge badge-${isOK ? 'ok' : 'err'}" style="font-size:12px;padding:4px 12px;">
           ${isOK ? '✓ OPTIMAL' : '⚠ ADJUST BATCH'}
         </span>
@@ -1185,8 +1449,8 @@ function renderQResult(data) {
             <circle cx="50" cy="50" r="42" fill="none" stroke="${gc}" stroke-width="9"
               stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"
               stroke-linecap="round" transform="rotate(-90 50 50)" style="transition:stroke-dashoffset .8s ease"/>
-            <text x="50" y="45" text-anchor="middle" font-size="20" font-weight="700" fill="#0F172A" font-family="Inter,sans-serif">${browning}</text>
-            <text x="50" y="60" text-anchor="middle" font-size="9" fill="#64748B" font-family="Inter,sans-serif">/ 100</text>
+            <text x="50" y="45" text-anchor="middle" font-size="20" font-weight="700" fill="#3A1F08" font-family="Inter,sans-serif">${browning}</text>
+            <text x="50" y="60" text-anchor="middle" font-size="9" fill="#8B5E30" font-family="Inter,sans-serif">/ 100</text>
           </svg>
           <div class="gauge-lbl">Browning Score</div>
         </div>
@@ -1200,16 +1464,20 @@ function renderQResult(data) {
         </div>
 
         <div style="width:100%;padding:13px;border-radius:8px;text-align:center;
-          background:${isOK?'var(--ok-bg)':'var(--err-bg)'};
-          border:1px solid ${isOK?'var(--ok-br)':'var(--err-br)'};">
+          background:${isOK?'rgba(5,150,105,.08)':'rgba(220,38,38,.08)'};
+          border:1px solid ${isOK?'rgba(5,150,105,.2)':'rgba(220,38,38,.2)'};">
           <div style="font-size:13px;font-weight:600;color:${isOK?'var(--ok)':'var(--err)'};">
             ${isOK
-              ? '✓ Browning is within optimal range (40–78). Batch approved.'
-              : `Browning ${browning < 40 ? 'too low – increase time or temperature' : 'too high – reduce baking duration'}. Review batch.`}
+              ? '✓ Browning within optimal range (40–78). Batch approved.'
+              : `Browning ${browning < 40 ? 'too low — increase time or temperature' : 'too high — reduce baking duration'}. Review batch.`}
           </div>
         </div>
+        <button class="btn btn-outline btn-full" onclick="qcTab('qc-tab-chef')" style="font-size:12.5px;">
+          <i data-lucide="message-circle" style="width:13px;height:13px;"></i> Continue with Chef Questions →
+        </button>
       </div>
     </div>`;
+  _qcLoadKpis();
 }
 
 /* ════════════════════════════════════
