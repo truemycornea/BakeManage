@@ -246,3 +246,33 @@ def test_dashboard_summary_operations_role(client):
 def test_dashboard_summary_auditor_role(client):
     r = client.get("/dashboard/summary", headers=AUD)
     assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# §4 — System Monitor  /system/status
+# ---------------------------------------------------------------------------
+
+def test_system_status_owner_returns_metrics(client):
+    r = client.get("/system/status", headers=OWNER)
+    assert r.status_code == 200
+    body = r.json()
+    assert "resources" in body
+    assert "cpu_pct" in body["resources"]
+    assert "ram_pct" in body["resources"]
+    assert "disk_pct" in body["resources"]
+    assert "services" in body
+    assert isinstance(body["services"], list)
+    assert len(body["services"]) >= 1
+    assert "queue" in body
+    assert "db_record_counts" in body
+    assert "stock_items" in body["db_record_counts"]
+
+
+def test_system_status_operations_role(client):
+    r = client.get("/system/status", headers=OPS)
+    assert r.status_code == 200
+
+
+def test_system_status_auditor_role(client):
+    r = client.get("/system/status", headers=AUD)
+    assert r.status_code == 200

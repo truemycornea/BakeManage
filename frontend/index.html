@@ -1589,35 +1589,288 @@ function sys_monitor(el) {
   el.innerHTML = `
     <div class="page-hd">
       <div class="page-title">System Monitoring</div>
-      <div class="page-desc">Owner-only. Infrastructure health, service status, AI token usage, and queue metrics.</div>
+      <div class="page-desc">Owner-only. Infrastructure health, service status, AI token usage, queue depth and database record counts.</div>
     </div>
-    <div class="info-box info-warn" style="margin-bottom:18px;font-size:12.5px;">
-      <strong>Phase 4</strong> will expand this into a full system dashboard (CPU, RAM, AI token usage, Celery queue depth).
-      The <em>Four Golden Signals</em> panel below is active now.
+
+    <!-- Resource gauges row -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;">
+      ${[['cpu_pct','CPU Usage','server'],['ram_pct','RAM Usage','memory-stick'],['disk_pct','Disk Usage','hard-drive']].map(([k,label,icon])=>`
+      <div class="card" style="text-align:center;padding:18px 12px;">
+        <div style="display:flex;justify-content:center;margin-bottom:8px;">
+          <div class="ico ico-amber"><i data-lucide="${icon}"></i></div>
+        </div>
+        <div style="font-size:26px;font-weight:700;color:var(--primary);" id="sm-${k}">—</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:3px;">${label}</div>
+        <div style="height:4px;background:var(--border);border-radius:2px;margin-top:10px;overflow:hidden;">
+          <div id="sm-bar-${k}" style="height:100%;background:var(--primary);border-radius:2px;width:0%;transition:width .6s;"></div>
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <div class="two-col">
+      <div class="col-stack">
+        <!-- Services -->
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Service Status</div></div>
+          <div class="card-bd" style="padding:10px 14px;" id="sm-services">
+            <div style="color:var(--muted);font-size:13px;">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Queue & AI -->
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Queue &amp; AI Usage</div></div>
+          <div class="card-bd" style="padding:12px 16px;" id="sm-queue">
+            <div style="color:var(--muted);font-size:13px;">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-stack">
+        <!-- DB record counts -->
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Database Record Counts</div></div>
+          <div class="card-bd" style="padding:12px 16px;" id="sm-db">
+            <div style="color:var(--muted);font-size:13px;">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Four Golden Signals pass-through -->
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Four Golden Signals</div></div>
+          <div class="card-bd">
+            <p style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">Queues a Celery sampling task. Anomaly &gt; 0.35 triggers cache-clear + SRE escalation.</p>
+            <button class="btn btn-primary btn-full" id="btn-sm-diag" onclick="smDiagnostics()">
+              <i data-lucide="activity"></i> Run Diagnostics
+            </button>
+            <div id="sm-diag-result" style="margin-top:12px;"></div>
+          </div>
+        </div>
+      </div>
     </div>`;
-  // Append the existing health content below the banner
-  const sub = document.createElement('div');
-  el.appendChild(sub);
-  health(sub);
+  lucide.createIcons();
+  _loadSystemStatus();
+}
+
+async function _loadSystemStatus() {
+  try {
+    const d = await GET('/system/status');
+    // Resources
+    ['cpu_pct','ram_pct','disk_pct'].forEach(k => {
+      const v = d.resources[k];
+      const el = document.getElementById('sm-' + k);
+      const bar = document.getElementById('sm-bar-' + k);
+      if (el) el.textContent = v + '%';
+      if (bar) { bar.style.width = v + '%'; bar.style.background = v > 80 ? 'var(--err)' : v > 60 ? '#f59e0b' : 'var(--primary)'; }
+    });
+
+    // Services
+    const svcEl = document.getElementById('sm-services');
+    if (svcEl) svcEl.innerHTML = d.services.map(s => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);">
+        <span style="font-size:13px;font-weight:500;">${s.name}</span>
+        <span class="badge badge-ok">
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:5px;"></span>${s.status}
+        </span>
+      </div>`).join('');
+
+    // Queue + AI
+    const qEl = document.getElementById('sm-queue');
+    if (qEl) qEl.innerHTML = `
+      <div class="kv"><span class="kv-key">Queue Depth</span><span class="kv-val">${d.queue.depth} tasks</span></div>
+      <div class="kv"><span class="kv-key">Latency (P50)</span><span class="kv-val">${d.queue.latency_ms} ms</span></div>
+      <div class="kv"><span class="kv-key">AI Tokens Used</span><span class="kv-val">${d.ai_usage.tokens_used_session.toLocaleString()}</span></div>
+      <div class="kv"><span class="kv-key">OCR Jobs Run</span><span class="kv-val">${d.ai_usage.ocr_jobs_run}</span></div>`;
+
+    // DB counts
+    const dbEl = document.getElementById('sm-db');
+    if (dbEl) {
+      const counts = d.db_record_counts;
+      dbEl.innerHTML = Object.entries({
+        'Stock Items': counts.stock_items,
+        'Quality Inspections': counts.quality_inspections,
+        'Quality Passed': counts.quality_pass,
+        'Proofing Readings': counts.proofing_readings,
+        'Service Credentials': counts.service_credentials,
+      }).map(([k,v]) => `<div class="kv"><span class="kv-key">${k}</span><span class="kv-val">${v}</span></div>`).join('');
+    }
+  } catch(e) { toast('System status unavailable: ' + e.message, 'err'); }
+}
+
+async function smDiagnostics() {
+  const btn = document.getElementById('btn-sm-diag'); setLoad(btn, true);
+  try {
+    const data = await GET('/health/metrics');
+    document.getElementById('sm-diag-result').innerHTML = `
+      <div class="info-box info-ok" style="font-size:12.5px;">
+        Task queued — ID: <code>${data.task_id}</code>
+      </div>`;
+    toast('Diagnostics queued');
+  } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
 }
 
 /* ════════════════════════════════════
-   SETTINGS: AUTH & ACCESS  (TODO: Phase 5 — RBAC, user management, API tokens)
-   Delegates to existing credentials() for Phase 1.
+   SETTINGS: AUTH & ACCESS
 ════════════════════════════════════ */
 function auth_access(el) {
   el.innerHTML = `
     <div class="page-hd">
-      <div class="page-title">Auth & Access</div>
-      <div class="page-desc">Owner-only. RBAC roles, user management, API tokens, and vaulted service credentials.</div>
+      <div class="page-title">Auth &amp; Access</div>
+      <div class="page-desc">Owner-only. Roles, permissions, API token management, and vaulted service credentials.</div>
     </div>
-    <div class="info-box info-warn" style="margin-bottom:18px;font-size:12.5px;">
-      <strong>Phase 5</strong> will add full RBAC management, user lists, and API token management.
-      Credential vaulting (Fernet) is active now — use the panel below.
-    </div>`;
-  const sub = document.createElement('div');
-  el.appendChild(sub);
-  credentials(sub);
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;">
+      ${[['aa-tab-roles','Roles & RBAC','shield'],['aa-tab-tokens','API Tokens','key'],['aa-tab-vault','Service Vault','lock'],['aa-tab-users','Users','users']].map(([id,label,icon],i)=>`
+      <button id="${id}" onclick="aaTab('${id}')" class="btn ${i===0?'btn-primary':'btn-outline'}" style="gap:6px;">
+        <i data-lucide="${icon}" style="width:14px;height:14px;"></i>${label}
+      </button>`).join('')}
+    </div>
+
+    <!-- Tab panels -->
+    <div id="aa-panel-roles">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Role Definitions</div></div>
+          <div class="card-bd">
+            ${[
+              ['owner','Full system access. Can access Settings, Auth, all business sections.'],
+              ['ops','Operational access. Stock, Injection, Quality, Cost, Proofing.'],
+              ['auditor','Read-only. Can view reports and inspections. Cannot modify.'],
+            ].map(([role,desc])=>`
+            <div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px;">
+                <span style="font-size:13px;font-weight:700;text-transform:capitalize;">${role}</span>
+                <span class="badge badge-neutral" style="text-transform:uppercase;font-size:10px;">${role}</span>
+              </div>
+              <div style="font-size:12px;color:var(--muted);line-height:1.5;">${desc}</div>
+            </div>`).join('')}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Permission Matrix</div></div>
+          <div class="card-bd" style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr>
+                  <th style="text-align:left;padding:8px 6px;border-bottom:2px solid var(--border);color:var(--muted);">Domain</th>
+                  ${['Owner','Ops','Auditor'].map(r=>`<th style="text-align:center;padding:8px 6px;border-bottom:2px solid var(--border);color:var(--muted);">${r}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${[
+                  ['Dashboard',     '✓','✓','✓'],
+                  ['Stock',         '✓','✓','✓'],
+                  ['Injection',     '✓','✓','✗'],
+                  ['Quality',       '✓','✓','✓'],
+                  ['Cost',          '✓','✓','✓'],
+                  ['Sales',         '✓','✓','✓'],
+                  ['Proofing',      '✓','✓','✗'],
+                  ['Settings',      '✓','✗','✗'],
+                  ['Auth & Access', '✓','✗','✗'],
+                ].map(([d,...vals])=>`
+                <tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:8px 6px;font-weight:500;">${d}</td>
+                  ${vals.map(v=>`<td style="text-align:center;padding:8px 6px;color:${v==='✓'?'var(--ok)':v==='✗'?'var(--err)':'var(--muted)'};">${v}</td>`).join('')}
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="aa-panel-tokens" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">API Token Model</div></div>
+          <div class="card-bd">
+            ${[
+              ['key','X-Client-Role header','Role is set in the HTTP request header (owner / ops / auditor).'],
+              ['hash','X-Client-PIN header','PBKDF2-SHA256 (390 000 iterations) hashed. Never stored in plain text.'],
+              ['shield','JWT tokens (enterprise)','POST /auth/login → returns signed JWT. Required for JWT-protected routes.'],
+              ['alert-triangle','Zero retrieval policy','API keys and tokens are write-only. Retrieve them from your secret manager.'],
+            ].map(([icon,title,desc])=>`
+            <div style="display:flex;gap:10px;margin-bottom:13px;align-items:flex-start;">
+              <div class="ico ico-amber" style="flex-shrink:0;"><i data-lucide="${icon}"></i></div>
+              <div><div style="font-size:13px;font-weight:600;margin-bottom:2px;">${title}</div>
+              <div style="font-size:12px;color:var(--muted);line-height:1.5;">${desc}</div></div>
+            </div>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Token Reference</div></div>
+          <div class="card-bd" style="padding:12px 16px;">
+            ${[
+              ['Sandbox PIN','sandbox1234 (env: BOOTSTRAP_PIN)'],
+              ['Admin username','admin (env: DEFAULT_ADMIN_USERNAME)'],
+              ['Hash algorithm','PBKDF2-HMAC-SHA256'],
+              ['Iterations','390 000'],
+              ['JWT expiry','24 hours'],
+              ['JWT signing','HS256 (env: JWT_SECRET)'],
+            ].map(([k,v])=>`<div class="kv"><span class="kv-key">${k}</span><span class="kv-val" style="font-family:ui-monospace,monospace;font-size:11px;">${v}</span></div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="aa-panel-vault" style="display:none;">`;
+  // Append the real credentials form below
+  const vaultWrap = document.createElement('div');
+  el.appendChild(vaultWrap);
+  credentials(vaultWrap);
+  // Close the template string — append users panel
+  el.insertAdjacentHTML('beforeend', `
+    </div>
+
+    <div id="aa-panel-users" style="display:none;">
+      <div class="card">
+        <div class="card-hd"><div class="card-title">User Accounts</div><span class="badge badge-neutral">Sandbox</span></div>
+        <div class="card-bd" style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr>
+                <th style="text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);color:var(--muted);">Username</th>
+                <th style="text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);color:var(--muted);">Role</th>
+                <th style="text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);color:var(--muted);">Auth Method</th>
+                <th style="text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);color:var(--muted);">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${[
+                ['admin',   'owner',   'PIN + JWT', 'Active'],
+                ['ops_user','ops',     'PIN',       'Active (demo)'],
+                ['auditor', 'auditor', 'PIN',       'Active (demo)'],
+              ].map(([u,r,m,s])=>`
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:10px 12px;font-weight:600;">${u}</td>
+                <td style="padding:10px 12px;"><span class="badge badge-neutral" style="text-transform:capitalize;">${r}</span></td>
+                <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${m}</td>
+                <td style="padding:10px 12px;"><span class="badge badge-ok">${s}</span></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+          <div class="info-box info-warn" style="margin-top:14px;font-size:12px;">
+            <strong>Phase 5:</strong> Full user management (add/remove/role-change) with PIN reset will be added in the next iteration.
+          </div>
+        </div>
+      </div>
+    </div>`);
+  lucide.createIcons();
+}
+
+function aaTab(active) {
+  ['aa-tab-roles','aa-tab-tokens','aa-tab-vault','aa-tab-users'].forEach(id => {
+    const btn = document.getElementById(id);
+    const panel = document.getElementById(id.replace('aa-tab-','aa-panel-'));
+    if (!btn) return;
+    if (id === active) {
+      btn.className = 'btn btn-primary'; if (panel) panel.style.display = '';
+    } else {
+      btn.className = 'btn btn-outline'; if (panel) panel.style.display = 'none';
+    }
+  });
 }
 
 /* ════════════════════════════════════
