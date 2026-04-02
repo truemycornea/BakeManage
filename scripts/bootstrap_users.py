@@ -17,7 +17,7 @@ def bootstrap():
     try:
         if not settings.default_admin_pin:
             print("Error: DEFAULT_ADMIN_PIN not set")
-            return
+            raise SystemExit(1)
 
         users_to_seed = [
             {"username": "rahul@olympus.ai", "role": "admin"},
