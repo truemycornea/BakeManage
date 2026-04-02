@@ -171,15 +171,11 @@ class QualityCheck(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     score: Mapped[float] = mapped_column(Float, nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="stable")
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
     image_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    co2_ppm: Mapped[float] = mapped_column(Float, nullable=False)
-    fan_speed_rpm: Mapped[float | None] = mapped_column(Float, nullable=True)
-    status: Mapped[str] = mapped_column(String(64), default="stable")
     anomaly_score: Mapped[float] = mapped_column(Float, default=0.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class QualityInspection(Base):
