@@ -1523,62 +1523,243 @@ function stock(el) {
   el.innerHTML = `
     <div class="page-hd">
       <div class="page-title">Stock Management</div>
-      <div class="page-desc">Inventory, vendors, multi-vendor pricing, expiry tracking, and cost-saving recommendations — all in one place.</div>
+      <div class="page-desc">Inventory, expiry tracking, barcode &amp; manual entry, and vendor cost management.</div>
     </div>
-    <div class="info-box info-info" style="margin-bottom:18px;font-size:12.5px;">
-      <strong>Phase 2 — coming soon.</strong> Barcode entry, photo-based stock addition, vendor pricing comparison, and expiry management will be implemented here.
-    </div>
-    <div class="stats-grid">
+
+    <!-- KPI mini-cards -->
+    <div class="stats-grid" style="margin-bottom:18px;">
       <div class="stat-card">
-        <div><div class="stat-lbl">Items In Stock</div><div class="stat-val" id="stk-items" style="font-size:17px;margin-top:6px;">…</div><div class="stat-hint">From inventory cache</div></div>
+        <div><div class="stat-lbl">Items In Stock</div><div class="stat-val" id="stk-total" style="font-size:20px;margin-top:4px;">…</div></div>
         <div class="ico ico-amber"><i data-lucide="package"></i></div>
       </div>
       <div class="stat-card">
-        <div><div class="stat-lbl">Expiring ≤ 7 days</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Expiry extraction: Phase 2</div></div>
+        <div><div class="stat-lbl">Expiring ≤ 7 days</div><div class="stat-val" id="stk-exp7" style="font-size:20px;margin-top:4px;">…</div></div>
         <div class="ico" style="background:#FEF2F2;color:#DC2626;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;"><i data-lucide="alert-triangle"></i></div>
       </div>
       <div class="stat-card">
-        <div><div class="stat-lbl">Active Vendors</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Vendor records</div></div>
+        <div><div class="stat-lbl">Active Vendors</div><div class="stat-val" style="font-size:20px;margin-top:4px;">—</div><div class="stat-hint">Phase 3: vendor records</div></div>
         <div class="ico ico-blue"><i data-lucide="truck"></i></div>
       </div>
       <div class="stat-card">
-        <div><div class="stat-lbl">Potential Savings</div><div class="stat-val" style="font-size:17px;margin-top:6px;">—</div><div class="stat-hint">Cross-vendor analysis: Phase 2</div></div>
+        <div><div class="stat-lbl">Potential Savings</div><div class="stat-val" style="font-size:20px;margin-top:4px;">—</div><div class="stat-hint">Cross-vendor: Phase 3</div></div>
         <div class="ico ico-green"><i data-lucide="piggy-bank"></i></div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-hd"><div class="card-title">Current Inventory Snapshot</div><div class="card-sub">Live from cache — full Stock Management UI arrives in Phase 2</div></div>
-      <div id="stk-inv-body" class="card-bd">
-        <div class="empty-state"><i data-lucide="package"></i><p>Loading inventory…</p></div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+      ${[['stk-tab-list','Stock List','package'],['stk-tab-add','Add Item','plus-circle'],['stk-tab-expiry','Expiry Watch','clock']].map(([id,label,icon],i)=>`
+      <button id="${id}" onclick="stkTab('${id}')" class="btn ${i===0?'btn-primary':'btn-outline'}" style="gap:6px;">
+        <i data-lucide="${icon}" style="width:14px;height:14px;"></i>${label}
+      </button>`).join('')}
+    </div>
+
+    <!-- Stock List panel -->
+    <div id="stk-panel-list">
+      <div class="card">
+        <div class="card-hd">
+          <div><div class="card-title">Current Inventory</div><div class="card-sub">Sorted by expiry — soonest first</div></div>
+          <button class="btn btn-outline" onclick="_stkLoadList()" style="gap:5px;font-size:12px;"><i data-lucide="refresh-cw" style="width:13px;height:13px;"></i>Refresh</button>
+        </div>
+        <div id="stk-list-body" class="card-bd">
+          <div class="empty-state"><i data-lucide="package"></i><p>Loading inventory…</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Item panel -->
+    <div id="stk-panel-add" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Add Stock Item</div></div>
+          <div class="card-bd">
+            <div class="form-group">
+              <label class="form-label">Item Name <span style="color:var(--err);">*</span></label>
+              <input class="form-input" id="stk-name" placeholder="e.g. Atta (Chakki Fresh), Sugar, Butter">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="form-group">
+                <label class="form-label">Quantity on Hand <span style="color:var(--err);">*</span></label>
+                <input class="form-input" id="stk-qty" type="number" step="0.01" min="0" placeholder="e.g. 25">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Unit</label>
+                <select class="form-input" id="stk-unit">
+                  ${['kg','g','litre','ml','unit','pack','box','dozen','bag'].map(u=>`<option>${u}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="form-group">
+                <label class="form-label">Category</label>
+                <select class="form-input" id="stk-cat">
+                  ${['flour','sugar','dairy','fat','flavour','packaging','produce','other'].map(c=>`<option>${c}</option>`).join('')}
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Unit Price (₹)</label>
+                <input class="form-input" id="stk-price" type="number" step="0.01" min="0" placeholder="e.g. 42.50">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Expiration Date</label>
+              <input class="form-input" id="stk-exp" type="date">
+            </div>
+            <button class="btn btn-primary btn-full" id="btn-stk-add" onclick="doAddStock()">
+              <i data-lucide="plus"></i> Add to Inventory
+            </button>
+          </div>
+        </div>
+
+        <div class="col-stack">
+          <div class="card">
+            <div class="card-hd"><div class="card-title">Entry Methods</div></div>
+            <div class="card-bd">
+              ${[
+                ['barcode','Barcode Scan','manual entry above — barcode scanner auto-populates name/price in Phase 3','btn-outline'],
+                ['camera','Photo Upload','image-based expiry extraction via OCR — Phase 3','btn-outline'],
+                ['file-text','Invoice Import','use Injection → auto-populates stock from vendor invoices','btn-outline'],
+              ].map(([icon,title,desc,cls])=>`
+              <div style="display:flex;gap:10px;margin-bottom:12px;align-items:flex-start;">
+                <div class="ico ico-amber" style="flex-shrink:0;"><i data-lucide="${icon}"></i></div>
+                <div><div style="font-size:13px;font-weight:600;margin-bottom:2px;">${title}</div>
+                <div style="font-size:12px;color:var(--muted);">${desc}</div></div>
+              </div>`).join('')}
+            </div>
+          </div>
+          <div id="stk-add-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Expiry Watch panel -->
+    <div id="stk-panel-expiry" style="display:none;">
+      <div class="card">
+        <div class="card-hd">
+          <div><div class="card-title">Expiry Watch — Next 7 Days</div></div>
+          <button class="btn btn-outline" onclick="_stkLoadExpiry()" style="gap:5px;font-size:12px;"><i data-lucide="refresh-cw" style="width:13px;height:13px;"></i>Refresh</button>
+        </div>
+        <div id="stk-exp-body" class="card-bd">
+          <div class="empty-state"><i data-lucide="clock"></i><p>Loading expiry data…</p></div>
+        </div>
       </div>
     </div>`;
+
   lucide.createIcons();
-  // Re-use existing inventory cache endpoint as a live data preview
-  GET('/inventory/cache').then(data => {
-    const items = Array.isArray(data) ? data : (data.items || data.inventory || []);
-    const cnt = document.getElementById('stk-items');
-    if (cnt) cnt.textContent = items.length || '0';
-    const body = document.getElementById('stk-inv-body');
-    if (!body) return;
-    if (!items.length) {
-      body.innerHTML = `<div class="empty-state"><i data-lucide="inbox"></i><p>No inventory data. Inject invoices to populate stock.</p></div>`;
+  _stkLoadSummary();
+  _stkLoadList();
+}
+
+function stkTab(active) {
+  ['stk-tab-list','stk-tab-add','stk-tab-expiry'].forEach(id => {
+    const btn = document.getElementById(id);
+    const panel = document.getElementById(id.replace('stk-tab-','stk-panel-'));
+    if (!btn) return;
+    if (id === active) { btn.className = 'btn btn-primary'; if (panel) panel.style.display = ''; }
+    else { btn.className = 'btn btn-outline'; if (panel) panel.style.display = 'none'; }
+  });
+  if (active === 'stk-tab-expiry') _stkLoadExpiry();
+}
+
+async function _stkLoadSummary() {
+  try {
+    const d = await GET('/stock/items');
+    const t = document.getElementById('stk-total'); if (t) t.textContent = d.total;
+    const e = document.getElementById('stk-exp7'); if (e) e.textContent = d.expiring_soon;
+  } catch {}
+}
+
+async function _stkLoadList() {
+  const body = document.getElementById('stk-list-body');
+  if (!body) return;
+  body.innerHTML = `<div class="empty-state"><i data-lucide="loader"></i><p>Loading…</p></div>`;
+  lucide.createIcons();
+  try {
+    const d = await GET('/stock/items');
+    if (!d.items || !d.items.length) {
+      body.innerHTML = `<div class="empty-state"><i data-lucide="inbox"></i><p>No stock items. Add items manually or inject invoices.</p></div>`;
       lucide.createIcons(); return;
     }
     body.innerHTML = `<div class="tbl-wrap"><table>
-      <thead><tr><th>Item</th><th>Qty On Hand</th><th>Unit</th><th>Category</th><th>Expiry</th></tr></thead>
-      <tbody>${items.map(it => `<tr>
-        <td style="font-weight:600;">${it.name||'—'}</td>
-        <td>${it.qty_on_hand??it.quantity_on_hand??'—'}</td>
-        <td>${it.unit_of_measure||'—'}</td>
-        <td><span class="badge badge-neutral">${it.category||'—'}</span></td>
-        <td>${it.expiration_date||'—'}</td>
-      </tr>`).join('')}</tbody>
+      <thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Category</th><th>Unit Price</th><th>Expires</th><th>Days Left</th></tr></thead>
+      <tbody>${d.items.map(it => {
+        const urgency = it.days_until_expiry !== null && it.days_until_expiry !== undefined
+          ? (it.days_until_expiry <= 3 ? 'color:var(--err);font-weight:700;' : it.days_until_expiry <= 7 ? 'color:#d97706;font-weight:600;' : '')
+          : '';
+        return `<tr>
+          <td style="font-weight:600;">${it.name}</td>
+          <td>${parseFloat(it.quantity_on_hand).toFixed(2)}</td>
+          <td>${it.unit_of_measure}</td>
+          <td><span class="badge badge-neutral">${it.category}</span></td>
+          <td>₹${parseFloat(it.unit_price).toFixed(2)}</td>
+          <td>${it.expiration_date || '—'}</td>
+          <td style="${urgency}">${it.days_until_expiry !== null && it.days_until_expiry !== undefined ? it.days_until_expiry + 'd' : '—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
     </table></div>`;
     lucide.createIcons();
-  }).catch(() => {
-    const body = document.getElementById('stk-inv-body');
-    if (body) body.innerHTML = `<div class="info-box info-warn">Could not load inventory cache. Inject invoices first.</div>`;
-  });
+  } catch(e) {
+    body.innerHTML = `<div class="info-box info-warn">Could not load inventory: ${e.message}</div>`;
+  }
+}
+
+async function doAddStock() {
+  const name = document.getElementById('stk-name').value.trim();
+  const qty = parseFloat(document.getElementById('stk-qty').value);
+  const unit = document.getElementById('stk-unit').value;
+  const cat = document.getElementById('stk-cat').value;
+  const price = parseFloat(document.getElementById('stk-price').value) || 0;
+  const expDate = document.getElementById('stk-exp').value || null;
+
+  if (!name) { toast('Item name is required', 'err'); return; }
+  if (isNaN(qty) || qty < 0) { toast('Valid quantity required', 'err'); return; }
+
+  const btn = document.getElementById('btn-stk-add'); setLoad(btn, true);
+  try {
+    const data = await POST('/stock/add', { name, quantity_on_hand: qty, unit_of_measure: unit, category: cat, unit_price: price, expiration_date: expDate });
+    document.getElementById('stk-add-result').innerHTML = `
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Added</div><span class="badge badge-ok">Success</span></div>
+        <div class="card-bd" style="padding:12px 16px;">
+          <div class="kv"><span class="kv-key">ID</span><span class="kv-val">#${data.id}</span></div>
+          <div class="kv"><span class="kv-key">Name</span><span class="kv-val">${data.name}</span></div>
+          <div class="kv"><span class="kv-key">Qty</span><span class="kv-val">${data.quantity_on_hand} ${data.unit_of_measure || ''}</span></div>
+          <div class="kv"><span class="kv-key">Expires</span><span class="kv-val">${data.expiration_date || '—'}</span></div>
+        </div>
+      </div>`;
+    ['stk-name','stk-qty','stk-price','stk-exp'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    _stkLoadSummary();
+    toast('Stock item added');
+  } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
+}
+
+async function _stkLoadExpiry() {
+  const body = document.getElementById('stk-exp-body');
+  if (!body) return;
+  body.innerHTML = `<div class="empty-state"><i data-lucide="loader"></i><p>Loading…</p></div>`;
+  lucide.createIcons();
+  try {
+    const d = await GET('/stock/expiring?days=7');
+    if (!d.items || !d.items.length) {
+      body.innerHTML = `<div class="info-box info-ok" style="margin:16px;">No items expiring within 7 days.</div>`;
+      return;
+    }
+    body.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Item</th><th>Qty</th><th>Expires</th><th>Days Left</th></tr></thead>
+      <tbody>${d.items.map(it => {
+        const style = it.days_until_expiry <= 3 ? 'color:var(--err);font-weight:700;' : 'color:#d97706;font-weight:600;';
+        return `<tr>
+          <td style="font-weight:600;">${it.name}</td>
+          <td>${parseFloat(it.quantity_on_hand).toFixed(2)}</td>
+          <td>${it.expiration_date}</td>
+          <td style="${style}">${it.days_until_expiry}d</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+    lucide.createIcons();
+  } catch(e) {
+    body.innerHTML = `<div class="info-box info-warn">Could not load expiry data: ${e.message}</div>`;
+  }
 }
 
 /* ════════════════════════════════════

@@ -536,6 +536,120 @@ async def dashboard_summary(
 
 
 # ---------------------------------------------------------------------------
+# Stock Management  (§6 OptimisedPPv1)
+# ---------------------------------------------------------------------------
+
+class StockAddRequest(BaseModel):
+    name: str
+    quantity_on_hand: float
+    unit_of_measure: str = "kg"
+    category: str = "general"
+    unit_price: float = 0.0
+    expiration_date: str | None = None   # ISO date string YYYY-MM-DD
+
+
+@app.get("/stock/items", response_model=dict)
+async def stock_list(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """List all inventory items sorted by expiry (soonest first, nulls last)."""
+    require_domain(role, "inventory")
+    from datetime import date as _date
+    items = (
+        session.query(InventoryItem)
+        .order_by(
+            InventoryItem.expiration_date.is_(None),
+            InventoryItem.expiration_date.asc(),
+        )
+        .all()
+    )
+    today = _date.today()
+    results = []
+    for it in items:
+        days_left: int | None = None
+        if it.expiration_date:
+            days_left = (it.expiration_date - today).days
+        results.append({
+            "id": it.id,
+            "name": it.name,
+            "quantity_on_hand": float(it.quantity_on_hand),
+            "unit_of_measure": it.unit_of_measure,
+            "category": it.category,
+            "unit_price": float(it.unit_price),
+            "expiration_date": it.expiration_date.isoformat() if it.expiration_date else None,
+            "days_until_expiry": days_left,
+        })
+    expiring_soon = sum(1 for r in results if r["days_until_expiry"] is not None and r["days_until_expiry"] <= 7)
+    return {"total": len(results), "expiring_soon": expiring_soon, "items": results}
+
+
+@app.post("/stock/add", response_model=dict)
+async def stock_add(
+    payload: StockAddRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Manually add a stock item (barcode / direct entry)."""
+    require_domain(role, "inventory")
+    from datetime import date as _date
+    exp_date: _date | None = None
+    if payload.expiration_date:
+        try:
+            exp_date = _date.fromisoformat(payload.expiration_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="expiration_date must be YYYY-MM-DD") from exc
+    item = InventoryItem(
+        name=payload.name,
+        quantity_on_hand=payload.quantity_on_hand,
+        unit_of_measure=payload.unit_of_measure,
+        category=payload.category,
+        unit_price=Decimal(str(payload.unit_price)),
+        expiration_date=exp_date,
+    )
+    session.add(item)
+    session.commit()
+    return {
+        "id": item.id,
+        "name": item.name,
+        "quantity_on_hand": float(item.quantity_on_hand),
+        "unit_of_measure": item.unit_of_measure,
+        "expiration_date": item.expiration_date.isoformat() if item.expiration_date else None,
+    }
+
+
+@app.get("/stock/expiring", response_model=dict)
+async def stock_expiring(
+    days: int = 7,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Items expiring within `days` days."""
+    require_domain(role, "inventory")
+    from datetime import date as _date, timedelta
+    cutoff = _date.today() + timedelta(days=days)
+    items = (
+        session.query(InventoryItem)
+        .filter(InventoryItem.expiration_date.is_not(None))
+        .filter(InventoryItem.expiration_date <= cutoff)
+        .order_by(InventoryItem.expiration_date.asc())
+        .all()
+    )
+    today = _date.today()
+    results = [
+        {
+            "id": it.id,
+            "name": it.name,
+            "quantity_on_hand": float(it.quantity_on_hand),
+            "expiration_date": it.expiration_date.isoformat(),
+            "days_until_expiry": (it.expiration_date - today).days,
+        }
+        for it in items
+    ]
+    return {"count": len(results), "items": results}
+
+
+# ---------------------------------------------------------------------------
 # Credentials and system health  (PIN-based)
 # ---------------------------------------------------------------------------
 

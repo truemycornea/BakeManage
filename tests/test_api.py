@@ -276,3 +276,48 @@ def test_system_status_operations_role(client):
 def test_system_status_auditor_role(client):
     r = client.get("/system/status", headers=AUD)
     assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# §6 — Stock Management
+# ---------------------------------------------------------------------------
+
+def test_stock_add_and_list(client):
+    payload = {
+        "name": "Test Atta",
+        "quantity_on_hand": 10.5,
+        "unit_of_measure": "kg",
+        "category": "flour",
+        "unit_price": 45.0,
+        "expiration_date": "2099-12-31",
+    }
+    r = client.post("/stock/add", json=payload, headers=OWNER)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["name"] == "Test Atta"
+    assert float(body["quantity_on_hand"]) == 10.5
+    # List includes the new item
+    r2 = client.get("/stock/items", headers=OWNER)
+    assert r2.status_code == 200
+    items = r2.json()
+    assert "total" in items
+    assert items["total"] >= 1
+
+
+def test_stock_add_invalid_date(client):
+    payload = {"name": "Bad Date Item", "quantity_on_hand": 1.0, "expiration_date": "not-a-date"}
+    r = client.post("/stock/add", json=payload, headers=OWNER)
+    assert r.status_code == 422
+
+
+def test_stock_expiring_endpoint(client):
+    r = client.get("/stock/expiring?days=7", headers=OWNER)
+    assert r.status_code == 200
+    body = r.json()
+    assert "count" in body
+    assert "items" in body
+
+
+def test_stock_list_ops_role(client):
+    r = client.get("/stock/items", headers=OPS)
+    assert r.status_code == 200
