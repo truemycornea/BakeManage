@@ -7,9 +7,7 @@ FastAPI + PostgreSQL + Redis + Celery, delivered as a single-page web applicatio
 
 **v2.1.0 additions:** Recipe Batch Scaling, Waste Tracking, Multi-Slab GST Calculator;
 7 bug fixes (lifespan migration, real dashboard KPIs, Phase 3 status counts, targeted cache
-clear) + Injection UI overhaul: openpyxl 3.1.5 dependency, MIME normalization for Excel uploads,
-client-side file validation, sample Excel template download, friendly JSON error messages.
-97/97 tests passing. Full data seed: 221 items, 216 sales, 13 waste records.
+clear). 97/97 tests passing.
 
 ---
 
@@ -639,7 +637,6 @@ Full endpoint listing, environment reference, and runbook: `production/v2.0.0/PR
 | Version | Date | Changes |
 |---|---|---|
 | v2.1.0 | 2026-04-02 | Feature 26 recipe batch scaling (`/recipes/{id}/scale`), Feature 27 waste tracking (`/waste/log`, `/waste/report`, `waste_records` table), Feature 28 GST calculator (`/gst/compute`, `/gst/slabs`); 3 new UI modules (GST Calculator, Waste Tracker, Batch Scaling); 7 bug fixes: lifespan migration (deprecation warnings eliminated), dashboard real sales KPIs (was returning None), system/status Phase 3 DB counts (loyalty/lead-times/indents/transfers/waste), targeted cache clear (was flushdb); +15 integration tests → 97/97 passing |
-| v2.1.0-uat | 2026-04-03 | Injection UI overhaul: added `openpyxl==3.1.5` to requirements (Excel ingestion was broken without it), MIME normalization in `/ingest/document` to accept `application/octet-stream` + filename extension check, frontend JSON error parsing in GET/POST/POSTF helpers, client-side file type validation (onImgSel/onDocSel), Sample Template CSV download button, `downloadExcelTemplate()` function; full platform data seed: 221 stock items, 216 sales, 13 waste records, 12 loyalty customers, 12 lead times, 170 indents, 13 recipes, 23 media assets; production snapshot: `production/v2.1.0/` folder + `bakemanage-v2.1.0-production-20260403.tar.gz` (347K archive) |
 | v2.0.0 | 2026-04-02 | Phase 2 hardening (rate-limit 120 req/min, GZip, Prometheus /metrics, health gate) + Phase 3 enterprise ops (supply-chain indent/transfer/lead-time, menu engineering, vendor optimisation, ML demand forecast, WhatsApp CRM, loyalty programme); drop-zone CSS breakpoint fix (720 px → 960 px); 47 API integration tests; 82/82 tests passing; production backup archive |
 | v1.5 | 2026-04-02 | Recipe Library, Media Library, 13 seeded recipes, 23 media assets, drop-zone CSS fix (display:block), responsive grid breakpoints at 720px, REDIS_URL env fix, co2_ppm schema fix, 35/35 tests |
 | v1.0 | 2026-04-01 | Core FastAPI, multimodal ingestion, FEFO inventory, cost engine, proofing telemetry, quality control, SRE golden signals, dashboard KPIs, Redis caching, Celery workers |
