@@ -6,7 +6,7 @@
 <title>BakeManage — ERP Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/lucide@0.477.0/dist/umd/lucide.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -444,12 +444,33 @@ function loadAuth() {
   return true;
 }
 
-function submitAuth() {
+async function submitAuth() {
   const pin = document.getElementById('auth-pin').value.trim();
   if (!pin) { toast('Enter your PIN', 'err'); return; }
+  const btn = document.getElementById('btn-auth');
+  setLoad(btn, true);
+  // Verify PIN against API before entering the app
+  try {
+    const r = await fetch('/api/stock/items', {
+      headers: { 'X-Client-Role': _selRole, 'X-Client-PIN': pin }
+    });
+    if (!r.ok) {
+      let msg = 'Invalid PIN or role — please try again';
+      try { const j = await r.json(); msg = j.detail || msg; } catch {}
+      toast(msg, 'err');
+      setLoad(btn, false);
+      return;
+    }
+  } catch {
+    toast('Cannot reach the API — check that all containers are running', 'err');
+    setLoad(btn, false);
+    return;
+  }
   saveAuth(_selRole, pin);
+  sessionStorage.setItem('bm', JSON.stringify({ role: _selRole, pin }));
   document.getElementById('auth-modal').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
+  setLoad(btn, false);
   initApp();
 }
 
