@@ -509,5 +509,258 @@ curl http://localhost:8000/health/extended
 
 ---
 
+---
+
+## Step 13 - Batch Scaling (v2.1.0)
+
+Scale any seeded recipe to an arbitrary target serving count.
+
+1. Click **Batch Scaling** under INTELLIGENCE.
+2. Select a recipe from the dropdown (all 13 recipes are available).
+3. Enter the **Target Servings** you need to produce.
+4. Click **Compute Scale**.
+
+**Result cards:**
+
+| Card | What it shows |
+|---|---|
+| Scale Factor | Ratio of target to base yield (e.g., 10× for 200 from 20) |
+| Total COGS | Total production cost at the target quantity |
+| Cost Per Serving | ₹ per unit at scale — updated automatically |
+
+**Scaled ingredient table** shows every ingredient with its base quantity, scaled quantity, and scaled cost.
+
+**Example — Butter Croissant scaled to 200 servings:**
+```
+Base yield: 20 servings → Scale factor: 10×
+Total COGS: ₹3,240.00  → Cost per serving: ₹16.20
+```
+
+**API direct use:**
+```bash
+curl "http://localhost:8000/recipes/1/scale?servings=200" \
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234"
+```
+
+---
+
+## Step 14 - GST Calculator (v2.1.0)
+
+Calculate Indian GST (CGST + SGST) for any bakery product category.
+
+1. Click **GST Calculator** under COMPLIANCE.
+2. Select **Product Category** from the dropdown.
+3. Enter **Base Price** (₹ before GST) and **Quantity**.
+4. For a custom rate select "Custom Rate" and enter the percentage.
+5. Click **Compute GST**.
+
+**Category presets:**
+
+| Category | GST Rate | Example |
+|---|---|---|
+| Pastries & Cakes | 18% | Croissants, éclairs, cakes |
+| Chocolate | 18% | Chocolate bars, truffles |
+| Branded Namkeen | 12% | Branded savory snacks |
+| Branded Biscuits | 5% | Packaged branded cookies |
+| Unbranded Bread | 0% | Artisan loaves, pav |
+| Unpackaged Namkeen | 0% | Loose savory items |
+| Custom Rate | Custom | Any user-supplied % |
+
+**Result example (Pastry, ₹100 base, qty 10):**
+```
+CGST (9%):  ₹90.00
+SGST (9%):  ₹90.00
+Total GST:  ₹180.00
+Final Price: ₹1,180.00
+```
+
+> **Intra-state only:** CGST + SGST applies. For inter-state transactions use IGST (same total rate).
+
+**API direct use:**
+```bash
+curl -X POST http://localhost:8000/gst/compute \
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+  -H "Content-Type: application/json" \
+  -d '{"category":"pastries_cakes","base_price":100,"quantity":10}'
+```
+
+---
+
+## Step 15 - Waste Tracker (v2.1.0)
+
+Log production waste and view 30-day cost analytics.
+
+1. Click **Waste Tracker** under COMPLIANCE.
+2. To log a new event, fill in:
+   - **Item Name** — product wasted (e.g., "Sourdough Loaf")
+   - **Quantity Wasted** — numeric amount
+   - **Unit** — kg / pcs / litre / g
+   - **Cause** — overproduction / spoilage / breakage / trim / other
+   - **Cost Per Unit** (₹) — used to compute estimated financial loss
+   - Optional: Notes, Logged By
+3. Click **Log Waste Event**.
+
+**View the 30-day report:**
+1. Click **Load 30-Day Report**.
+2. See a breakdown by cause, top 5 waste items by cost, and recent event list.
+
+**Cause guide:**
+
+| Cause | When to use |
+|---|---|
+| overproduction | You made more than you sold |
+| spoilage | Item expired or deteriorated |
+| breakage | Physical damage during handling |
+| trim | Offcuts removed during shaping |
+| other | Anything that doesn't fit above |
+
+**API direct use:**
+```bash
+# Log a waste event
+curl -X POST http://localhost:8000/waste/log \
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+  -H "Content-Type: application/json" \
+  -d '{"item_name":"Croissant","quantity_wasted":4,"unit_of_measure":"pcs","waste_cause":"overproduction","cost_per_unit":45.0}'
+
+# Get 30-day report
+curl "http://localhost:8000/waste/report?days=30" \
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234"
+```
+
+---
+
+## Step 16 - Supply Chain (v2.1.0)
+
+### Stock Indent
+Auto-generate purchase orders for low-stock ingredients.
+
+1. Click **Stock Indent** under SUPPLY CHAIN.
+2. Set a reorder threshold quantity.
+3. Click **Generate Indent** — the system creates indent records for all SKUs below threshold.
+4. View all open indents in the table below.
+
+### Stock Transfer
+Move inventory between production locations.
+
+1. Click **Stock Transfer** under SUPPLY CHAIN.
+2. Select source and destination locations.
+3. Enter item name and quantity.
+4. Click **Transfer** — stock is debited from source and credited to destination.
+
+### Lead Times
+View and manage supplier SLAs.
+
+1. Click **Lead Times** under SUPPLY CHAIN.
+2. The table shows: vendor name, ingredient, lead days, last confirmed price.
+3. Click **Add** to register a new vendor–ingredient SLA.
+
+---
+
+## Step 17 - CRM Loyalty (v2.1.0)
+
+1. Click **Loyalty Programme** under CRM.
+2. The table shows all 12 seeded loyalty customers with:
+   - Name, phone, tier badge, total spend, loyalty points, last visit
+
+**Tier thresholds:**
+
+| Tier | Spend Threshold |
+|---|---|
+| Bronze | < ₹5,000 |
+| Silver | ₹5,000 – ₹10,000 |
+| Gold | > ₹10,000 |
+
+**Add or update a customer:**
+```bash
+curl -X POST http://localhost:8000/crm/loyalty/upsert \
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
+  -H "Content-Type: application/json" \
+  -d '{"customer_name":"Priya Sharma","phone":"+919876540020","birthday":"1990-06-15","total_spend_inr":6500}'
+```
+
+**Birthday triggers:** The system automatically surfaces customers with birthdays in the next 7 days for WhatsApp outreach.
+
+---
+
+## Step 18 - WhatsApp CRM (v2.1.0)
+
+1. Click **WhatsApp CRM** under CRM.
+2. Select a loyalty customer from the list.
+3. Choose a message template:
+   - `birthday_wish` — "Happy Birthday, {name}! Your special discount awaits."
+   - `reorder_reminder` — "Hi {name}, your favourite {product} is back in stock."
+   - `loyalty_upgrade` — "Congratulations! You've reached {tier} tier."
+4. The message preview renders with variable substitution.
+5. Click **Send Message** — dispatches via Twilio sandbox (logs in worker console).
+
+---
+
+## Step 19 - Intelligence Modules (v2.1.0)
+
+### Demand Forecast
+Uses linear regression on historical sales data to project future demand.
+
+1. Click **Demand Forecast** under INTELLIGENCE.
+2. Select Lookahead Days (7, 14, or 30).
+3. Click **Generate Forecast**.
+4. Table: Product → Historical Avg → Forecasted Demand → Confidence.
+
+```bash
+curl "http://localhost:8000/intelligence/demand-forecast?days=14" \
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234"
+```
+
+### Menu Engineering
+Classifies all products into the Boston Matrix using real sales and margin data.
+
+| Quadrant | Margin | Demand | Action |
+|---|---|---|---|
+| ⭐ Star | High | High | Protect and promote |
+| 🐴 Plow-Horse | Low | High | Reprice or automate |
+| ❓ Puzzle | High | Low | Market aggressively |
+| 🐕 Dog | Low | Low | Consider discontinuing |
+
+```bash
+curl http://localhost:8000/intelligence/menu-engineering \
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234"
+```
+
+### Vendor Optimisation
+Ranks vendors per ingredient by unit price and lead days.
+
+```bash
+curl http://localhost:8000/intelligence/vendor-optimisation \
+  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234"
+# Returns best vendor per ingredient with lowest price and fastest SLA
+```
+
+---
+
+## System Data State (v2.1.0 Demo Seed)
+
+After running the demo seed scripts the platform contains:
+
+| Table | Records |
+|---|---|
+| stock_items | 221 |
+| sales (all time) | 216 |
+| quality_inspections | 36 |
+| proofing_readings | 75 |
+| recipes | 13 |
+| recipe_ingredients | 98 |
+| media_assets | 23 |
+| loyalty_customers | 12 |
+| supplier_lead_times | 12 |
+| stock_indents | 170 |
+| stock_transfers | 12 |
+| waste_records | 13 |
+
+**Dashboard live KPIs (demo seed):**
+- Revenue Today: ₹16,170.00
+- Items Sold Today: 242
+- Cost Saved This Week: ₹4,012.65
+
+---
+
 *BakeManage (c) 2026 - All IP assigned to BakeManage*
-*Guide version: v1.5 | Last updated: 2026-04-02*
+*Guide version: v2.1.0 | Last updated: 2026-04-03*

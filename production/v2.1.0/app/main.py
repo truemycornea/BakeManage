@@ -110,42 +110,13 @@ def _ensure_requirements_locked() -> None:
 
 
 def _seed_admin_user(session: Session) -> None:
-    users_to_seed = [
-        {"username": settings.default_admin_username, "role": "admin"},
-    ]
-
-    environment = str(getattr(settings, "environment", "") or "").lower()
-    seed_local_users = bool(getattr(settings, "seed_local_users", False))
-    if environment == "development" and seed_local_users:
-    primary_user = {"username": settings.default_admin_username, "role": "admin"}
-    optional_users_to_seed = [
-        {"username": "rahul@olympus.ai", "role": "admin"},
-        {"username": "helen@olympus.ai", "role": "operations"},
-    ]
-
-    primary_missing = not session.query(User).filter(User.username == primary_user["username"]).first()
-    missing_optional_users = [
-        u_data
-        for u_data in optional_users_to_seed
-        if not session.query(User).filter(User.username == u_data["username"]).first()
-    ]
-
-    if primary_missing and not settings.default_admin_pin:
-        raise RuntimeError("DEFAULT_ADMIN_PIN must be set for initial user seeding")
-
-    users_to_create = []
-    if primary_missing:
-        users_to_create.append(primary_user)
-    if settings.default_admin_pin:
-        users_to_create.extend(missing_optional_users)
-
-    if not users_to_create:
+    if session.query(User).filter(User.username == settings.default_admin_username).first():
         return
-
-    for u_data in users_to_create:
-        hashed, salt = hash_pin(settings.default_admin_pin)
-        user = User(username=u_data["username"], role=u_data["role"], hashed_pin=hashed, salt=salt)
-        session.add(user)
+    if not settings.default_admin_pin:
+        raise RuntimeError("DEFAULT_ADMIN_PIN must be set for initial admin user")
+    hashed, salt = hash_pin(settings.default_admin_pin)
+    admin = User(username=settings.default_admin_username, role="admin", hashed_pin=hashed, salt=salt)
+    session.add(admin)
     session.commit()
 
 
