@@ -54,8 +54,8 @@ class CostComputationResponse(BaseModel):
 
 
 class AuthRequest(BaseModel):
-    username: str
-    pin: str
+    username: str = Field(min_length=1, max_length=255)
+    pin: str = Field(min_length=6, max_length=128)
 
 
 class TokenResponse(BaseModel):

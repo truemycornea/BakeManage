@@ -110,13 +110,6 @@ def _ensure_requirements_locked() -> None:
 
 
 def _seed_admin_user(session: Session) -> None:
-    users_to_seed = [
-        {"username": settings.default_admin_username, "role": "admin"},
-    ]
-
-    environment = str(getattr(settings, "environment", "") or "").lower()
-    seed_local_users = bool(getattr(settings, "seed_local_users", False))
-    if environment == "development" and seed_local_users:
     primary_user = {"username": settings.default_admin_username, "role": "admin"}
     optional_users_to_seed = [
         {"username": "rahul@olympus.ai", "role": "admin"},
@@ -337,7 +330,8 @@ async def system_status(
 # ---------------------------------------------------------------------------
 
 @app.post("/auth/login", response_model=TokenResponse)
-async def login(payload: AuthRequest, session: Session = Depends(get_session)) -> TokenResponse:
+@limiter.limit("5/minute")
+async def login(request: Request, payload: AuthRequest, session: Session = Depends(get_session)) -> TokenResponse:
     user = session.query(User).filter(User.username == payload.username).first()
     if user is None or not verify_pin(payload.pin, user.hashed_pin, user.salt):
         raise HTTPException(status_code=401, detail="Invalid credentials")
