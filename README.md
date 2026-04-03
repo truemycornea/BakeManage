@@ -11,9 +11,48 @@ clear) + Injection UI overhaul: openpyxl 3.1.5 dependency, MIME normalization fo
 client-side file validation, sample Excel template download, friendly JSON error messages.
 97/97 tests passing. Full data seed: 221 items, 216 sales, 13 waste records.
 
+## Features
+- Upload endpoints for images (receipts, handwritten notes), PDFs, and Excel sheets
+- Docling-powered structural parsing with a simulated Vision-Language OCR response
+- PostgreSQL persistence via SQLAlchemy with models for vendors, invoices, inventory, and recipes
+- Celery workers for FEFO inventory deductions and cost of goods sold calculations
+- Dockerized multi-stage build for production deployment
+- Comprehensive pytest suite covering ingestion, costing, and integration workflows
+
+## Planning
+- SCRUM-aligned backlog and AI execution guidance: [bakemanageroot_scrum.md](./bakemanageroot_scrum.md)
+
+## Getting Started (Local Development, No Docker)
+
+If you want the recommended containerized setup, use the Docker Compose Quickstart documented later in this README. The steps below are an optional local-development path for running the services directly on your machine.
+
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Configure environment variables for your local PostgreSQL and Redis services as needed:
+   - `DATABASE_URL` (default: `postgresql+psycopg2://postgres:postgres@localhost:5432/bakemanage`)
+   - `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` (default: `redis://localhost:6379/0`)
+3. Launch the API locally:
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+4. Start a local Celery worker:
+   ```bash
+   celery -A app.tasks.celery_app worker --loglevel=info
+   ```
+5. Run tests locally:
+   ```bash
+   pytest tests/
+   ```
+
 ---
 
 ## Table of Contents
+
+- [Features](#features)
+- [Planning (SCRUM)](#planning)
+- [Getting Started (Local Development, No Docker)](#getting-started-local-development-no-docker)
 
 1. [Architecture Overview](#1-architecture-overview)
 2. [Feature Map](#2-feature-map)
