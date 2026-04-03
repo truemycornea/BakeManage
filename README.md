@@ -1,6 +1,15 @@
-# BakeManage
+# BakeManage ERP — v2.1.0 Sandbox
 
-Python-based FastAPI microservice for multimodal document ingestion and dynamic inventory management for a bakery ERP.
+Enterprise-grade SaaS ERP for Indian bakeries — multimodal AI ingestion, recipe costing,
+inventory FEFO, proofing telemetry, quality control, supply chain automation, CRM loyalty
+programme, ML-powered demand forecasting, GST compliance, and waste tracking. Built on
+FastAPI + PostgreSQL + Redis + Celery, delivered as a single-page web application.
+
+**v2.1.0 additions:** Recipe Batch Scaling, Waste Tracking, Multi-Slab GST Calculator;
+7 bug fixes (lifespan migration, real dashboard KPIs, Phase 3 status counts, targeted cache
+clear) + Injection UI overhaul: openpyxl 3.1.5 dependency, MIME normalization for Excel uploads,
+client-side file validation, sample Excel template download, friendly JSON error messages.
+97/97 tests passing. Full data seed: 221 items, 216 sales, 13 waste records.
 
 ## Features
 - Upload endpoints for images (receipts, handwritten notes), PDFs, and Excel sheets
@@ -20,25 +29,30 @@ If you want the recommended containerized setup, use the Docker Compose Quicksta
 1. Install dependencies:
    ```bash
    pip install -r requirements.txt
-   ```bash
-   pytest
    ```
-# BakeManage ERP — v2.1.0 Sandbox
-
-Enterprise-grade SaaS ERP for Indian bakeries — multimodal AI ingestion, recipe costing,
-inventory FEFO, proofing telemetry, quality control, supply chain automation, CRM loyalty
-programme, ML-powered demand forecasting, GST compliance, and waste tracking. Built on
-FastAPI + PostgreSQL + Redis + Celery, delivered as a single-page web application.
-
-**v2.1.0 additions:** Recipe Batch Scaling, Waste Tracking, Multi-Slab GST Calculator;
-7 bug fixes (lifespan migration, real dashboard KPIs, Phase 3 status counts, targeted cache
-clear) + Injection UI overhaul: openpyxl 3.1.5 dependency, MIME normalization for Excel uploads,
-client-side file validation, sample Excel template download, friendly JSON error messages.
-97/97 tests passing. Full data seed: 221 items, 216 sales, 13 waste records.
+2. Configure environment variables for your local PostgreSQL and Redis services as needed:
+   - `DATABASE_URL` (default: `postgresql+psycopg2://postgres:postgres@localhost:5432/bakemanage`)
+   - `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` (default: `redis://localhost:6379/0`)
+3. Launch the API locally:
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+4. Start a local Celery worker:
+   ```bash
+   celery -A app.tasks.celery_app worker --loglevel=info
+   ```
+5. Run tests locally:
+   ```bash
+   pytest tests/
+   ```
 
 ---
 
 ## Table of Contents
+
+- [Features](#features)
+- [Planning (SCRUM)](#planning)
+- [Getting Started (Local Development, No Docker)](#getting-started-local-development-no-docker)
 
 1. [Architecture Overview](#1-architecture-overview)
 2. [Feature Map](#2-feature-map)
