@@ -51,7 +51,7 @@ jobs:
       # The default value here MUST match the default in app/config.py (bootstrap_pin: "123456")
       # and the default used by tests when BOOTSTRAP_PIN is unset.
       # To use a custom PIN, set BOOTSTRAP_PIN and DEFAULT_ADMIN_PIN as repository secrets.
-      JWT_SECRET: ${{ secrets.JWT_SECRET || 'change-this-secret' }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
       DEFAULT_ADMIN_PIN: ${{ secrets.DEFAULT_ADMIN_PIN || '123456' }}
       BOOTSTRAP_PIN: ${{ secrets.BOOTSTRAP_PIN || '123456' }}
 
