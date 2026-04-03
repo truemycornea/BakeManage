@@ -1,7 +1,9 @@
+# BakeManage IP Assignment: All contributions assign IP to BakeManage (c) 2026
 from __future__ import annotations
 
 import hashlib
-from datetime import date, datetime, timedelta
+import logging
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
 from typing import Any
@@ -12,12 +14,21 @@ from sqlalchemy.orm import Session
 from . import models
 from .schemas import InvoiceItemPayload, InvoicePayload
 
+logger = logging.getLogger(__name__)
+
 try:
     from docling.parsers.pdf_parser import PDFParser
     from docling.parsers.image_parser import ImageParser
 except ImportError:  # pragma: no cover - optional dependency safety
     PDFParser = None
     ImageParser = None
+
+try:
+    from google import genai as _google_genai
+    _GENAI_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional dependency safety
+    _google_genai = None  # type: ignore[assignment]
+    _GENAI_AVAILABLE = False
 
 
 def parse_structural_layout(file_bytes: bytes, content_type: str) -> dict[str, Any]:
@@ -45,21 +56,156 @@ def parse_structural_layout(file_bytes: bytes, content_type: str) -> dict[str, A
 
 
 def simulate_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
+    """Extract invoice data from an image.
+
+    When ``GAIS_BM_APIK`` is configured, this uses the Gemini Vision
+    model for real OCR.  Otherwise it falls back to a deterministic stub so the
+    rest of the pipeline keeps working without credentials.
+    """
+    from .config import settings
+
+    if _GENAI_AVAILABLE and settings.gemini_api_key:
+        try:
+            return _gemini_vlm_ocr(image_bytes, settings.gemini_api_key)
+        except Exception as exc:  # pragma: no cover - network / quota errors
+            logger.warning("Gemini OCR failed, falling back to stub: %s", exc)
+
+    return _stub_vlm_ocr(image_bytes)
+
+
+def _gemini_vlm_ocr(image_bytes: bytes, api_key: str) -> InvoicePayload:  # pragma: no cover
+    """Call Gemini Vision to extract structured invoice data from an image."""
+    import json
+    import os
+    import re
+
+    client = _google_genai.Client(api_key=api_key)
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
+    prompt = (
+        "You are an invoice OCR system. Extract the invoice data from the image "
+        "and return ONLY a valid JSON object — no markdown, no explanation — with "
+        "this exact structure:\n"
+        '{"vendor_name": "string", "invoice_number": "string", '
+        '"invoice_date": "YYYY-MM-DD", "total_amount": "0.00", '
+        '"items": [{"item_name": "string", "quantity": 0.0, "unit_price": "0.00", '
+        '"tax_rate": "0.00", "expiration_date": "YYYY-MM-DD or null", '
+        '"category": "string", "unit_of_measure": "string", "vertical": "string"}]}'
+    )
+
+    import PIL.Image as PILImage
+    pil_image = PILImage.open(BytesIO(image_bytes))
+    response = client.models.generate_content(
+        model=model,
+        contents=[prompt, pil_image],
+    )
+    raw = response.text.strip()
+
+    # Strip optional markdown fences
+    raw = re.sub(r"^```(?:json)?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
+
+    data = json.loads(raw)
+
+    items: list[InvoiceItemPayload] = []
+    for item in data.get("items", []):
+        exp_raw = item.get("expiration_date")
+        expiration_date: date | None = None
+        if exp_raw and exp_raw != "null":
+            try:
+                expiration_date = date.fromisoformat(exp_raw)
+            except ValueError:
+                expiration_date = None
+        items.append(
+            InvoiceItemPayload(
+                item_name=str(item.get("item_name", "Unknown")),
+                quantity=float(item.get("quantity", 1.0)),
+                unit_price=Decimal(str(item.get("unit_price", "0.00"))),
+                tax_rate=Decimal(str(item.get("tax_rate", "0.00"))),
+                expiration_date=expiration_date,
+                category=str(item.get("category", "general")),
+                unit_of_measure=str(item.get("unit_of_measure", "unit")),
+                vertical=str(item.get("vertical", "restaurant")),
+            )
+        )
+
+    if not items:
+        items.append(
+            InvoiceItemPayload(
+                item_name="Unknown",
+                quantity=1,
+                unit_price=Decimal("0.00"),
+                tax_rate=Decimal("0"),
+            )
+        )
+
+    invoice_date_raw = data.get("invoice_date")
+    invoice_date: date | None = None
+    if invoice_date_raw:
+        try:
+            invoice_date = date.fromisoformat(invoice_date_raw)
+        except ValueError:
+            invoice_date = date.today()
+
+    total = Decimal(str(data.get("total_amount", "0.00")))
+    if total == Decimal("0"):
+        total = sum(
+            (item.unit_price * Decimal(item.quantity))
+            * (Decimal("1") + (item.tax_rate or Decimal("0")) / Decimal("100"))
+            for item in items
+        ).quantize(Decimal("0.01"))
+
+    return InvoicePayload(
+        vendor_name=str(data.get("vendor_name", "Unknown Vendor")),
+        invoice_date=invoice_date or date.today(),
+        invoice_number=str(data.get("invoice_number", f"INV-{int(datetime.now(timezone.utc).timestamp())}")),
+        items=items,
+        total_amount=total.quantize(Decimal("0.01")),
+    )
+
+
+def _stub_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
+    """Return a deterministic Indian-vendor invoice stub for testing without API credentials."""
     fingerprint = hashlib.sha256(image_bytes).hexdigest()[:8]
+    # Rotate through realistic Indian bakery supplier names based on fingerprint
+    _indian_vendors = [
+        "Amul Dairy Ltd", "ITC Foods Ltd", "Patanjali Ayurved Ltd",
+        "Hindustan Unilever Ltd", "Everest Spices Ltd", "Tata Consumer Products",
+        "RSGSM Atta Mills", "MTR Foods Pvt Ltd",
+    ]
+    vendor_idx = int(fingerprint[:2], 16) % len(_indian_vendors)
+    vendor_name = _indian_vendors[vendor_idx]
+
     items = [
         InvoiceItemPayload(
-            item_name="Flour",
-            quantity=50,
-            unit_price=Decimal("1.20"),
+            item_name="Maida (Refined Flour)",
+            quantity=50.0,
+            unit_price=Decimal("38.00"),
             tax_rate=Decimal("5.00"),
-            expiration_date=date.today() + timedelta(days=60),
+            expiration_date=date.today() + timedelta(days=180),
+            category="flour",
+            unit_of_measure="kg",
+            vertical="bakery",
         ),
         InvoiceItemPayload(
-            item_name="Butter",
-            quantity=20,
-            unit_price=Decimal("2.50"),
+            item_name="Amul Butter (500g)",
+            quantity=20.0,
+            unit_price=Decimal("260.00"),
+            tax_rate=Decimal("12.00"),
+            expiration_date=date.today() + timedelta(days=60),
+            category="dairy_fat",
+            unit_of_measure="pcs",
+            vertical="bakery",
+        ),
+        InvoiceItemPayload(
+            item_name="Refined Sugar",
+            quantity=25.0,
+            unit_price=Decimal("46.00"),
             tax_rate=Decimal("5.00"),
-            expiration_date=date.today() + timedelta(days=30),
+            expiration_date=date.today() + timedelta(days=365),
+            category="sugar",
+            unit_of_measure="kg",
+            vertical="bakery",
         ),
     ]
     total = sum(
@@ -68,9 +214,9 @@ def simulate_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
         for item in items
     )
     return InvoicePayload(
-        vendor_name=f"Vendor-{fingerprint}",
+        vendor_name=vendor_name,
         invoice_date=date.today(),
-        invoice_number=f"INV-{fingerprint}",
+        invoice_number=f"INV-{fingerprint.upper()}",
         items=items,
         total_amount=total.quantize(Decimal("0.01")),
     )
@@ -96,6 +242,9 @@ def parse_excel_invoice(file_bytes: bytes) -> InvoicePayload:
                 unit_price=Decimal(str(record["unit_price"])),
                 tax_rate=Decimal(str(record.get("tax_rate", 0))),
                 expiration_date=expiration_date,
+                category=str(record.get("category", "general")),
+                unit_of_measure=str(record.get("unit_of_measure", "unit")),
+                vertical=str(record.get("vertical", "restaurant")),
             )
         )
 
@@ -167,6 +316,9 @@ def persist_invoice(session: Session, payload: InvoicePayload) -> models.Invoice
             quantity_on_hand=item.quantity,
             unit_price=item.unit_price,
             expiration_date=item.expiration_date,
+            category=item.category,
+            unit_of_measure=item.unit_of_measure,
+            vertical=item.vertical,
             invoice_item=invoice_item,
         )
         session.add(inventory_entry)

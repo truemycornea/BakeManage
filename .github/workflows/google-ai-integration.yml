@@ -1,0 +1,230 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# BakeManage — Google AI Studio (Gemini) Integration Workflow
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# PURPOSE
+# ───────
+# This workflow securely injects all required secrets from GitHub repository
+# secrets into the runtime environment and validates that the Google AI Studio
+# (Gemini) API key is functional.  It is the single source of truth for
+# environment configuration and removes any need for manual secret handling.
+#
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │  ONE-TIME SETUP (minimal user steps — do this once, never again)        │
+# ├─────────────────────────────────────────────────────────────────────────┤
+# │                                                                         │
+# │  1. GET A GOOGLE AI STUDIO API KEY                                      │
+# │     → https://aistudio.google.com/app/apikey                           │
+# │     Click "Create API key" and copy the value.                          │
+# │                                                                         │
+# │  2. OPEN GITHUB REPO SECRETS                                            │
+# │     → Go to your repository on GitHub:                                  │
+# │       Settings → Secrets and variables → Actions                        │
+# │     Click "New repository secret" for each entry below.                 │
+# │                                                                         │
+# │  ┌──────────────────────────────┬──────────────────────────────────┐   │
+# │  │ Secret name                  │ What to put there                │   │
+# │  ├──────────────────────────────┼──────────────────────────────────┤   │
+# │  │ GAIS_BM_APIK                 │ The key from step 1              │   │
+# │  │ JWT_SECRET                   │ A strong random string (32+ chars)│   │
+# │  │ DEFAULT_ADMIN_PIN            │ Your admin PIN (e.g. 6 digits)   │   │
+# │  │ DATABASE_URL                 │ Your production Postgres URL      │   │
+# │  │ REDIS_URL                    │ Your production Redis URL         │   │
+# │  │ CELERY_BROKER_URL            │ Same as REDIS_URL usually         │   │
+# │  │ CELERY_RESULT_BACKEND        │ Same as REDIS_URL usually         │   │
+# │  │ FERNET_KEY (optional)        │ Base64 Fernet key — auto-derived  │   │
+# │  │                              │ from JWT_SECRET if omitted        │   │
+# │  │ PIN_PEPPER (optional)        │ Random string pepper for PINs     │   │
+# │  │ BOOTSTRAP_PIN (optional)     │ Bootstrap PIN — defaults to 123456│   │
+# │  │ GEMINI_MODEL (optional)      │ Gemini model to use for validation│   │
+# │  │                              │ Defaults to gemini-2.5-flash      │   │
+# │  └──────────────────────────────┴──────────────────────────────────┘   │
+# │                                                                         │
+# │  That's it.  Push any commit and this workflow runs automatically.      │
+# └─────────────────────────────────────────────────────────────────────────┘
+#
+# ══════════════════════════════════════════════════════════════════════════════
+
+name: Google AI Studio Integration
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: {}          # allow manual trigger from the GitHub UI
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 1 — Validate Google AI Studio API key and run unit tests
+  # ────────────────────────────────────────────────────────────────────────────
+  validate-and-test:
+    name: Validate Gemini API Key & Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      # ── Infrastructure (SQLite for unit tests) ────────────────────────────
+      DATABASE_URL: sqlite:///./test.db
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/0
+      ENVIRONMENT: ci
+
+      # ── Application secrets (non-empty fallbacks keep unit tests green) ───
+      # Fallback values are used only when secrets are not configured.
+      # JWT_SECRET uses the run ID so it is unique per run and never static.
+      JWT_SECRET:               ${{ secrets.JWT_SECRET || format('ci-unit-test-jwt-{0}-{1}', github.run_id, github.run_attempt) }}
+      DEFAULT_ADMIN_PIN:        ${{ secrets.DEFAULT_ADMIN_PIN || '123456' }}
+      FERNET_KEY:               ${{ secrets.FERNET_KEY }}
+      PIN_PEPPER:               ${{ secrets.PIN_PEPPER }}
+      # sandbox1234 matches the default used in test files via os.environ.get("BOOTSTRAP_PIN", "sandbox1234")
+      BOOTSTRAP_PIN:            ${{ secrets.BOOTSTRAP_PIN || 'sandbox1234' }}
+      # ── Infrastructure ─────────────────────────────────────────────────────
+      DATABASE_URL: postgresql+psycopg2://bakemanage:bakemanage@postgres:5432/bakemanage
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: ci
+
+      # ── Application secrets (read from GitHub repository secrets) ──────────
+      JWT_SECRET:               ${{ secrets.JWT_SECRET }}
+      DEFAULT_ADMIN_PIN:        ${{ secrets.DEFAULT_ADMIN_PIN || '123456' }}
+      FERNET_KEY:               ${{ secrets.FERNET_KEY }}
+      PIN_PEPPER:               ${{ secrets.PIN_PEPPER }}
+      BOOTSTRAP_PIN:            ${{ secrets.BOOTSTRAP_PIN || '123456' }}
+
+      # ── Google AI Studio ───────────────────────────────────────────────────
+      GAIS_BM_APIK: ${{ secrets.GAIS_BM_APIK }}
+
+      # ── Gemini model — override via GEMINI_MODEL repo secret/var if needed ─
+      GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── Validate Google AI Studio API key ──────────────────────────────────
+      - name: Validate Google AI Studio API key
+        if: ${{ env.GAIS_BM_APIK != '' }}
+        run: |
+          python - <<'EOF'
+          import os
+          import sys
+          from google import genai
+
+          api_key = os.environ["GAIS_BM_APIK"]
+          model   = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+          client  = genai.Client(api_key=api_key)
+
+          try:
+              response = client.models.generate_content(
+                  model=model,
+                  contents="Reply with only the word: OK",
+              )
+              text = (response.text or "").strip()
+              print(f"Gemini API responded: {text!r}")
+              print(f"✅  Google AI Studio API key is valid and {model} is reachable.")
+          except Exception as exc:
+              print(f"❌  Gemini API validation failed: {exc}", file=sys.stderr)
+              sys.exit(1)
+          EOF
+
+      - name: Warn when API key is not configured
+        if: ${{ env.GAIS_BM_APIK == '' }}
+        run: |
+          echo "⚠️  GAIS_BM_APIK is not set — Gemini VLM OCR will"
+          echo "    use the deterministic stub.  Add the secret to enable real AI."
+
+      # ── Run unit tests (non-integration, no live server needed) ───────────
+      - name: Run unit tests
+        run: |
+          pytest tests/ \
+            --ignore=tests/test_api_all_phases.py \
+            --ignore=tests/test_india_comprehensive.py \
+            -q --tb=short
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 2 — Full integration tests against a live stack (main branch only)
+  # ────────────────────────────────────────────────────────────────────────────
+  integration-test:
+    name: Full Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: validate-and-test
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Create .env from secrets
+        run: |
+          cat > .env <<EOF
+          DATABASE_URL=postgresql+psycopg2://bakemanage:bakemanage@db:5432/bakemanage
+          CELERY_BROKER_URL=redis://redis:6379/0
+          CELERY_RESULT_BACKEND=redis://redis:6379/0
+          REDIS_URL=redis://redis:6379/0
+          ENVIRONMENT=ci
+          JWT_SECRET=${{ secrets.JWT_SECRET || 'ci-only-jwt-secret-not-for-production' }}
+          DEFAULT_ADMIN_PIN=${{ secrets.DEFAULT_ADMIN_PIN || '123456' }}
+          FERNET_KEY=${{ secrets.FERNET_KEY }}
+          PIN_PEPPER=${{ secrets.PIN_PEPPER || 'ci-pin-pepper' }}
+          BOOTSTRAP_PIN=${{ secrets.BOOTSTRAP_PIN || '123456' }}
+          GAIS_BM_APIK=${{ secrets.GAIS_BM_APIK }}
+          EOF
+
+      - name: Build and start services
+        run: docker compose up -d --build
+
+      - name: Wait for API to be healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+              echo "✅  API is healthy."
+              break
+            fi
+            echo "Waiting for API… ($i/30)"
+            sleep 5
+          done
+
+      - name: Run integration test suite
+        run: pip install httpx pytest && pytest tests/test_api_all_phases.py -q --tb=short
+
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose logs --tail=100
+
+      - name: Tear down services
+        if: always()
+        run: docker compose down -v
