@@ -81,6 +81,7 @@ from .security import (
     require_role,
     verify_pin,
 )
+from .seeding import seed_users
 from .tasks import (
     calculate_inventory_deductions,
     cache_inventory_state_task,
@@ -120,27 +121,13 @@ def _ensure_requirements_locked() -> None:
 
 
 def _seed_admin_user(session: Session) -> None:
-    # Default users to seed
-    users_to_seed = [
-        {"username": settings.default_admin_username, "role": "admin"},
-        {"username": "helen@olympus.ai", "role": "operations"},
-    ]
-
-    if not settings.default_admin_pin:
-        # Skip seeding if PIN is not provided (e.g. in production where users are managed manually)
-        return
-
-    for u_data in users_to_seed:
-        existing = session.query(User).filter(User.username == u_data["username"]).first()
-        if not existing:
-            hashed, salt = hash_pin(settings.default_admin_pin)
-            user = User(username=u_data["username"], role=u_data["role"], hashed_pin=hashed, salt=salt)
-            session.add(user)
-            try:
-                session.commit()
-            except IntegrityError:
-                # Another instance seeded this user concurrently; safe to ignore.
-                session.rollback()
+    seed_users(
+        session,
+        default_admin_username=settings.default_admin_username,
+        default_admin_pin=settings.default_admin_pin,
+        environment=settings.environment,
+        seed_local_users=settings.seed_local_users,
+    )
 
 
 class CredentialRequest(BaseModel):

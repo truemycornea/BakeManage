@@ -56,6 +56,7 @@ class Settings(BaseModel):
     jwt_expiry_minutes: int = int(os.getenv("JWT_EXPIRY_MINUTES", "60"))
     default_admin_username: str = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
     default_admin_pin: str | None = os.getenv("DEFAULT_ADMIN_PIN")
+    seed_local_users: bool = os.getenv("SEED_LOCAL_USERS", "false").strip().lower() in ("true", "1", "yes")
     fernet_key: str = os.getenv("FERNET_KEY", "")
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", os.getenv("GAIS_BM_APIK", ""))
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
