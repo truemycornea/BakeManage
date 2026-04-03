@@ -138,7 +138,7 @@ jobs:
                   model=model,
                   contents="Reply with only the word: OK",
               )
-              text = response.text.strip()
+              text = (response.text or "").strip()
               print(f"Gemini API responded: {text!r}")
               print(f"✅  Google AI Studio API key is valid and {model} is reachable.")
           except Exception as exc:
