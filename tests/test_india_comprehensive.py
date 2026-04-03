@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import io
+import os
 import time
 from datetime import date, timedelta
 from pathlib import Path
@@ -11,7 +12,17 @@ from pathlib import Path
 import pytest
 
 BASE_URL = "http://localhost:8000"
-HEADERS  = {"X-Client-Role": "owner", "X-Client-PIN": "sandbox1234"}
+
+# ---------------------------------------------------------------------------
+# Credentials — env-driven so tests and the running server always agree.
+# BOOTSTRAP_PIN is used for X-Client-PIN; DEFAULT_ADMIN_PIN (or BOOTSTRAP_PIN
+# when unset) is used for /auth/login; DEFAULT_ADMIN_USERNAME for the username.
+# ---------------------------------------------------------------------------
+_BOOTSTRAP_PIN: str = os.environ.get("BOOTSTRAP_PIN", "123456")
+_ADMIN_PIN: str = os.environ.get("DEFAULT_ADMIN_PIN", _BOOTSTRAP_PIN)
+_ADMIN_USERNAME: str = os.environ.get("DEFAULT_ADMIN_USERNAME", "admin")
+
+HEADERS  = {"X-Client-Role": "owner", "X-Client-PIN": _BOOTSTRAP_PIN}
 FIXTURES = Path(__file__).parent / "fixtures"
 _RUN = str(int(time.time()))[-6:]   # unique suffix to avoid DB conflicts across runs
 
@@ -47,7 +58,7 @@ class TestAuthentication:
         assert r.json()["status"] == "ok"
 
     def test_login_owner_returns_token(self):
-        r = _post("/auth/login", json={"username": "admin", "pin": "sandbox1234"})
+        r = _post("/auth/login", json={"username": _ADMIN_USERNAME, "pin": _ADMIN_PIN})
         assert r.status_code == 200, r.text
         data = r.json()
         assert "access_token" in data
@@ -58,7 +69,7 @@ class TestAuthentication:
         assert r.status_code == 401
 
     def test_login_unknown_user_returns_401(self):
-        r = _post("/auth/login", json={"username": "nobody@bakemanage.io", "pin": "sandbox1234"})
+        r = _post("/auth/login", json={"username": "nobody@bakemanage.io", "pin": _ADMIN_PIN})
         assert r.status_code == 401
 
     def test_protected_endpoint_without_auth_returns_4xx(self):
@@ -70,7 +81,7 @@ class TestAuthentication:
         # The API uses domain-level role checks; stock add is owner-domain only
         r = _post("/stock/add",
                   json={"name": "Test Item Audit", "quantity_on_hand": 1.0},
-                  headers={"X-Client-Role": "auditor", "X-Client-PIN": "sandbox1234"})
+                  headers={"X-Client-Role": "auditor", "X-Client-PIN": _BOOTSTRAP_PIN})
         # Accept 403/401 when role restrictions are enforced; 200 if not yet implemented
         assert r.status_code in (200, 403, 401)
 
@@ -352,7 +363,7 @@ class TestQualityControl:
 
     def test_browning_endpoint_with_qr_image(self):
         """/quality/browning requires JWT; get token via admin login then upload QR PNG."""
-        login = _post("/auth/login", json={"username": "admin", "pin": "sandbox1234"})
+        login = _post("/auth/login", json={"username": _ADMIN_USERNAME, "pin": _ADMIN_PIN})
         if login.status_code != 200:
             pytest.skip("/auth/login unavailable — skipping JWT-gated browning test")
         token = login.json()["access_token"]
@@ -401,7 +412,7 @@ class TestQualityControl:
 
     def test_proofing_jwt_endpoint(self):
         # Login first with correct admin credentials
-        login = _post("/auth/login", json={"username": "admin", "pin": "sandbox1234"})
+        login = _post("/auth/login", json={"username": _ADMIN_USERNAME, "pin": _ADMIN_PIN})
         if login.status_code != 200:
             pytest.skip("Admin user not seeded")
         token = login.json()["access_token"]
@@ -1527,7 +1538,7 @@ class TestDashboardInsights:
     def test_system_status_requires_owner_role(self):
         """System status is owner-domain only; auditor may receive 200 or 403."""
         r = _get("/system/status",
-                 headers={"X-Client-Role": "owner", "X-Client-PIN": "sandbox1234"})
+                 headers={"X-Client-Role": "owner", "X-Client-PIN": _BOOTSTRAP_PIN})
         # Owner must always succeed
         assert r.status_code == 200
         d = r.json()
