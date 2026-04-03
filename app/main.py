@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from PIL import Image, ImageStat
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
@@ -110,36 +111,27 @@ def _ensure_requirements_locked() -> None:
 
 
 def _seed_admin_user(session: Session) -> None:
-    primary_user = {"username": settings.default_admin_username, "role": "admin"}
-    optional_users_to_seed = [
-        {"username": "rahul@olympus.ai", "role": "admin"},
+    # Default users to seed
+    users_to_seed = [
+        {"username": settings.default_admin_username, "role": "admin"},
         {"username": "helen@olympus.ai", "role": "operations"},
     ]
 
-    primary_missing = not session.query(User).filter(User.username == primary_user["username"]).first()
-    missing_optional_users = [
-        u_data
-        for u_data in optional_users_to_seed
-        if not session.query(User).filter(User.username == u_data["username"]).first()
-    ]
-
-    if primary_missing and not settings.default_admin_pin:
-        raise RuntimeError("DEFAULT_ADMIN_PIN must be set for initial user seeding")
-
-    users_to_create = []
-    if primary_missing:
-        users_to_create.append(primary_user)
-    if settings.default_admin_pin:
-        users_to_create.extend(missing_optional_users)
-
-    if not users_to_create:
+    if not settings.default_admin_pin:
+        # Skip seeding if PIN is not provided (e.g. in production where users are managed manually)
         return
 
-    for u_data in users_to_create:
-        hashed, salt = hash_pin(settings.default_admin_pin)
-        user = User(username=u_data["username"], role=u_data["role"], hashed_pin=hashed, salt=salt)
-        session.add(user)
-    session.commit()
+    for u_data in users_to_seed:
+        existing = session.query(User).filter(User.username == u_data["username"]).first()
+        if not existing:
+            hashed, salt = hash_pin(settings.default_admin_pin)
+            user = User(username=u_data["username"], role=u_data["role"], hashed_pin=hashed, salt=salt)
+            session.add(user)
+            try:
+                session.commit()
+            except IntegrityError:
+                # Another instance seeded this user concurrently; safe to ignore.
+                session.rollback()
 
 
 class CredentialRequest(BaseModel):
