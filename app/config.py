@@ -50,6 +50,14 @@ class Settings(BaseModel):
             "auditor": ["inventory", "health"],
         }
     )
+    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    environment: str = os.getenv("ENVIRONMENT", "development")
+    jwt_secret: str = os.getenv("JWT_SECRET", "change-this-secret")
+    jwt_expiry_minutes: int = int(os.getenv("JWT_EXPIRY_MINUTES", "60"))
+    default_admin_username: str = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
+    default_admin_pin: str | None = os.getenv("DEFAULT_ADMIN_PIN")
+    fernet_key: str = os.getenv("FERNET_KEY", "")
+    google_ai_studio_api_key: str | None = os.getenv("GAIS_BM_APIK")
     redis_url: str = Field(default=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     jwt_secret: str = Field(default=os.getenv("JWT_SECRET", "change-this-secret"))
     jwt_expiry_minutes: int = Field(default=int(os.getenv("JWT_EXPIRY_MINUTES", "30")))

@@ -136,11 +136,17 @@ jobs:
           try:
               response = client.models.generate_content(
                   model=model,
+          client = genai.Client(api_key=api_key)
+
+          try:
+              response = client.models.generate_content(
+                  model="gemini-2.0-flash",
                   contents="Reply with only the word: OK",
               )
               text = response.text.strip()
               print(f"Gemini API responded: {text!r}")
               print(f"✅  Google AI Studio API key is valid and {model} is reachable.")
+              print("✅  Google AI Studio API key is valid and Gemini is reachable.")
           except Exception as exc:
               print(f"❌  Gemini API validation failed: {exc}", file=sys.stderr)
               sys.exit(1)
