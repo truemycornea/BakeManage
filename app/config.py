@@ -53,8 +53,8 @@ class Settings(BaseModel):
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     environment: str = os.getenv("ENVIRONMENT", "development")
     jwt_secret: str = os.getenv("JWT_SECRET", "change-this-secret")
-    jwt_expiry_minutes: int = int(os.getenv("JWT_EXPIRY_MINUTES", "60"))
-    default_admin_username: str = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
+    jwt_expiry_minutes: int = int(os.getenv("JWT_EXPIRY_MINUTES", "30"))
+    default_admin_username: str = os.getenv("DEFAULT_ADMIN_USERNAME", "rahul@olympus.ai")
     default_admin_pin: str | None = os.getenv("DEFAULT_ADMIN_PIN")
     fernet_key: str = os.getenv("FERNET_KEY", "")
 
