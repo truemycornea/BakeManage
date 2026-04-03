@@ -66,11 +66,8 @@ jobs:
       contents: read
 
     env:
-      # ── Infrastructure (SQLite for unit tests — no live Postgres needed) ───
+      # ── Infrastructure (SQLite for unit tests — no live services needed) ───
       DATABASE_URL: sqlite:///./test.db
-      CELERY_BROKER_URL: redis://localhost:6379/0
-      CELERY_RESULT_BACKEND: redis://localhost:6379/0
-      REDIS_URL: redis://localhost:6379/0
       ENVIRONMENT: ci
 
       # ── Application secrets (read from GitHub repository secrets) ──────────
