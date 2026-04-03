@@ -586,8 +586,11 @@ async def validate_quality(
         uniformity_score=assessment.uniformity_score,
         status=assessment.verdict,
     )
-    session.add(record)
-    session.commit()
+    try:
+        session.add(record)
+        session.commit()
+    except IntegrityError:
+        session.rollback()  # duplicate fingerprint — assessment already recorded
     cache_inventory_snapshot(
         f"{settings.cache_namespace}:quality",
         {
@@ -650,6 +653,17 @@ async def dashboard_summary(
         .count()
     )
 
+    # Vendor savings: difference between highest and lowest priced vendor per ingredient × qty
+    lead_records = session.query(SupplierLeadTime).all()
+    by_ingredient: dict[str, list[float]] = defaultdict(list)
+    for lr in lead_records:
+        if lr.last_price_per_unit is not None:
+            by_ingredient[lr.ingredient_name].append(float(lr.last_price_per_unit))
+    vendor_savings = round(
+        sum(max(prices) - min(prices) for prices in by_ingredient.values() if len(prices) > 1),
+        2,
+    )
+
     return filter_fields(
         {
             "stock_items": stock_count,
@@ -657,7 +671,7 @@ async def dashboard_summary(
             "quality_pass_rate": pass_rate,
             "proofing_readings": proofing_count,
             "expiring_soon": expiring_soon,
-            "vendor_savings_inr": None,
+            "vendor_savings_inr": vendor_savings,
             "revenue_today_inr": revenue_today,
             "items_sold_today": items_sold_today,
             "cost_saved_week_inr": cost_saved_week,
@@ -884,16 +898,25 @@ async def record_sale(
 
 @app.get("/sales/daily", response_model=dict)
 async def sales_daily(
+    date: str | None = None,
     session: Session = Depends(get_session),
     role: str = Depends(authorize_request),
 ) -> dict:
-    """Today's sales summary and line items."""
+    """Daily sales summary and line items. Pass ?date=YYYY-MM-DD for a specific day; defaults to today."""
     require_domain(role, "costing")
     from datetime import date as _date
-    today_start = datetime.combine(_date.today(), datetime.min.time())
+    if date:
+        try:
+            target_date = _date.fromisoformat(date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD") from exc
+    else:
+        target_date = _date.today()
+    today_start = datetime.combine(target_date, datetime.min.time())
+    today_end = datetime.combine(target_date, datetime.max.time())
     records = (
         session.query(SaleRecord)
-        .filter(SaleRecord.sold_at >= today_start)
+        .filter(SaleRecord.sold_at >= today_start, SaleRecord.sold_at <= today_end)
         .order_by(SaleRecord.sold_at.desc())
         .all()
     )
@@ -910,7 +933,7 @@ async def sales_daily(
         for r in records
     ]
     return {
-        "date": _date.today().isoformat(),
+        "date": target_date.isoformat(),
         "total_sales": len(records),
         "total_revenue": round(total_revenue, 2),
         "items": items,
@@ -1068,6 +1091,16 @@ class IndentRequest(BaseModel):
     raised_by: str = "system"
 
 
+class DirectIndentRequest(BaseModel):
+    """Direct named-item indent request matching the GAIS orchestration API signature."""
+    item_name: str
+    quantity_required: float
+    unit_of_measure: str = "kg"
+    required_by_date: str   # ISO date YYYY-MM-DD
+    notes: str | None = None
+    raised_by: str = "BakeManage AI"
+
+
 class StockTransferRequest(BaseModel):
     inventory_item_id: int
     from_location: str
@@ -1181,6 +1214,84 @@ async def transfer_stock(
         "unit_of_measure": payload.unit_of_measure,
         "remaining_on_hand": float(item.quantity_on_hand),
         "transferred_at": transfer.transferred_at.isoformat(),
+    }
+
+
+@app.get("/stock/transfers", response_model=dict)
+async def list_stock_transfers(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Fix 5 — list all stock transfer records."""
+    require_domain(role, "inventory")
+    transfers = session.query(StockTransfer).order_by(StockTransfer.transferred_at.desc()).all()
+    return {
+        "total": len(transfers),
+        "transfers": [
+            {
+                "id": t.id,
+                "inventory_item_id": t.inventory_item_id,
+                "item_name": t.inventory_item.name if t.inventory_item else None,
+                "from_location": t.from_location,
+                "to_location": t.to_location,
+                "quantity": t.quantity,
+                "unit_of_measure": t.unit_of_measure,
+                "notes": t.notes,
+                "transferred_at": t.transferred_at.isoformat(),
+            }
+            for t in transfers
+        ],
+    }
+
+
+@app.post("/supply-chain/indent/item", response_model=dict)
+async def create_direct_indent(
+    payload: DirectIndentRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Fix 2 — Direct one-item indent matching the GAIS orchestration API signature.
+
+    GAIS calls: POST /supply-chain/indent/item
+    Body: {item_name, quantity_required, unit_of_measure, required_by_date, notes}
+    """
+    require_domain(role, "inventory")
+    from datetime import date as _date
+    try:
+        required_by = _date.fromisoformat(payload.required_by_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="required_by_date must be YYYY-MM-DD") from exc
+    if payload.quantity_required <= 0:
+        raise HTTPException(status_code=422, detail="quantity_required must be > 0")
+
+    # Try to find a vendor with shortest lead time for this item
+    lead = (
+        session.query(SupplierLeadTime)
+        .filter(SupplierLeadTime.ingredient_name.ilike(f"%{payload.item_name}%"))
+        .order_by(SupplierLeadTime.lead_days.asc())
+        .first()
+    )
+    indent = StockIndent(
+        ingredient_name=payload.item_name,
+        quantity_required=payload.quantity_required,
+        unit_of_measure=payload.unit_of_measure,
+        vendor_name=lead.vendor_name if lead else None,
+        status="pending",
+        raised_by=payload.raised_by,
+    )
+    session.add(indent)
+    session.commit()
+    return {
+        "indent_id": indent.id,
+        "item_name": indent.ingredient_name,
+        "quantity_required": indent.quantity_required,
+        "unit_of_measure": indent.unit_of_measure,
+        "required_by_date": required_by.isoformat(),
+        "preferred_vendor": indent.vendor_name,
+        "best_lead_days": lead.lead_days if lead else None,
+        "status": indent.status,
+        "raised_by": indent.raised_by,
+        "notes": payload.notes,
     }
 
 

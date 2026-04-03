@@ -142,7 +142,8 @@ Both roles are always active. When called as the inference engine, embed your or
 
 | Method | Path | Body | Purpose |
 |--------|------|------|---------|
-| POST | `/supply-chain/indent` | `{item_name, quantity_required, unit_of_measure, required_by_date, notes}` | Create stock indent/purchase request. |
+| POST | `/supply-chain/indent` | `{threshold_quantity, raised_by}` | Auto-raise indents for all items below threshold qty. |
+| POST | `/supply-chain/indent/item` | `{item_name, quantity_required, unit_of_measure, required_by_date, notes}` | **AI-preferred**: Direct named-item indent (use this from GAIS). |
 | GET | `/supply-chain/lead-times` | — | All supplier lead times. |
 | POST | `/supply-chain/lead-times` | `{supplier_name, item_name, lead_time_days, unit_cost}` | Add/update supplier lead time. |
 

@@ -1,4 +1,4 @@
-# BakeManage v3.0 — Complete API Reference
+# BakeManage v3.1 — Complete API Reference
 
 > **Base URL:** `http://localhost:8000`  
 > **Auth:** All endpoints (except QR menu/order) require either PIN headers or JWT Bearer token.  
@@ -36,6 +36,7 @@
 | PATCH | `/stock/{id}` | `?delta=<float>` | Adjust quantity (+/-) |
 | GET | `/stock/expiring` | `?days=7` | Items expiring within N days (FEFO alert) |
 | POST | `/stock/transfer` | `{item_id, quantity, from_location, to_location}` | Transfer stock between locations |
+| GET | `/stock/transfers` | — | List all stock transfers (audit log) |
 
 ---
 
@@ -54,10 +55,10 @@
 
 ## Sales
 
-| Method | Path | Body | Description |
-|--------|------|------|-------------|
-| POST | `/sales` | `{product_name, quantity_sold, unit_price, customer_name?}` | Log a sale |
-| GET | `/sales` | — | List all sales |
+| Method | Path | Body / Params | Description |
+|--------|------|---------------|-------------|
+| POST | `/sales/record` | `{product_name, quantity_sold, unit_price}` | Log a sale (quantity > 0, price > 0) |
+| GET | `/sales/daily` | `?date=YYYY-MM-DD` | Daily sales report; defaults to today if `date` omitted |
 
 ---
 
@@ -92,10 +93,18 @@
 
 ## Quality Control
 
-| Method | Path | Body | Description |
-|--------|------|------|-------------|
-| POST | `/quality/check` | `{product_name, batch_number, result, score, inspector, notes}` | Log quality check |
-| GET | `/quality/inspections` | — | All quality inspections |
+| Method | Path | Auth | Body | Description |
+|--------|------|------|------|-------------|
+| POST | `/quality/validate` | PIN | `file: image/*` | Upload product image — returns browning_score, uniformity_score, verdict (`optimal` / `adjust_batch`) |
+| POST | `/quality/browning` | **JWT Bearer** | `file: image/*` | Browning-only check; requires `admin` or `operator` role JWT |
+| POST | `/quality/check` | PIN | `{product_name, batch_number, result, score, inspector, notes}` | Log manual quality check |
+| GET | `/quality/inspections` | PIN | — | All quality inspection records |
+
+**Browning scoring:**  
+`browning_score` = mean pixel intensity / 2.55 (0–100 scale).  
+Target band: **40–78** → `optimal`. Outside band → `adjust_batch`.
+
+> **Note:** `/quality/validate` is idempotent — re-submitting the same image returns the cached score without duplicate DB errors.
 
 ---
 
@@ -137,9 +146,24 @@
 
 | Method | Path | Body | Description |
 |--------|------|------|-------------|
-| POST | `/supply-chain/indent` | `{item_name, quantity_requested, supplier_name, expected_delivery_date}` | Raise purchase indent |
+| POST | `/supply-chain/indent` | `{threshold_quantity, raised_by}` | Auto-indent all items below threshold |
+| POST | `/supply-chain/indent/item` | `{item_name, quantity_required, unit_of_measure, required_by_date, notes?, raised_by?}` | **Direct item indent** — GAIS-compatible named-item purchase request |
 | GET | `/supply-chain/indents` | — | All purchase indents |
-| GET | `/supply-chain/lead-times` | — | Supplier lead time analytics |
+| POST | `/supply-chain/lead-times` | `{vendor_name, ingredient_name, lead_days, last_price_per_unit}` | Add/update vendor lead time |
+| GET | `/supply-chain/lead-times` | — | All vendor lead-time records |
+| GET | `/insights/vendor-optimization` | — | Best vendor per ingredient (lowest price + lead days) |
+
+**Direct indent fields:**
+```json
+{
+  "item_name": "Aashirvaad Maida 1kg",
+  "quantity_required": 100.0,
+  "unit_of_measure": "kg",
+  "required_by_date": "2026-04-06",
+  "notes": "Diwali production",
+  "raised_by": "BakeManage AI"
+}
+```
 
 ---
 
@@ -204,8 +228,11 @@
 
 | Method | Path | Form | Description |
 |--------|------|------|-------------|
-| POST | `/ingest/image` | `file: image/png\|jpeg` | OCR invoice from image (Gemini Vision) |
-| POST | `/ingest/document` | `file: application/pdf` | Parse PDF purchase order |
+| POST | `/ingest/image` | `file: image/png\|jpeg\|webp` | OCR invoice from image (Gemini Vision stub; returns Indian vendor + items) |
+| POST | `/ingest/document` | `file: .xlsx` | Parse Excel invoice/purchase order — supports Indian vendor template |
+
+**Indian vendor fixture:** `tests/fixtures/indian_vendor_invoice.xlsx` — 9-row Amul Dairy invoice with GSTIN, HSN codes, CGST/SGST columns.  
+**B2B fixture:** `tests/fixtures/indian_receipt_b2b.xlsx` — multi-vendor B2B purchase (HUL, RSGSM, Parle).
 
 ---
 
@@ -225,4 +252,40 @@
 
 ---
 
-*BakeManage v3.0 © 2026. All IP assigned to BakeManage.*
+## Indian Market Data — GST Rate Reference
+
+| Category | Example Product | GST Rate |
+|----------|----------------|----------|
+| `unbranded_bread` | Plain Rusk, Unbranded Chapati | **0%** (Nil) |
+| `branded_biscuits` | Parle-G, Britannia Good Day | **5%** |
+| `branded_namkeen` | Haldiram's Bhujia, Kurkure | **12%** |
+| `pastries_cakes` | Kaju Barfi, Chocolate Cake, Gulab Jamun | **18%** |
+| `chocolate` | Chocolate Truffle, Ferrero Rocher | **18%** |
+| `custom` | Any — specify `custom_rate_pct` field | Custom |
+
+**GSTIN format:** `{2-digit state code}{10-char PAN}{1-digit entity}{1-char Z}{1-char checksum}` — e.g. `27AABCR1234F1Z5` (Maharashtra).
+
+---
+
+## Cost Computation — Component Format
+
+The `/cost/compute` endpoint uses **pre-computed component costs**:
+
+```json
+{
+  "components": [
+    {"name": "Kaju (Cashew)", "cost": 245.0},
+    {"name": "Refined Sugar",  "cost": 6.90},
+    {"name": "Desi Ghee",      "cost": 6.20}
+  ],
+  "overhead": 20.0,
+  "selling_price": 350.0
+}
+```
+
+`total_cost` = sum(component costs) + overhead.  
+`margin_warning` = `true` when margin < 20%.
+
+---
+
+*BakeManage v3.1 © 2026. All IP assigned to BakeManage.*
