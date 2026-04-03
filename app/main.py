@@ -14,10 +14,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from PIL import Image, ImageStat
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
@@ -147,7 +149,12 @@ async def lifespan(application: FastAPI):  # noqa: ARG001
     yield
 
 
-app = FastAPI(title="BakeManage Platform API", version="2.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="BakeManage Platform API",
+    version="2.0.0",
+    lifespan=lifespan,
+    docs_url=None,  # override below with correct openapi URL for nginx proxy
+)
 
 # Rate limiter — 120 req/min per IP by default  (Phase 2 v2.1)
 limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
@@ -189,6 +196,15 @@ async def _https_enforcement(request: Request, call_next):
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:  # pragma: no cover
     monitor_four_signals.delay()
     return JSONResponse(status_code=500, content={"detail": "Internal error, remediation queued"})
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    """Custom Swagger UI that loads spec via /api/openapi.json (nginx-proxy–safe path)."""
+    return get_swagger_ui_html(
+        openapi_url="/api/openapi.json",
+        title="BakeManage Platform API",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -965,6 +981,63 @@ async def list_recipes(
     return {"total": len(result), "recipes": result}
 
 
+class RecipeIngredientIn(BaseModel):
+    ingredient_name: str
+    quantity_used: float = 1.0
+    unit: str = "kg"
+    cost: float = 0.0
+
+
+class RecipeCreateRequest(BaseModel):
+    name: str
+    category: str = "Bread"
+    yield_amount: float = 10.0
+    bake_time_minutes: int = 30
+    overhead_cost: float = 0.0
+    method: str = ""
+    ingredients: list[RecipeIngredientIn] = []
+
+
+@app.post("/recipes", response_model=dict)
+async def create_recipe(
+    payload: RecipeCreateRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Create a new recipe with ingredient breakdown (BUG-007 fix)."""
+    require_domain(role, "costing")
+    existing = session.query(Recipe).filter(Recipe.name == payload.name).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Recipe '{payload.name}' already exists")
+    recipe = Recipe(
+        name=payload.name,
+        overhead_cost=payload.overhead_cost,
+        yield_amount=payload.yield_amount,
+    )
+    session.add(recipe)
+    session.flush()  # get recipe.id
+    total_ingredient_cost = 0.0
+    for ing in payload.ingredients:
+        ri = RecipeIngredient(
+            recipe_id=recipe.id,
+            ingredient_name=ing.ingredient_name,
+            cost=ing.cost,
+            yield_amount=ing.quantity_used,
+            required_quantity=ing.quantity_used,
+        )
+        session.add(ri)
+        total_ingredient_cost += ing.cost
+    session.commit()
+    return {
+        "id": recipe.id,
+        "name": recipe.name,
+        "yield_amount": float(recipe.yield_amount),
+        "overhead_cost": float(recipe.overhead_cost),
+        "total_cost": round(total_ingredient_cost + float(recipe.overhead_cost), 2),
+        "ingredient_count": len(payload.ingredients),
+    }
+
+
 @app.get("/recipes/{recipe_id}", response_model=dict)
 async def get_recipe(
     recipe_id: int,
@@ -1126,10 +1199,10 @@ async def generate_indent(
     indents = []
     for item in low_stock:
         qty_needed = round(payload.threshold_quantity - item.quantity_on_hand, 3)
-        # Check lead-time record for preferred vendor
+        # Check lead-time record for preferred vendor (case-insensitive name match)
         lead = (
             session.query(SupplierLeadTime)
-            .filter(SupplierLeadTime.ingredient_name == item.name)
+            .filter(func.lower(SupplierLeadTime.ingredient_name) == item.name.lower())
             .order_by(SupplierLeadTime.lead_days.asc())
             .first()
         )

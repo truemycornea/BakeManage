@@ -471,12 +471,17 @@ function hdrs(json = true) {
   return h;
 }
 
+function _extractDetail(j) {
+  if (Array.isArray(j.detail)) return j.detail.map(e => e.msg || JSON.stringify(e)).join('; ');
+  return j.detail || j.message || JSON.stringify(j);
+}
+
 async function GET(path) {
   const r = await fetch(`/api${path}`, { headers: hdrs(false) });
   if (r.status === 401 || r.status === 403) { signOut(); toast('Session expired — please sign in again', 'err'); throw new Error('auth'); }
   if (!r.ok) {
     let msg = `${r.status}`;
-    try { const j = await r.json(); msg = j.detail || j.message || JSON.stringify(j); }
+    try { const j = await r.json(); msg = _extractDetail(j); }
     catch { msg = await r.text() || msg; }
     throw new Error(msg);
   }
@@ -488,7 +493,7 @@ async function POST(path, data) {
   if (r.status === 401 || r.status === 403) { signOut(); toast('Session expired — please sign in again', 'err'); throw new Error('auth'); }
   if (!r.ok) {
     let msg = `${r.status}`;
-    try { const j = await r.json(); msg = j.detail || j.message || JSON.stringify(j); }
+    try { const j = await r.json(); msg = _extractDetail(j); }
     catch { msg = await r.text() || msg; }
     throw new Error(msg);
   }
@@ -499,7 +504,7 @@ async function POSTF(path, fd) {
   const r = await fetch(`/api${path}`, { method: 'POST', headers: hdrs(false), body: fd });
   if (!r.ok) {
     let msg = `${r.status}`;
-    try { const j = await r.json(); msg = j.detail || j.message || JSON.stringify(j); }
+    try { const j = await r.json(); msg = _extractDetail(j); }
     catch { msg = await r.text() || msg; }
     throw new Error(msg);
   }
@@ -621,14 +626,14 @@ async function dashboard(el) {
     <div class="stats-grid">
       <div class="stat-card">
         <div><div class="stat-lbl">Revenue Today</div>
-          <div class="stat-val" id="d-revenue" style="font-size:17px;margin-top:6px;">—</div>
-          <div class="stat-hint">Sales tracking: Phase 3</div></div>
+          <div class="stat-val" id="d-revenue" style="font-size:17px;margin-top:6px;">…</div>
+          <div class="stat-hint" id="d-revenue-hint">Loading…</div></div>
         <div class="ico ico-green"><i data-lucide="trending-up"></i></div>
       </div>
       <div class="stat-card">
         <div><div class="stat-lbl">Items Sold Today</div>
-          <div class="stat-val" id="d-sold" style="font-size:17px;margin-top:6px;">—</div>
-          <div class="stat-hint">Sales log: Phase 3</div></div>
+          <div class="stat-val" id="d-sold" style="font-size:17px;margin-top:6px;">…</div>
+          <div class="stat-hint" id="d-sold-hint">Loading…</div></div>
         <div class="ico ico-amber"><i data-lucide="shopping-bag"></i></div>
       </div>
       <div class="stat-card">
@@ -732,8 +737,17 @@ async function _loadDashboardData() {
     setKpi('d-stock', s.stock_items ?? '0', stHint, 'd-stock-hint');
     const prHint = s.proofing_readings ? `${s.proofing_readings} reading${s.proofing_readings !== 1 ? 's' : ''} logged` : 'Submit proofing readings to populate';
     setKpi('d-proofing', s.proofing_readings ?? '0', prHint, 'd-proofing-hint');
+    // Revenue + sales KPIs
+    const revEl = document.getElementById('d-revenue');
+    if (revEl) revEl.textContent = '₹' + parseFloat(s.revenue_today_inr || 0).toFixed(0);
+    const revHintEl = document.getElementById('d-revenue-hint');
+    if (revHintEl) revHintEl.textContent = s.revenue_today_inr > 0 ? 'Live from today\'s sales' : 'No sales recorded today';
+    const soldEl = document.getElementById('d-sold');
+    if (soldEl) soldEl.textContent = (s.items_sold_today ?? 0).toString();
+    const soldHintEl = document.getElementById('d-sold-hint');
+    if (soldHintEl) soldHintEl.textContent = s.items_sold_today > 0 ? 'Units sold today' : 'Record sales to populate';
   } catch {
-    ['d-quality','d-stock','d-proofing'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = '—'; });
+    ['d-quality','d-stock','d-proofing','d-revenue','d-sold'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = '—'; });
   }
   // 3. Golden signals from extended health
   try {
@@ -1015,7 +1029,7 @@ function onDocSel(e) {
 }
 
 async function doIngImg() {
-  if (!_imgFile) return;
+  if (!_imgFile) { toast('Please select an invoice image first', 'err'); return; }
   const btn = document.getElementById('btn-ing-img'); setLoad(btn, true);
   try {
     const fd = new FormData(); fd.append('file', _imgFile);
@@ -1025,7 +1039,7 @@ async function doIngImg() {
 }
 
 async function doIngDoc() {
-  if (!_docFile) return;
+  if (!_docFile) { toast('Please select a document or spreadsheet first', 'err'); return; }
   const btn = document.getElementById('btn-ing-doc'); setLoad(btn, true);
   try {
     const fd = new FormData(); fd.append('file', _docFile);
@@ -1826,7 +1840,7 @@ function onQSel(e) {
 }
 
 async function doQuality() {
-  if (!_qFile) return;
+  if (!_qFile) { toast('Please upload a product photo first', 'err'); return; }
   const btn = document.getElementById('btn-qual'); setLoad(btn, true);
   try {
     const fd = new FormData(); fd.append('file', _qFile);
@@ -2135,19 +2149,35 @@ async function doHealthCheck() {
 async function doDiagnostics() {
   const btn = document.getElementById('btn-diag'); setLoad(btn, true);
   try {
-    const data = await GET('/health/metrics');
+    const data = await GET('/health/extended');
+    const gs = data.golden_signals || {};
+    const svc = data.services || {};
     document.getElementById('h-result').innerHTML = `
       <div class="card">
-        <div class="card-hd"><div class="card-title">Task Dispatched</div><span class="badge badge-ok">Queued</span></div>
+        <div class="card-hd"><div class="card-title">System Diagnostics</div><span class="badge badge-ok">Live</span></div>
         <div class="card-bd">
-          <div style="padding:11px 13px;background:var(--bg);border-radius:6px;border:1px solid var(--border);margin-bottom:12px;">
-            <div style="font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;">Celery Task ID</div>
-            <code style="font-size:12px;word-break:break-all;">${data.task_id}</code>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;">
+            <div style="padding:10px;border:1px solid var(--border);border-radius:7px;">
+              <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px;">API Status</div>
+              <div style="font-size:13px;font-weight:700;color:var(--ok);">${svc.api === 'ok' ? 'Online' : (svc.api || 'Unknown')}</div>
+            </div>
+            <div style="padding:10px;border:1px solid var(--border);border-radius:7px;">
+              <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px;">Database</div>
+              <div style="font-size:13px;font-weight:700;color:var(--ok);">${svc.database === 'ok' ? 'Connected' : (svc.database || 'Unknown')}</div>
+            </div>
+            <div style="padding:10px;border:1px solid var(--border);border-radius:7px;">
+              <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px;">Latency (P50)</div>
+              <div style="font-size:13px;font-weight:700;">${gs.latency_ms_p50 ?? '—'} ms</div>
+            </div>
+            <div style="padding:10px;border:1px solid var(--border);border-radius:7px;">
+              <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px;">Error Rate</div>
+              <div style="font-size:13px;font-weight:700;color:${(gs.error_rate||0)<0.05?'var(--ok)':'var(--err)'};">${((gs.error_rate||0)*100).toFixed(1)}%</div>
+            </div>
           </div>
-          <div class="info-box info-info" style="font-size:12.5px;">${data.message}</div>
+          <div style="font-size:11.5px;color:var(--muted);">Saturation: ${((gs.saturation||0)*100).toFixed(0)}% &nbsp;·&nbsp; Traffic: ${gs.traffic_rps ?? '—'} rps</div>
         </div>
       </div>`;
-    toast('Diagnostics queued');
+    toast('Diagnostics loaded');
   } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
 }
 
@@ -2272,21 +2302,8 @@ function sales(el) {
         </div>
         <div class="card">
           <div class="card-hd"><div class="card-title">Revenue Targets</div><span class="badge badge-neutral">Sandbox</span></div>
-          <div class="card-bd" style="padding:12px 16px;">
-            ${[
-              ['Daily Target','₹8,000','—','—'],
-              ['Weekly Target','₹56,000','—','—'],
-              ['Monthly Target','₹2,40,000','—','—'],
-            ].map(([period,target,actual,pct])=>`
-            <div style="padding:10px 0;border-bottom:1px solid var(--border);">
-              <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                <span style="font-size:13px;font-weight:500;">${period}</span>
-                <span style="font-size:12px;color:var(--muted);">Target: <strong>${target}</strong></span>
-              </div>
-              <div class="prog-bg"><div class="prog-fill prog-amber" style="width:0%"></div></div>
-              <div style="font-size:11px;color:var(--muted);margin-top:4px;">Actual: ${actual} · Attainment: ${pct}</div>
-            </div>`).join('')}
-            <div class="info-box info-info" style="margin-top:12px;font-size:12px;">Phase 3: Attainment bars will fill from live daily/monthly sales totals.</div>
+          <div class="card-bd" style="padding:12px 16px;" id="sl-revenue-targets">
+            <div style="text-align:center;color:var(--muted);font-size:12.5px;padding:20px 0;"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;width:16px;height:16px;"></i></div>
           </div>
         </div>
       </div>
@@ -2408,6 +2425,29 @@ async function _slLoadDaily() {
             </div>`).join('');
         }
       }
+    }
+    // Revenue targets
+    const targets = document.getElementById('sl-revenue-targets');
+    if (targets) {
+      const todayRev = parseFloat(data.total_revenue || 0);
+      const DAILY_TARGET = 8000, WEEKLY_TARGET = 56000, MONTHLY_TARGET = 240000;
+      const pct = v => Math.min(Math.round(v / DAILY_TARGET * 100), 100);
+      targets.innerHTML = [
+        ['Daily Target', `₹${DAILY_TARGET.toLocaleString('en-IN')}`, todayRev, DAILY_TARGET],
+        ['Weekly Target', `₹${WEEKLY_TARGET.toLocaleString('en-IN')}`, todayRev, WEEKLY_TARGET],
+        ['Monthly Target', `₹${MONTHLY_TARGET.toLocaleString('en-IN')}`, todayRev, MONTHLY_TARGET],
+      ].map(([period, target, actual, tgt]) => {
+        const p = Math.min(Math.round(actual / tgt * 100), 100);
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:13px;font-weight:500;">${period}</span>
+            <span style="font-size:12px;color:var(--muted);">Target: <strong>${target}</strong></span>
+          </div>
+          <div class="prog-bg"><div class="prog-fill ${p >= 80 ? 'prog-green' : 'prog-amber'}" style="width:${p}%"></div></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Today: ₹${actual.toFixed(0)} · Attainment: ${p}%</div>
+        </div>`;
+      }).join('') + `<div class="info-box info-info" style="margin-top:12px;font-size:12px;">Bars show today's revenue vs. target for context.</div>`;
+      lucide.createIcons();
     }
   } catch(e) {
     const rev = document.getElementById('sl-rev'); if (rev) rev.textContent = 'Error';
@@ -2578,15 +2618,33 @@ async function _stkLoadList() {
       body.innerHTML = `<div class="empty-state"><i data-lucide="inbox"></i><p>No stock items. Add items manually or inject invoices.</p></div>`;
       lucide.createIcons(); return;
     }
+    // Consolidate by name: sum quantities, take latest unit price, nearest expiry
+    const consolidated = new Map();
+    for (const it of d.items) {
+      const key = it.name.trim().toLowerCase();
+      if (!consolidated.has(key)) {
+        consolidated.set(key, { ...it, batch_count: 1, quantity_on_hand: parseFloat(it.quantity_on_hand) });
+      } else {
+        const c = consolidated.get(key);
+        c.quantity_on_hand += parseFloat(it.quantity_on_hand);
+        c.batch_count += 1;
+        // keep nearest expiry
+        if (it.expiration_date && (!c.expiration_date || it.expiration_date < c.expiration_date)) {
+          c.expiration_date = it.expiration_date;
+          c.days_until_expiry = it.days_until_expiry;
+        }
+      }
+    }
+    const items = Array.from(consolidated.values());
     body.innerHTML = `<div class="tbl-wrap"><table>
-      <thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Category</th><th>Unit Price</th><th>Expires</th><th>Days Left</th></tr></thead>
-      <tbody>${d.items.map(it => {
+      <thead><tr><th>Item</th><th>Total Qty</th><th>Unit</th><th>Category</th><th>Unit Price</th><th>Nearest Expiry</th><th>Days Left</th></tr></thead>
+      <tbody>${items.map(it => {
         const urgency = it.days_until_expiry !== null && it.days_until_expiry !== undefined
           ? (it.days_until_expiry <= 3 ? 'color:var(--err);font-weight:700;' : it.days_until_expiry <= 7 ? 'color:#d97706;font-weight:600;' : '')
           : '';
         return `<tr>
-          <td style="font-weight:600;">${it.name}</td>
-          <td>${parseFloat(it.quantity_on_hand).toFixed(2)}</td>
+          <td style="font-weight:600;">${it.name}${it.batch_count > 1 ? `<span style="font-size:10px;color:var(--muted);margin-left:5px;">${it.batch_count} batches</span>` : ''}</td>
+          <td>${it.quantity_on_hand.toFixed(2)}</td>
           <td>${it.unit_of_measure}</td>
           <td><span class="badge badge-neutral">${it.category}</span></td>
           <td>₹${parseFloat(it.unit_price).toFixed(2)}</td>
@@ -2779,12 +2837,16 @@ async function _loadSystemStatus() {
 async function smDiagnostics() {
   const btn = document.getElementById('btn-sm-diag'); setLoad(btn, true);
   try {
-    const data = await GET('/health/metrics');
+    const data = await GET('/health/extended');
+    const gs = data.golden_signals || {};
     document.getElementById('sm-diag-result').innerHTML = `
       <div class="info-box info-ok" style="font-size:12.5px;">
-        Task queued — ID: <code>${data.task_id}</code>
+        API: ${data.services?.api === 'ok' ? 'Online ✓' : 'Degraded'} ·
+        DB: ${data.services?.database === 'ok' ? 'Connected ✓' : 'Unavailable'} ·
+        Latency P50: ${gs.latency_ms_p50 ?? '—'} ms ·
+        Error Rate: ${((gs.error_rate||0)*100).toFixed(1)}%
       </div>`;
-    toast('Diagnostics queued');
+    toast('Diagnostics loaded');
   } catch(e) { toast(e.message,'err'); } finally { setLoad(btn,false); }
 }
 
@@ -3240,7 +3302,10 @@ async function _saveLT() {
     last_price_per_unit: parseFloat(document.getElementById('lt-price').value) || null,
     notes: document.getElementById('lt-notes').value.trim() || null,
   };
-  if (!payload.vendor_name || !payload.ingredient_name) { toast('Vendor and ingredient name required', 'err'); return; }
+  if (!payload.vendor_name || !payload.ingredient_name) {
+    const missing = [!payload.vendor_name && 'Vendor Name', !payload.ingredient_name && 'Ingredient Name'].filter(Boolean).join(' and ');
+    toast(`Please fill in: ${missing}`, 'err'); return;
+  }
   try {
     await POST('/supply-chain/lead-times', payload);
     toast('Lead time saved', 'ok');
@@ -3398,8 +3463,9 @@ async function _runForecast() {
       <div class="card" style="margin-bottom:14px;">
         <div class="card-hd">
           <div><div class="card-title">${f.product_name}</div>
-            <div class="card-sub">Method: ${f.method} · ${f.data_points} data points${f.slope != null ? ' · trend: ' + (f.slope > 0 ? '▲' : f.slope < 0 ? '▼' : '→') + ' ' + f.slope : ''}</div></div>
+            <div class="card-sub">Method: ${f.method} · ${f.data_points} data point${f.data_points !== 1 ? 's' : ''}${f.slope != null ? ' · trend: ' + (f.slope > 0 ? '▲' : f.slope < 0 ? '▼' : '→') + ' ' + f.slope : ''}</div></div>
         </div>
+        ${f.data_points < 3 ? `<div class="info-box info-warn" style="margin:0 14px 10px;font-size:12px;">Forecast uses average of ${f.data_points} sale day(s) — record at least 7 days of sales for trend-based prediction.</div>` : ''}
         <div class="card-bd" style="padding:0;">
           <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
             <thead><tr style="border-bottom:1px solid var(--border);">
@@ -3452,7 +3518,10 @@ async function _sendWA() {
     order_id: document.getElementById('wa-order').value.trim() || null,
   };
   const res = document.getElementById('wa-result');
-  if (!payload.customer_name || !payload.phone || !payload.message) { toast('Name, phone, and message required', 'err'); return; }
+  if (!payload.customer_name || !payload.phone || !payload.message) {
+    const missing = [!payload.customer_name && 'Customer Name', !payload.phone && 'Phone Number', !payload.message && 'Message'].filter(Boolean).join(', ');
+    toast(`Please fill in: ${missing}`, 'err'); return;
+  }
   try {
     const data = await POST('/crm/whatsapp-notify', payload);
     res.innerHTML = `<div class="card" style="background:#F0FDF4;border-color:#86EFAC;">
@@ -3498,7 +3567,7 @@ async function _upsertLoyalty() {
     birthday: document.getElementById('lc-bday').value.trim() || null,
     purchase_amount_inr: parseFloat(document.getElementById('lc-spend').value) || 0,
   };
-  if (!payload.customer_name) { toast('Customer name required', 'err'); return; }
+  if (!payload.customer_name) { toast('Please enter the Customer Name to save', 'err'); return; }
   try {
     const data = await POST('/crm/loyalty/upsert', payload);
     toast(`${data.customer_name} — ${data.tier.toUpperCase()} (${data.loyalty_points} pts)`, 'ok');
@@ -3791,7 +3860,17 @@ async function recipe_scale(el) {
   try {
     const d = await GET('/recipes');
     const sel = document.getElementById('rs-recipe');
-    sel.innerHTML = d.recipes.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    if (!d.recipes || !d.recipes.length) {
+      sel.innerHTML = '<option value="">— No recipes yet —</option>';
+      sel.disabled = true;
+      const hint = document.createElement('div');
+      hint.className = 'info-box info-info';
+      hint.style.cssText = 'margin-top:10px;font-size:12.5px;';
+      hint.innerHTML = 'No recipes found. <a href="#" onclick="event.preventDefault();nav(\'recipes\')" style="color:var(--primary);font-weight:600;">Add recipes in Recipe Library first →</a>';
+      sel.closest('.card-bd').appendChild(hint);
+    } else {
+      sel.innerHTML = d.recipes.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    }
   } catch(e) { /* leave blank */ }
   lucide.createIcons();
 }
@@ -3878,6 +3957,9 @@ async function recipes(el) {
       <button class="btn btn-outline btn-sm" onclick="recipes(document.getElementById('content'))">
         <i data-lucide="refresh-cw" style="width:13px;height:13px;"></i> Refresh
       </button>
+      <button class="btn btn-primary btn-sm" onclick="_openAddRecipeModal()" style="margin-left:auto;">
+        <i data-lucide="plus" style="width:13px;height:13px;"></i> Add Recipe
+      </button>
     </div>
 
     <!-- Recipe grid -->
@@ -3938,7 +4020,7 @@ function _renderRecipeGrid(list) {
   const grid = document.getElementById('rl-grid');
   if (!grid) return;
   if (!list.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i data-lucide="search-x"></i><p>No recipes match your filter.</p></div>`;
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i data-lucide="chef-hat"></i><p>No recipes yet — <a href="#" onclick="event.preventDefault();_openAddRecipeModal()" style="color:var(--primary);font-weight:600;">Add your first recipe</a></p></div>`;
     lucide.createIcons(); return;
   }
   grid.innerHTML = list.map((r, i) => {
@@ -3988,14 +4070,109 @@ function _renderRecipeGrid(list) {
   lucide.createIcons();
 }
 
+function _openAddRecipeModal() {
+  // Remove any existing modal
+  const existing = document.getElementById('add-recipe-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'add-recipe-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:12px;max-width:560px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div style="font-size:17px;font-weight:700;">Add New Recipe</div>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('add-recipe-modal').remove()">✕ Close</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="two-col" style="gap:12px;">
+          <div><label class="form-label">Recipe Name *</label><input class="form-input" id="ar-name" placeholder="Sourdough Bread"></div>
+          <div><label class="form-label">Category</label>
+            <select class="form-input" id="ar-cat">
+              <option>Bread</option><option>Pastry</option><option>Cake</option><option>Cookie</option><option>Brownie</option><option>Cracker</option><option>Indian</option>
+            </select>
+          </div>
+          <div><label class="form-label">Yield (units)</label><input class="form-input" id="ar-yield" type="number" min="1" value="10"></div>
+          <div><label class="form-label">Bake Time (mins)</label><input class="form-input" id="ar-bake" type="number" min="1" value="30"></div>
+          <div><label class="form-label">Overhead Cost (₹)</label><input class="form-input" id="ar-overhead" type="number" min="0" step="0.01" value="0"></div>
+        </div>
+        <div>
+          <label class="form-label">Method / Instructions</label>
+          <textarea class="form-input" id="ar-method" rows="3" placeholder="Describe the baking steps…"></textarea>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <label class="form-label" style="margin:0;">Ingredients</label>
+            <button class="btn btn-ghost btn-sm" onclick="_arAddIngRow()" style="font-size:12px;">+ Add Row</button>
+          </div>
+          <table style="width:100%;font-size:12.5px;border-collapse:collapse;" id="ar-ing-table">
+            <thead><tr style="border-bottom:1px solid var(--border);">
+              <th style="padding:4px 8px;text-align:left;color:var(--muted);">Ingredient</th>
+              <th style="padding:4px 8px;text-align:left;color:var(--muted);">Qty</th>
+              <th style="padding:4px 8px;text-align:left;color:var(--muted);">Unit</th>
+              <th style="padding:4px 8px;text-align:right;color:var(--muted);">Cost (₹)</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="ar-ing-body"></tbody>
+          </table>
+        </div>
+        <div id="ar-err" style="display:none;" class="info-box info-warn"></div>
+        <button class="btn btn-primary" onclick="_submitNewRecipe()">
+          <i data-lucide="save" style="width:14px;height:14px;"></i> Save Recipe
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  lucide.createIcons();
+  _arAddIngRow(); // start with one ingredient row
+}
+
+function _arAddIngRow() {
+  const body = document.getElementById('ar-ing-body');
+  if (!body) return;
+  const idx = body.children.length;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="padding:4px 4px;"><input class="form-input" placeholder="Maida" id="ar-ing-name-${idx}" style="min-width:120px;"></td>
+    <td style="padding:4px 4px;"><input class="form-input" type="number" min="0" step="0.01" placeholder="0" id="ar-ing-qty-${idx}" style="min-width:60px;"></td>
+    <td style="padding:4px 4px;"><select class="form-input" id="ar-ing-unit-${idx}" style="min-width:70px;"><option>kg</option><option>g</option><option>L</option><option>ml</option><option>pcs</option><option>tbsp</option><option>tsp</option></select></td>
+    <td style="padding:4px 4px;"><input class="form-input" type="number" min="0" step="0.01" placeholder="0" id="ar-ing-cost-${idx}" style="min-width:70px;"></td>
+    <td style="padding:4px 4px;text-align:right;"><button class="btn btn-ghost btn-sm" style="color:var(--err);padding:4px;" onclick="this.closest('tr').remove()">✕</button></td>`;
+  body.appendChild(tr);
+}
+
+async function _submitNewRecipe() {
+  const name = document.getElementById('ar-name')?.value.trim();
+  if (!name) { const err = document.getElementById('ar-err'); err.style.display=''; err.textContent='Recipe name is required.'; return; }
+  const body = document.getElementById('ar-ing-body');
+  const rows = body ? Array.from(body.children) : [];
+  const ingredients = rows.map((tr, i) => ({
+    ingredient_name: document.getElementById(`ar-ing-name-${i}`)?.value.trim() || '',
+    quantity_used: parseFloat(document.getElementById(`ar-ing-qty-${i}`)?.value) || 0,
+    unit: document.getElementById(`ar-ing-unit-${i}`)?.value || 'kg',
+    cost: parseFloat(document.getElementById(`ar-ing-cost-${i}`)?.value) || 0,
+  })).filter(r => r.ingredient_name);
+  if (!ingredients.length) { const err = document.getElementById('ar-err'); err.style.display=''; err.textContent='Add at least one ingredient.'; return; }
+  const payload = {
+    name,
+    category: document.getElementById('ar-cat')?.value || 'Bread',
+    yield_amount: parseFloat(document.getElementById('ar-yield')?.value) || 10,
+    bake_time_minutes: parseInt(document.getElementById('ar-bake')?.value) || 30,
+    overhead_cost: parseFloat(document.getElementById('ar-overhead')?.value) || 0,
+    method: document.getElementById('ar-method')?.value.trim() || '',
+    ingredients,
+  };
+  try {
+    await POST('/recipes', payload);
+    document.getElementById('add-recipe-modal')?.remove();
+    toast('Recipe saved successfully', 'ok');
+    recipes(document.getElementById('content'));
+  } catch(e) {
+    const err = document.getElementById('ar-err'); if (err) { err.style.display=''; err.textContent = e.message; }
+    toast(e.message, 'err');
+  }
+}
+
 async function openRecipeDrawer(recipeId) {
-  const drawer = document.getElementById('rl-drawer');
-  const overlay = document.getElementById('rl-overlay');
-  const content = document.getElementById('rl-drawer-content');
-  if (!drawer) return;
-  drawer.style.display = '';
-  if (overlay) overlay.style.display = '';
-  content.innerHTML = `<div style="padding:24px;"><div class="empty-state"><i data-lucide="loader-circle" style="animation:spin 1s linear infinite;"></i><p>Loading…</p></div></div>`;
   lucide.createIcons();
 
   try {
@@ -4114,6 +4291,30 @@ async function loadRecipeIntoCalculator(recipeId) {
 /* ════════════════════════════════════
    MEDIA LIBRARY  §13 OptimisedPPv1
 ════════════════════════════════════ */
+async function _mlUpload() {
+  const fileEl = document.getElementById('ml-upload-file');
+  const typeEl = document.getElementById('ml-upload-type');
+  const resultEl = document.getElementById('ml-upload-result');
+  if (!fileEl || !fileEl.files.length) { toast('Please select a file to upload', 'err'); return; }
+  const file = fileEl.files[0];
+  const assetType = typeEl?.value || 'recipe';
+  resultEl.innerHTML = `<div class="info-box info-info" style="font-size:12.5px;">Uploading <strong>${file.name}</strong>…</div>`;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('asset_type', assetType);
+    const data = await POSTF('/ingest/document', fd);
+    resultEl.innerHTML = `<div class="info-box info-ok" style="font-size:12.5px;">Uploaded successfully — ${data.filename || file.name}</div>`;
+    toast('Asset uploaded');
+    fileEl.value = '';
+    // Refresh media grid
+    media(document.getElementById('content'));
+  } catch(e) {
+    resultEl.innerHTML = `<div class="info-box info-warn" style="font-size:12.5px;">${e.message}</div>`;
+    toast(e.message, 'err');
+  }
+}
+
 async function media(el) {
   el.innerHTML = `
     <div class="page-hd">
@@ -4125,6 +4326,34 @@ async function media(el) {
       <div class="stat-card"><div><div class="stat-lbl">Recipe PDFs</div><div class="stat-val" id="ml-pdfs" style="font-size:20px;margin-top:4px;">—</div></div><div class="ico ico-blue"><i data-lucide="file-text"></i></div></div>
       <div class="stat-card"><div><div class="stat-lbl">Video Clips</div><div class="stat-val" id="ml-videos" style="font-size:20px;margin-top:4px;">—</div></div><div class="ico ico-green"><i data-lucide="video"></i></div></div>
       <div class="stat-card"><div><div class="stat-lbl">Total Duration</div><div class="stat-val" id="ml-duration" style="font-size:20px;margin-top:4px;">—</div></div><div class="ico ico-purple"><i data-lucide="clock"></i></div></div>
+    </div>
+
+    <!-- Upload card -->
+    <div class="card" style="margin-bottom:18px;">
+      <div class="card-hd"><div class="card-title">Upload Asset</div><span class="badge badge-neutral">Ingest</span></div>
+      <div class="card-bd">
+        <div class="two-col" style="gap:12px;align-items:flex-end;">
+          <div>
+            <label class="form-label">Asset Type</label>
+            <select class="form-input" id="ml-upload-type">
+              <option value="recipe">Recipe PDF</option>
+              <option value="training">Training Material</option>
+              <option value="quality">Quality Reference Image</option>
+              <option value="vendor">Vendor Document</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">File (PDF, image, Excel)</label>
+            <input type="file" class="form-input" id="ml-upload-file" accept=".pdf,.xlsx,.xls,.png,.jpg,.jpeg,.webp">
+          </div>
+          <div>
+            <button class="btn btn-primary btn-sm" onclick="_mlUpload()">
+              <i data-lucide="upload" style="width:13px;height:13px;"></i> Upload
+            </button>
+          </div>
+        </div>
+        <div id="ml-upload-result" style="margin-top:10px;"></div>
+      </div>
     </div>
 
     <!-- Filter tabs -->
