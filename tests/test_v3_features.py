@@ -19,11 +19,19 @@ os.environ.setdefault("CELERY_BROKER_URL", "memory://")
 os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
 os.environ.setdefault("ENFORCE_HTTPS", "false")
 os.environ.setdefault("SUPPLY_CHAIN_GUARD", "false")
+# Ensure BOOTSTRAP_PIN and DEFAULT_ADMIN_PIN are always non-empty before the app
+# module is imported so that security.py computes the correct PIN hash and seeding
+# does not raise RuntimeError when DEFAULT_ADMIN_PIN is absent.
+if not os.environ.get("BOOTSTRAP_PIN"):
+    os.environ["BOOTSTRAP_PIN"] = "123456"
+if not os.environ.get("DEFAULT_ADMIN_PIN"):
+    os.environ["DEFAULT_ADMIN_PIN"] = "123456"
 
 from app.main import app  # noqa: E402
 
-OWNER = {"X-Client-Role": "owner", "X-Client-PIN": os.environ.get("BOOTSTRAP_PIN", "sandbox1234")}
-OPS   = {"X-Client-Role": "operations", "X-Client-PIN": os.environ.get("BOOTSTRAP_PIN", "sandbox1234")}
+_PIN = os.environ["BOOTSTRAP_PIN"]
+OWNER = {"X-Client-Role": "owner", "X-Client-PIN": _PIN}
+OPS   = {"X-Client-Role": "operations", "X-Client-PIN": _PIN}
 
 # ---------- unique run ID so tests never collide across runs ----------
 import time as _time

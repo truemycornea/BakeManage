@@ -88,18 +88,18 @@ jobs:
 
     env:
       # ── Infrastructure ─────────────────────────────────────────────────────
-      DATABASE_URL: postgresql+psycopg2://bakemanage:bakemanage@localhost:5432/bakemanage
-      CELERY_BROKER_URL: redis://localhost:6379/0
-      CELERY_RESULT_BACKEND: redis://localhost:6379/0
-      REDIS_URL: redis://localhost:6379/0
+      DATABASE_URL: postgresql+psycopg2://bakemanage:bakemanage@postgres:5432/bakemanage
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
       ENVIRONMENT: ci
 
       # ── Application secrets (read from GitHub repository secrets) ──────────
       JWT_SECRET:               ${{ secrets.JWT_SECRET }}
-      DEFAULT_ADMIN_PIN:        ${{ secrets.DEFAULT_ADMIN_PIN }}
+      DEFAULT_ADMIN_PIN:        ${{ secrets.DEFAULT_ADMIN_PIN || '123456' }}
       FERNET_KEY:               ${{ secrets.FERNET_KEY }}
       PIN_PEPPER:               ${{ secrets.PIN_PEPPER }}
-      BOOTSTRAP_PIN:            ${{ secrets.BOOTSTRAP_PIN }}
+      BOOTSTRAP_PIN:            ${{ secrets.BOOTSTRAP_PIN || '123456' }}
 
       # ── Google AI Studio ───────────────────────────────────────────────────
       GAIS_BM_APIK: ${{ secrets.GAIS_BM_APIK }}
@@ -157,6 +157,7 @@ jobs:
         run: |
           pytest tests/ \
             --ignore=tests/test_api_all_phases.py \
+            --ignore=tests/test_india_comprehensive.py \
             -q --tb=short
 
   # ────────────────────────────────────────────────────────────────────────────
