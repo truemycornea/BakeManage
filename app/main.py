@@ -32,6 +32,11 @@ from .config import settings
 from .database import Base, engine, get_session
 from .ingestion import parse_excel_invoice, parse_structural_layout, persist_invoice, simulate_vlm_ocr
 from .models import (
+    BatchIngredient,
+    BatchLot,
+    DiningTable,
+    Employee,
+    GSTREntry,
     InventoryItem,
     MediaAsset,
     ProofingTelemetry,
@@ -41,10 +46,13 @@ from .models import (
     RecipeIngredient,
     SaleRecord,
     ServiceCredential,
+    ShiftLog,
     StockIndent,
     StockTransfer,
     SupplierLeadTime,
     LoyaltyRecord,
+    SyncQueueEntry,
+    TableOrder,
     WasteRecord,
     User,
 )
@@ -1947,4 +1955,976 @@ async def ai_insights(
         "thinking_budget": result["thinking_budget"],
         "tokens": result["tokens"],
         "context_modules": sorted(modules),
+    }
+
+
+# ===========================================================================
+# Feature 4 — Bi-Directional Batch Traceability  (v3)
+# ===========================================================================
+
+class BatchIngredientPayload(BaseModel):
+    ingredient_name: str
+    quantity_used: float
+    unit_of_measure: str = "kg"
+    lot_number: str | None = None
+    inventory_item_id: int | None = None
+
+
+class BatchCreateRequest(BaseModel):
+    batch_number: str
+    product_name: str
+    recipe_id: int | None = None
+    quantity_produced: float
+    unit_of_measure: str = "units"
+    allergen_flags: str | None = None   # comma-separated: "gluten,dairy,nuts"
+    notes: str | None = None
+    produced_by: str = "kitchen"
+    best_before: str | None = None     # ISO date YYYY-MM-DD
+    ingredients: list[BatchIngredientPayload]
+
+
+@app.post("/batches", response_model=dict)
+async def create_batch(
+    payload: BatchCreateRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 4: Create production batch with ingredients for full traceability."""
+    require_domain(role, "inventory")
+    from datetime import date as _date
+    best_before: _date | None = None
+    if payload.best_before:
+        try:
+            best_before = _date.fromisoformat(payload.best_before)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="best_before must be YYYY-MM-DD") from exc
+
+    existing = session.query(BatchLot).filter(BatchLot.batch_number == payload.batch_number).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Batch number '{payload.batch_number}' already exists")
+
+    batch = BatchLot(
+        batch_number=payload.batch_number,
+        product_name=payload.product_name,
+        recipe_id=payload.recipe_id,
+        quantity_produced=payload.quantity_produced,
+        unit_of_measure=payload.unit_of_measure,
+        allergen_flags=payload.allergen_flags,
+        notes=payload.notes,
+        produced_by=payload.produced_by,
+        best_before=best_before,
+    )
+    session.add(batch)
+    session.flush()
+
+    for ing in payload.ingredients:
+        bi = BatchIngredient(
+            batch_id=batch.id,
+            inventory_item_id=ing.inventory_item_id,
+            ingredient_name=ing.ingredient_name,
+            quantity_used=ing.quantity_used,
+            unit_of_measure=ing.unit_of_measure,
+            lot_number=ing.lot_number,
+        )
+        session.add(bi)
+    session.commit()
+    return {
+        "batch_id": batch.id,
+        "batch_number": batch.batch_number,
+        "product_name": batch.product_name,
+        "quantity_produced": batch.quantity_produced,
+        "ingredient_count": len(payload.ingredients),
+        "allergen_flags": batch.allergen_flags,
+        "best_before": batch.best_before.isoformat() if batch.best_before else None,
+        "status": batch.status,
+    }
+
+
+@app.get("/batches", response_model=dict)
+async def list_batches(
+    status: str | None = None,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 4: List all production batches, optionally filtered by status."""
+    require_domain(role, "inventory")
+    q = session.query(BatchLot)
+    if status:
+        q = q.filter(BatchLot.status == status)
+    batches = q.order_by(BatchLot.produced_at.desc()).all()
+    return {
+        "count": len(batches),
+        "batches": [
+            {
+                "id": b.id,
+                "batch_number": b.batch_number,
+                "product_name": b.product_name,
+                "quantity_produced": b.quantity_produced,
+                "unit_of_measure": b.unit_of_measure,
+                "status": b.status,
+                "allergen_flags": b.allergen_flags,
+                "best_before": b.best_before.isoformat() if b.best_before else None,
+                "produced_by": b.produced_by,
+                "produced_at": b.produced_at.isoformat(),
+            }
+            for b in batches
+        ],
+    }
+
+
+@app.get("/batches/{batch_id}/trace", response_model=dict)
+async def trace_batch(
+    batch_id: int,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 4: Full bi-directional trace — ingredients in, product out, expiry, allergens, recall readiness."""
+    require_domain(role, "inventory")
+    batch = session.query(BatchLot).filter(BatchLot.id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    ingredients = session.query(BatchIngredient).filter(BatchIngredient.batch_id == batch_id).all()
+    allergens = [a.strip() for a in (batch.allergen_flags or "").split(",") if a.strip()]
+    recall_risk = batch.status != "recalled" and any(
+        i.inventory_item and i.inventory_item.expiration_date
+        and i.inventory_item.expiration_date < __import__("datetime").date.today()
+        for i in ingredients
+    )
+    return {
+        "batch": {
+            "id": batch.id,
+            "batch_number": batch.batch_number,
+            "product_name": batch.product_name,
+            "quantity_produced": batch.quantity_produced,
+            "unit_of_measure": batch.unit_of_measure,
+            "status": batch.status,
+            "best_before": batch.best_before.isoformat() if batch.best_before else None,
+            "produced_by": batch.produced_by,
+            "produced_at": batch.produced_at.isoformat(),
+            "recipe_id": batch.recipe_id,
+            "notes": batch.notes,
+        },
+        "allergens": allergens,
+        "recall_risk": recall_risk,
+        "ingredients_used": [
+            {
+                "id": i.id,
+                "ingredient_name": i.ingredient_name,
+                "quantity_used": i.quantity_used,
+                "unit_of_measure": i.unit_of_measure,
+                "lot_number": i.lot_number,
+                "inventory_item_id": i.inventory_item_id,
+            }
+            for i in ingredients
+        ],
+        "trace_score": "HIGH" if recall_risk else ("MEDIUM" if allergens else "LOW"),
+    }
+
+
+@app.patch("/batches/{batch_id}/status", response_model=dict)
+async def update_batch_status(
+    batch_id: int,
+    status: str,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 4: Update batch status — produced | dispatched | recalled | consumed."""
+    require_domain(role, "inventory")
+    valid = {"produced", "dispatched", "recalled", "consumed"}
+    if status not in valid:
+        raise HTTPException(status_code=422, detail=f"status must be one of {valid}")
+    batch = session.query(BatchLot).filter(BatchLot.id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    batch.status = status
+    session.commit()
+    return {"batch_id": batch.id, "batch_number": batch.batch_number, "new_status": status}
+
+
+# ===========================================================================
+# Feature 5 Enhancement — GSTR-1 / GSTR-3B Reconciliation  (v3)
+# ===========================================================================
+
+class GSTREntryRequest(BaseModel):
+    invoice_number: str
+    invoice_date: str          # YYYY-MM-DD
+    period_month: int          # 1-12
+    period_year: int
+    customer_name: str | None = None
+    gstin: str | None = None   # 15-char GSTIN
+    taxable_value: float
+    gst_rate_pct: float        # 0, 5, 12, 18
+    supply_type: str = "B2C"   # B2B | B2C | export
+
+
+@app.post("/gst/gstr1/entry", response_model=dict)
+async def create_gstr1_entry(
+    payload: GSTREntryRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 5: Record a GSTR-1 invoice entry with auto-computed GST split."""
+    require_domain(role, "inventory")
+    from datetime import date as _date
+    try:
+        inv_date = _date.fromisoformat(payload.invoice_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="invoice_date must be YYYY-MM-DD") from exc
+    if payload.period_month < 1 or payload.period_month > 12:
+        raise HTTPException(status_code=422, detail="period_month must be 1-12")
+    valid_rates = {0, 5, 12, 18}
+    if payload.gst_rate_pct not in valid_rates:
+        raise HTTPException(status_code=422, detail=f"gst_rate_pct must be one of {valid_rates}")
+
+    taxable = Decimal(str(payload.taxable_value))
+    gst_total = round(taxable * Decimal(str(payload.gst_rate_pct)) / 100, 2)
+    # IGST for inter-state (export/B2B cross-state), else split CGST+SGST
+    if payload.supply_type == "export":
+        cgst, sgst, igst = Decimal("0"), Decimal("0"), gst_total
+    else:
+        cgst = round(gst_total / 2, 2)
+        sgst = gst_total - cgst
+        igst = Decimal("0")
+
+    entry = GSTREntry(
+        invoice_number=payload.invoice_number,
+        invoice_date=inv_date,
+        period_month=payload.period_month,
+        period_year=payload.period_year,
+        customer_name=payload.customer_name,
+        gstin=payload.gstin,
+        taxable_value=taxable,
+        cgst=cgst,
+        sgst=sgst,
+        igst=igst,
+        total_tax=gst_total,
+        invoice_total=taxable + gst_total,
+        gst_rate_pct=payload.gst_rate_pct,
+        supply_type=payload.supply_type,
+    )
+    session.add(entry)
+    session.commit()
+    return {
+        "entry_id": entry.id,
+        "invoice_number": entry.invoice_number,
+        "taxable_value": float(entry.taxable_value),
+        "cgst": float(entry.cgst),
+        "sgst": float(entry.sgst),
+        "igst": float(entry.igst),
+        "total_tax": float(entry.total_tax),
+        "invoice_total": float(entry.invoice_total),
+        "filed_status": entry.filed_status,
+    }
+
+
+@app.get("/gst/gstr1", response_model=dict)
+async def get_gstr1(
+    month: int,
+    year: int,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 5: GSTR-1 report — invoice-level outward supply for a filing period."""
+    require_domain(role, "inventory")
+    entries = (
+        session.query(GSTREntry)
+        .filter(GSTREntry.period_month == month, GSTREntry.period_year == year)
+        .order_by(GSTREntry.invoice_date)
+        .all()
+    )
+    total_taxable = sum(float(e.taxable_value) for e in entries)
+    total_cgst = sum(float(e.cgst) for e in entries)
+    total_sgst = sum(float(e.sgst) for e in entries)
+    total_igst = sum(float(e.igst) for e in entries)
+    total_tax = sum(float(e.total_tax) for e in entries)
+    return {
+        "period": f"{year}-{month:02d}",
+        "total_invoices": len(entries),
+        "summary_inr": {
+            "taxable_value": round(total_taxable, 2),
+            "cgst": round(total_cgst, 2),
+            "sgst": round(total_sgst, 2),
+            "igst": round(total_igst, 2),
+            "total_tax": round(total_tax, 2),
+            "invoice_total": round(total_taxable + total_tax, 2),
+        },
+        "invoices": [
+            {
+                "id": e.id,
+                "invoice_number": e.invoice_number,
+                "invoice_date": e.invoice_date.isoformat(),
+                "customer_name": e.customer_name,
+                "gstin": e.gstin,
+                "taxable_value": float(e.taxable_value),
+                "cgst": float(e.cgst),
+                "sgst": float(e.sgst),
+                "igst": float(e.igst),
+                "total_tax": float(e.total_tax),
+                "invoice_total": float(e.invoice_total),
+                "gst_rate_pct": e.gst_rate_pct,
+                "supply_type": e.supply_type,
+                "filed_status": e.filed_status,
+            }
+            for e in entries
+        ],
+    }
+
+
+@app.get("/gst/gstr3b", response_model=dict)
+async def get_gstr3b(
+    month: int,
+    year: int,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 5: GSTR-3B consolidated monthly return — net tax payable summary."""
+    require_domain(role, "inventory")
+    entries = (
+        session.query(GSTREntry)
+        .filter(GSTREntry.period_month == month, GSTREntry.period_year == year)
+        .all()
+    )
+    by_rate: dict[float, dict] = {}
+    for e in entries:
+        r = e.gst_rate_pct
+        if r not in by_rate:
+            by_rate[r] = {"taxable_value": 0.0, "cgst": 0.0, "sgst": 0.0, "igst": 0.0}
+        by_rate[r]["taxable_value"] += float(e.taxable_value)
+        by_rate[r]["cgst"] += float(e.cgst)
+        by_rate[r]["sgst"] += float(e.sgst)
+        by_rate[r]["igst"] += float(e.igst)
+
+    total_cgst = sum(v["cgst"] for v in by_rate.values())
+    total_sgst = sum(v["sgst"] for v in by_rate.values())
+    total_igst = sum(v["igst"] for v in by_rate.values())
+    filing_deadline = f"{year}-{month:02d}-20"
+    return {
+        "period": f"{year}-{month:02d}",
+        "filing_deadline": filing_deadline,
+        "total_invoices": len(entries),
+        "net_tax_payable_inr": {
+            "cgst": round(total_cgst, 2),
+            "sgst": round(total_sgst, 2),
+            "igst": round(total_igst, 2),
+            "total": round(total_cgst + total_sgst + total_igst, 2),
+        },
+        "by_gst_rate": {
+            f"{r}%": {k: round(v, 2) for k, v in vals.items()}
+            for r, vals in sorted(by_rate.items())
+        },
+        "itc_advisory": "Cross-check with GSTR-2B from portal to verify Input Tax Credit before filing.",
+    }
+
+
+@app.get("/gst/reconcile", response_model=dict)
+async def gst_reconcile(
+    month: int,
+    year: int,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 5: Reconcile GSTR-1 filed entries vs SaleRecords for the period — flag gaps."""
+    require_domain(role, "inventory")
+    import calendar
+    from datetime import date as _date
+
+    _, last_day = calendar.monthrange(year, month)
+    period_start = datetime(year, month, 1)
+    period_end = datetime(year, month, last_day, 23, 59, 59)
+
+    sale_revenue = sum(
+        float(s.total_amount)
+        for s in session.query(SaleRecord)
+        .filter(SaleRecord.sold_at >= period_start, SaleRecord.sold_at <= period_end)
+        .all()
+    )
+    gstr_entries = session.query(GSTREntry).filter(
+        GSTREntry.period_month == month, GSTREntry.period_year == year
+    ).all()
+    gstr_taxable = sum(float(e.taxable_value) for e in gstr_entries)
+    gap = round(sale_revenue - gstr_taxable, 2)
+    reconciled = abs(gap) < 0.01
+    return {
+        "period": f"{year}-{month:02d}",
+        "sales_revenue_in_platform_inr": round(sale_revenue, 2),
+        "gstr1_taxable_value_inr": round(gstr_taxable, 2),
+        "gap_inr": gap,
+        "reconciled": reconciled,
+        "action": "No action required." if reconciled else (
+            f"₹{abs(gap):.2f} {'unrecorded in GSTR-1 — add missing entries' if gap > 0 else 'excess in GSTR-1 — review invoices'}."
+        ),
+        "gstr1_entry_count": len(gstr_entries),
+    }
+
+
+# ===========================================================================
+# Feature 9 — Offline-First Sync Queue  (v3)
+# ===========================================================================
+
+class SyncOperationRequest(BaseModel):
+    client_id: str
+    operation: str          # create | update | delete
+    resource: str           # stock | sale | waste | proofing
+    payload: dict
+
+
+@app.post("/sync/queue", response_model=dict)
+async def push_sync_queue(
+    payload: SyncOperationRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 9: Accept offline operations into the sync queue (from offline-first clients)."""
+    import json
+    require_domain(role, "inventory")
+    valid_ops = {"create", "update", "delete"}
+    valid_resources = {"stock", "sale", "waste", "proofing"}
+    if payload.operation not in valid_ops:
+        raise HTTPException(status_code=422, detail=f"operation must be one of {valid_ops}")
+    if payload.resource not in valid_resources:
+        raise HTTPException(status_code=422, detail=f"resource must be one of {valid_resources}")
+
+    entry = SyncQueueEntry(
+        client_id=payload.client_id,
+        operation=payload.operation,
+        resource=payload.resource,
+        payload=json.dumps(payload.payload),
+    )
+    session.add(entry)
+    session.commit()
+    return {"sync_id": entry.id, "status": "queued", "client_id": entry.client_id}
+
+
+@app.get("/sync/queue", response_model=dict)
+async def get_sync_queue(
+    client_id: str | None = None,
+    status: str = "pending",
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 9: Pull pending sync operations — used by server to process offline queue."""
+    require_domain(role, "inventory")
+    q = session.query(SyncQueueEntry).filter(SyncQueueEntry.status == status)
+    if client_id:
+        q = q.filter(SyncQueueEntry.client_id == client_id)
+    items = q.order_by(SyncQueueEntry.created_at).limit(100).all()
+    return {
+        "count": len(items),
+        "entries": [
+            {
+                "id": e.id,
+                "client_id": e.client_id,
+                "operation": e.operation,
+                "resource": e.resource,
+                "status": e.status,
+                "created_at": e.created_at.isoformat(),
+                "processed_at": e.processed_at.isoformat() if e.processed_at else None,
+                "error_message": e.error_message,
+            }
+            for e in items
+        ],
+    }
+
+
+@app.post("/sync/flush", response_model=dict)
+async def flush_sync_queue(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 9: Process pending sync queue — replay offline operations into the live platform."""
+    import json
+    require_domain(role, "inventory")
+    pending = (
+        session.query(SyncQueueEntry)
+        .filter(SyncQueueEntry.status == "pending")
+        .order_by(SyncQueueEntry.created_at)
+        .limit(50)
+        .all()
+    )
+    processed = 0
+    failed = 0
+    for entry in pending:
+        try:
+            data = json.loads(entry.payload)
+            if entry.resource == "stock" and entry.operation == "create":
+                item = InventoryItem(
+                    name=data.get("name", "unknown"),
+                    quantity_on_hand=data.get("quantity_on_hand", 0),
+                    unit_of_measure=data.get("unit_of_measure", "kg"),
+                    unit_price=Decimal(str(data.get("unit_price", 0))),
+                )
+                session.add(item)
+            elif entry.resource == "sale" and entry.operation == "create":
+                sale = SaleRecord(
+                    product_name=data.get("product_name", "unknown"),
+                    quantity_sold=data.get("quantity_sold", 1),
+                    unit_price=Decimal(str(data.get("unit_price", 0))),
+                    total_amount=Decimal(str(data.get("quantity_sold", 1))) * Decimal(str(data.get("unit_price", 0))),
+                )
+                session.add(sale)
+            elif entry.resource == "waste" and entry.operation == "create":
+                waste = WasteRecord(
+                    item_name=data.get("item_name", "unknown"),
+                    quantity_wasted=data.get("quantity_wasted", 0),
+                    waste_cause=data.get("waste_cause", "other"),
+                    logged_by=entry.client_id,
+                )
+                session.add(waste)
+            entry.status = "processed"
+            entry.processed_at = datetime.utcnow()
+            processed += 1
+        except Exception as exc:
+            entry.status = "failed"
+            entry.error_message = str(exc)[:512]
+            failed += 1
+    session.commit()
+    return {"processed": processed, "failed": failed, "total": len(pending)}
+
+
+# ===========================================================================
+# Feature 14 — Employee Performance Analytics  (v3)
+# ===========================================================================
+
+class EmployeeCreateRequest(BaseModel):
+    name: str
+    role: str = "kitchen"   # kitchen | biller | supervisor | delivery
+    phone: str | None = None
+    joining_date: str | None = None   # YYYY-MM-DD
+
+
+class ShiftLogRequest(BaseModel):
+    shift_date: str          # YYYY-MM-DD
+    shift_type: str = "morning"  # morning | afternoon | evening | night
+    hours_worked: float = 8.0
+    items_produced: int = 0
+    items_sold: int = 0
+    waste_events: int = 0
+    waste_cost_inr: float = 0.0
+    quality_pass_count: int = 0
+    quality_fail_count: int = 0
+    revenue_generated_inr: float = 0.0
+    notes: str | None = None
+
+
+@app.post("/employees", response_model=dict)
+async def create_employee(
+    payload: EmployeeCreateRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 14: Register a staff member for performance tracking."""
+    require_domain(role, "health")
+    from datetime import date as _date
+    joining: _date | None = None
+    if payload.joining_date:
+        try:
+            joining = _date.fromisoformat(payload.joining_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="joining_date must be YYYY-MM-DD") from exc
+    valid_roles = {"kitchen", "biller", "supervisor", "delivery"}
+    if payload.role not in valid_roles:
+        raise HTTPException(status_code=422, detail=f"role must be one of {valid_roles}")
+    emp = Employee(name=payload.name, role=payload.role, phone=payload.phone, joining_date=joining)
+    session.add(emp)
+    session.commit()
+    return {"id": emp.id, "name": emp.name, "role": emp.role, "active": emp.active}
+
+
+@app.get("/employees", response_model=dict)
+async def list_employees(
+    active_only: bool = True,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 14: List all registered employees."""
+    require_domain(role, "health")
+    q = session.query(Employee)
+    if active_only:
+        q = q.filter(Employee.active == True)  # noqa: E712
+    employees = q.order_by(Employee.name).all()
+    return {
+        "count": len(employees),
+        "employees": [
+            {
+                "id": e.id,
+                "name": e.name,
+                "role": e.role,
+                "phone": e.phone,
+                "joining_date": e.joining_date.isoformat() if e.joining_date else None,
+                "active": e.active,
+            }
+            for e in employees
+        ],
+    }
+
+
+@app.post("/employees/{employee_id}/shift", response_model=dict)
+async def log_employee_shift(
+    employee_id: int,
+    payload: ShiftLogRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 14: Log a shift performance record for an employee."""
+    require_domain(role, "health")
+    from datetime import date as _date
+    emp = session.query(Employee).filter(Employee.id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    try:
+        shift_date = _date.fromisoformat(payload.shift_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="shift_date must be YYYY-MM-DD") from exc
+    valid_shifts = {"morning", "afternoon", "evening", "night"}
+    if payload.shift_type not in valid_shifts:
+        raise HTTPException(status_code=422, detail=f"shift_type must be one of {valid_shifts}")
+    log = ShiftLog(
+        employee_id=employee_id,
+        shift_date=shift_date,
+        shift_type=payload.shift_type,
+        hours_worked=payload.hours_worked,
+        items_produced=payload.items_produced,
+        items_sold=payload.items_sold,
+        waste_events=payload.waste_events,
+        waste_cost_inr=Decimal(str(payload.waste_cost_inr)),
+        quality_pass_count=payload.quality_pass_count,
+        quality_fail_count=payload.quality_fail_count,
+        revenue_generated_inr=Decimal(str(payload.revenue_generated_inr)),
+        notes=payload.notes,
+    )
+    session.add(log)
+    session.commit()
+    return {
+        "shift_log_id": log.id,
+        "employee_id": employee_id,
+        "shift_date": shift_date.isoformat(),
+        "shift_type": log.shift_type,
+        "hours_worked": log.hours_worked,
+    }
+
+
+@app.get("/employees/{employee_id}/performance", response_model=dict)
+async def employee_performance(
+    employee_id: int,
+    days: int = 30,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 14: Performance summary for an employee over the last N days."""
+    require_domain(role, "health")
+    from datetime import date as _date, timedelta
+    emp = session.query(Employee).filter(Employee.id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    since = _date.today() - timedelta(days=days)
+    logs = (
+        session.query(ShiftLog)
+        .filter(ShiftLog.employee_id == employee_id, ShiftLog.shift_date >= since)
+        .all()
+    )
+    total_shifts = len(logs)
+    total_hours = sum(l.hours_worked for l in logs)
+    total_produced = sum(l.items_produced for l in logs)
+    total_sold = sum(l.items_sold for l in logs)
+    total_waste_events = sum(l.waste_events for l in logs)
+    total_waste_cost = sum(float(l.waste_cost_inr) for l in logs)
+    total_quality_pass = sum(l.quality_pass_count for l in logs)
+    total_quality_total = total_quality_pass + sum(l.quality_fail_count for l in logs)
+    total_revenue = sum(float(l.revenue_generated_inr) for l in logs)
+    quality_rate = round(total_quality_pass / total_quality_total * 100, 1) if total_quality_total > 0 else None
+    efficiency_score = round(
+        (total_sold / max(total_produced, 1)) * 50
+        + (total_quality_pass / max(total_quality_total, 1)) * 30
+        + max(0, 20 - total_waste_events),
+        1,
+    )
+    return {
+        "employee": {"id": emp.id, "name": emp.name, "role": emp.role},
+        "period_days": days,
+        "total_shifts": total_shifts,
+        "total_hours_worked": round(total_hours, 1),
+        "total_items_produced": total_produced,
+        "total_items_sold": total_sold,
+        "total_waste_events": total_waste_events,
+        "total_waste_cost_inr": round(total_waste_cost, 2),
+        "quality_pass_rate_pct": quality_rate,
+        "total_revenue_generated_inr": round(total_revenue, 2),
+        "efficiency_score": min(efficiency_score, 100.0),
+    }
+
+
+@app.get("/employees/leaderboard", response_model=dict)
+async def employee_leaderboard(
+    days: int = 30,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 14: Team leaderboard ranked by efficiency score."""
+    require_domain(role, "health")
+    from datetime import date as _date, timedelta
+    since = _date.today() - timedelta(days=days)
+    employees = session.query(Employee).filter(Employee.active == True).all()  # noqa: E712
+    rankings = []
+    for emp in employees:
+        logs = session.query(ShiftLog).filter(
+            ShiftLog.employee_id == emp.id, ShiftLog.shift_date >= since
+        ).all()
+        if not logs:
+            continue
+        total_produced = sum(l.items_produced for l in logs)
+        total_sold = sum(l.items_sold for l in logs)
+        total_waste = sum(l.waste_events for l in logs)
+        total_qp = sum(l.quality_pass_count for l in logs)
+        total_qt = total_qp + sum(l.quality_fail_count for l in logs)
+        score = round(
+            (total_sold / max(total_produced, 1)) * 50
+            + (total_qp / max(total_qt, 1)) * 30
+            + max(0, 20 - total_waste),
+            1,
+        )
+        rankings.append({
+            "employee_id": emp.id,
+            "name": emp.name,
+            "role": emp.role,
+            "shifts": len(logs),
+            "items_produced": total_produced,
+            "efficiency_score": min(score, 100.0),
+            "quality_pass_rate_pct": round(total_qp / max(total_qt, 1) * 100, 1),
+        })
+    rankings.sort(key=lambda x: x["efficiency_score"], reverse=True)
+    for i, r in enumerate(rankings, 1):
+        r["rank"] = i
+    return {"period_days": days, "total_employees": len(rankings), "leaderboard": rankings}
+
+
+# ===========================================================================
+# Feature 15 — QR-Based Table Ordering  (v3)
+# ===========================================================================
+
+class TableCreateRequest(BaseModel):
+    table_number: str
+    seats: int = 4
+    location: str = "main"   # main | terrace | private
+
+
+class TableOrderRequest(BaseModel):
+    order_items: list[dict]   # [{name, qty, price_inr}]
+    special_instructions: str | None = None
+    guest_name: str | None = None
+
+
+@app.post("/tables", response_model=dict)
+async def create_table(
+    payload: TableCreateRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 15: Register a dining table with QR token."""
+    require_domain(role, "health")
+    import secrets
+    existing = session.query(DiningTable).filter(DiningTable.table_number == payload.table_number).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Table '{payload.table_number}' already exists")
+    qr_token = secrets.token_urlsafe(16)
+    table = DiningTable(
+        table_number=payload.table_number,
+        seats=payload.seats,
+        location=payload.location,
+        qr_token=qr_token,
+    )
+    session.add(table)
+    session.commit()
+    return {
+        "id": table.id,
+        "table_number": table.table_number,
+        "seats": table.seats,
+        "location": table.location,
+        "qr_token": table.qr_token,
+        "qr_url": f"/tables/{qr_token}/menu",
+    }
+
+
+@app.get("/tables", response_model=dict)
+async def list_tables(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 15: List all dining tables with QR tokens."""
+    require_domain(role, "health")
+    tables = session.query(DiningTable).filter(DiningTable.active == True).order_by(DiningTable.table_number).all()  # noqa: E712
+    return {
+        "count": len(tables),
+        "tables": [
+            {
+                "id": t.id,
+                "table_number": t.table_number,
+                "seats": t.seats,
+                "location": t.location,
+                "qr_token": t.qr_token,
+                "qr_url": f"/tables/{t.qr_token}/menu",
+            }
+            for t in tables
+        ],
+    }
+
+
+@app.get("/tables/{qr_token}/menu", response_model=dict)
+async def table_menu(
+    qr_token: str,
+    session: Session = Depends(get_session),
+) -> dict:
+    """Feature 15: Public menu endpoint scanned via QR code — no auth required."""
+    table = session.query(DiningTable).filter(DiningTable.qr_token == qr_token, DiningTable.active == True).first()  # noqa: E712
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found or inactive")
+    # Build menu from recent sale data as proxy
+    recent_sales = (
+        session.query(SaleRecord.product_name, SaleRecord.unit_price)
+        .distinct(SaleRecord.product_name)
+        .order_by(SaleRecord.product_name)
+        .limit(30)
+        .all()
+    )
+    menu_items = [{"name": s.product_name, "price_inr": float(s.unit_price)} for s in recent_sales]
+    return {
+        "table_number": table.table_number,
+        "location": table.location,
+        "seats": table.seats,
+        "welcome": f"Welcome to Table {table.table_number}! Scan to order.",
+        "menu": menu_items,
+        "place_order_url": f"/tables/{qr_token}/order",
+    }
+
+
+@app.post("/tables/{qr_token}/order", response_model=dict)
+async def place_table_order(
+    qr_token: str,
+    payload: TableOrderRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    """Feature 15: Place a dine-in order via QR scan — public endpoint, routed to kitchen."""
+    import json
+    table = session.query(DiningTable).filter(DiningTable.qr_token == qr_token, DiningTable.active == True).first()  # noqa: E712
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found or inactive")
+    if not payload.order_items:
+        raise HTTPException(status_code=422, detail="order_items must not be empty")
+    total = sum(
+        float(item.get("price_inr", 0)) * float(item.get("qty", 1))
+        for item in payload.order_items
+    )
+    order = TableOrder(
+        table_id=table.id,
+        order_items=json.dumps(payload.order_items),
+        total_amount=Decimal(str(round(total, 2))),
+        special_instructions=payload.special_instructions,
+        guest_name=payload.guest_name,
+    )
+    session.add(order)
+    session.commit()
+    return {
+        "order_id": order.id,
+        "table_number": table.table_number,
+        "status": order.status,
+        "total_amount_inr": float(order.total_amount),
+        "items_count": len(payload.order_items),
+        "message": "Order received! Kitchen is preparing your items.",
+    }
+
+
+@app.get("/tables/{table_id}/orders", response_model=dict)
+async def get_table_orders(
+    table_id: int,
+    status: str | None = None,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 15: Kitchen view — all orders for a table, optionally filtered by status."""
+    require_domain(role, "health")
+    import json
+    table = session.query(DiningTable).filter(DiningTable.id == table_id).first()
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+    q = session.query(TableOrder).filter(TableOrder.table_id == table_id)
+    if status:
+        q = q.filter(TableOrder.status == status)
+    orders = q.order_by(TableOrder.placed_at.desc()).all()
+    return {
+        "table_number": table.table_number,
+        "count": len(orders),
+        "orders": [
+            {
+                "id": o.id,
+                "status": o.status,
+                "items": json.loads(o.order_items),
+                "total_amount_inr": float(o.total_amount),
+                "special_instructions": o.special_instructions,
+                "guest_name": o.guest_name,
+                "placed_at": o.placed_at.isoformat(),
+                "served_at": o.served_at.isoformat() if o.served_at else None,
+            }
+            for o in orders
+        ],
+    }
+
+
+@app.patch("/tables/{table_id}/orders/{order_id}", response_model=dict)
+async def update_order_status(
+    table_id: int,
+    order_id: int,
+    status: str,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 15: Update order status — pending | preparing | ready | served | cancelled."""
+    require_domain(role, "health")
+    valid = {"pending", "preparing", "ready", "served", "cancelled"}
+    if status not in valid:
+        raise HTTPException(status_code=422, detail=f"status must be one of {valid}")
+    order = session.query(TableOrder).filter(
+        TableOrder.id == order_id, TableOrder.table_id == table_id
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    order.status = status
+    if status == "served":
+        order.served_at = datetime.utcnow()
+    session.commit()
+    return {
+        "order_id": order.id,
+        "table_id": table_id,
+        "new_status": order.status,
+        "served_at": order.served_at.isoformat() if order.served_at else None,
+    }
+
+
+@app.get("/kitchen/display", response_model=dict)
+async def kitchen_display(
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """Feature 15: Kitchen Display System — all pending/preparing orders across all tables."""
+    require_domain(role, "health")
+    import json
+    active_orders = (
+        session.query(TableOrder, DiningTable)
+        .join(DiningTable, TableOrder.table_id == DiningTable.id)
+        .filter(TableOrder.status.in_(["pending", "preparing"]))
+        .order_by(TableOrder.placed_at.asc())
+        .all()
+    )
+    return {
+        "active_orders": len(active_orders),
+        "queue": [
+            {
+                "order_id": o.id,
+                "table_number": t.table_number,
+                "status": o.status,
+                "items": json.loads(o.order_items),
+                "special_instructions": o.special_instructions,
+                "placed_at": o.placed_at.isoformat(),
+                "waiting_minutes": round((datetime.utcnow() - o.placed_at).total_seconds() / 60, 1),
+            }
+            for o, t in active_orders
+        ],
     }

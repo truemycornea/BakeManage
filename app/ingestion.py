@@ -64,9 +64,9 @@ def simulate_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
     """
     from .config import settings
 
-    if _GENAI_AVAILABLE and settings.google_ai_studio_api_key:
+    if _GENAI_AVAILABLE and settings.gemini_api_key:
         try:
-            return _gemini_vlm_ocr(image_bytes, settings.google_ai_studio_api_key)
+            return _gemini_vlm_ocr(image_bytes, settings.gemini_api_key)
         except Exception as exc:  # pragma: no cover - network / quota errors
             logger.warning("Gemini OCR failed, falling back to stub: %s", exc)
 
