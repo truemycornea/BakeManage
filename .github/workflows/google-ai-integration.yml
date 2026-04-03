@@ -88,10 +88,10 @@ jobs:
 
     env:
       # ── Infrastructure ─────────────────────────────────────────────────────
-      DATABASE_URL: postgresql+psycopg2://bakemanage:bakemanage@localhost:5432/bakemanage
-      CELERY_BROKER_URL: redis://localhost:6379/0
-      CELERY_RESULT_BACKEND: redis://localhost:6379/0
-      REDIS_URL: redis://localhost:6379/0
+      DATABASE_URL: postgresql+psycopg2://bakemanage:bakemanage@postgres:5432/bakemanage
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
       ENVIRONMENT: ci
 
       # ── Application secrets (read from GitHub repository secrets) ──────────
