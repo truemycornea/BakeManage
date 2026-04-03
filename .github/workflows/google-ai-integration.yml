@@ -65,30 +65,9 @@ jobs:
     permissions:
       contents: read
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: bakemanage
-          POSTGRES_PASSWORD: bakemanage
-          POSTGRES_DB: bakemanage
-        options: >-
-          --health-cmd "pg_isready -U bakemanage -d bakemanage"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-
     env:
-      # ── Infrastructure ─────────────────────────────────────────────────────
-      DATABASE_URL: postgresql+psycopg2://bakemanage:bakemanage@localhost:5432/bakemanage
+      # ── Infrastructure (SQLite for unit tests — no live Postgres needed) ───
+      DATABASE_URL: sqlite:///./test.db
       CELERY_BROKER_URL: redis://localhost:6379/0
       CELERY_RESULT_BACKEND: redis://localhost:6379/0
       REDIS_URL: redis://localhost:6379/0
