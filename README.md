@@ -10,6 +10,9 @@ Python-based FastAPI microservice for multimodal document ingestion and dynamic 
 - Dockerized multi-stage build for production deployment
 - Basic pytest coverage for ingestion and costing utilities
 
+## Planning
+- SCRUM-aligned backlog and AI execution guidance: [bakemanageroot_scrum.md](./bakemanageroot_scrum.md)
+
 ## Getting Started
 1. Install dependencies:
    ```bash
