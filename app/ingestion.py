@@ -165,25 +165,45 @@ def _gemini_vlm_ocr(image_bytes: bytes, api_key: str) -> InvoicePayload:  # prag
 
 
 def _stub_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
+    """Return a deterministic Indian-vendor invoice stub for testing without API credentials."""
     fingerprint = hashlib.sha256(image_bytes).hexdigest()[:8]
+    # Rotate through realistic Indian bakery supplier names based on fingerprint
+    _indian_vendors = [
+        "Amul Dairy Ltd", "ITC Foods Ltd", "Patanjali Ayurved Ltd",
+        "Hindustan Unilever Ltd", "Everest Spices Ltd", "Tata Consumer Products",
+        "RSGSM Atta Mills", "MTR Foods Pvt Ltd",
+    ]
+    vendor_idx = int(fingerprint[:2], 16) % len(_indian_vendors)
+    vendor_name = _indian_vendors[vendor_idx]
+
     items = [
         InvoiceItemPayload(
-            item_name="Flour",
+            item_name="Maida (Refined Flour)",
             quantity=50.0,
-            unit_price=Decimal("1.20"),
+            unit_price=Decimal("38.00"),
             tax_rate=Decimal("5.00"),
-            expiration_date=date.today() + timedelta(days=60),
-            category="kirana_staple",
+            expiration_date=date.today() + timedelta(days=180),
+            category="flour",
             unit_of_measure="kg",
-            vertical="kirana",
+            vertical="bakery",
         ),
         InvoiceItemPayload(
-            item_name="Butter",
+            item_name="Amul Butter (500g)",
             quantity=20.0,
-            unit_price=Decimal("2.50"),
+            unit_price=Decimal("260.00"),
+            tax_rate=Decimal("12.00"),
+            expiration_date=date.today() + timedelta(days=60),
+            category="dairy_fat",
+            unit_of_measure="pcs",
+            vertical="bakery",
+        ),
+        InvoiceItemPayload(
+            item_name="Refined Sugar",
+            quantity=25.0,
+            unit_price=Decimal("46.00"),
             tax_rate=Decimal("5.00"),
-            expiration_date=date.today() + timedelta(days=30),
-            category="bakery_fat",
+            expiration_date=date.today() + timedelta(days=365),
+            category="sugar",
             unit_of_measure="kg",
             vertical="bakery",
         ),
@@ -194,9 +214,9 @@ def _stub_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
         for item in items
     )
     return InvoicePayload(
-        vendor_name=f"Vendor-{fingerprint}",
+        vendor_name=vendor_name,
         invoice_date=date.today(),
-        invoice_number=f"INV-{fingerprint}",
+        invoice_number=f"INV-{fingerprint.upper()}",
         items=items,
         total_amount=total.quantize(Decimal("0.01")),
     )

@@ -1,7 +1,8 @@
-# BakeManage v3.0 — Complete User Guide
+# BakeManage v3.1 — Complete User Guide
 
 > **Audience**: Bakery owners, managers, kitchen staff, billing staff, and system administrators.
-> **Version**: 3.0.0 | **Stack**: FastAPI + PostgreSQL + Redis + Docker
+> **Version**: 3.1.0 | **Stack**: FastAPI + PostgreSQL + Redis + Docker
+> **Market**: Optimised for Indian bakeries — INR pricing, Indian GST slabs, GSTIN, GSTR-1/3B, Indian vendors.
 
 ---
 
@@ -235,25 +236,43 @@ curl "http://localhost:8000/batches?status=dispatched" \
 
 ## 5. Sales & Point of Sale
 
-### Log a Sale
+### Record a Sale (Indian Bakery Example)
 
 ```bash
-curl -X POST http://localhost:8000/sales \
-  -H "X-Client-Role: operations" -H "X-Client-PIN: $PIN" \
+curl -X POST http://localhost:8000/sales/record \
+  -H "X-Client-Role: owner" -H "X-Client-PIN: $PIN" \
   -H "Content-Type: application/json" \
   -d '{
-    "product_name": "Croissant",
-    "quantity_sold": 5,
-    "unit_price": 65.00,
-    "customer_name": "Office Order"
+    "product_name": "Kaju Barfi (250g box)",
+    "quantity_sold": 10,
+    "unit_price": 280.00
   }'
 ```
 
-### View Sales History
+**Validation rules:** `quantity_sold > 0`, `unit_price > 0`.
+
+### View Daily Sales Report
 
 ```bash
-curl http://localhost:8000/sales \
+# Today's sales
+curl http://localhost:8000/sales/daily \
   -H "X-Client-Role: owner" -H "X-Client-PIN: $PIN"
+
+# Specific date (v3.1 ✨ — new date param)
+curl "http://localhost:8000/sales/daily?date=2026-04-03" \
+  -H "X-Client-Role: owner" -H "X-Client-PIN: $PIN"
+```
+
+**Response:**
+```json
+{
+  "date": "2026-04-03",
+  "total_sales": 25,
+  "total_revenue": 12500.0,
+  "top_products": [
+    {"product_name": "Kaju Barfi", "units_sold": 10, "revenue": 2800.0}
+  ]
+}
 ```
 
 ---
@@ -545,27 +564,68 @@ Compares total GSTR-1 taxable value against sales recorded in BakeManage and fla
 
 ## 12. Supply Chain & Indenting
 
-### Raise a Stock Indent
+### Raise a Threshold-Based Indent (Auto-Scan)
 
 ```bash
 curl -X POST http://localhost:8000/supply-chain/indent \
-  -H "X-Client-Role: operations" -H "X-Client-PIN: $PIN" \
+  -H "X-Client-Role: owner" -H "X-Client-PIN: $PIN" \
+  -H "Content-Type: application/json" \
+  -d '{"threshold_quantity": 10.0, "raised_by": "BakeManage AI"}'
+```
+
+Returns all items currently below `threshold_quantity` as pending indents.
+
+### Raise a Direct Named-Item Indent (GAIS-Compatible) ✨ v3.1
+
+Use this when you know exactly what item you need:
+
+```bash
+curl -X POST http://localhost:8000/supply-chain/indent/item \
+  -H "X-Client-Role: owner" -H "X-Client-PIN: $PIN" \
   -H "Content-Type: application/json" \
   -d '{
-    "item_name": "Butter",
-    "quantity_requested": 20.0,
+    "item_name": "Aashirvaad Maida 1kg",
+    "quantity_required": 100.0,
     "unit_of_measure": "kg",
-    "supplier_name": "Amul Dairy",
-    "expected_delivery_date": "2026-04-05"
+    "required_by_date": "2026-04-06",
+    "notes": "Diwali production — urgent",
+    "raised_by": "BakeManage AI"
   }'
 ```
 
-### View Supplier Lead Times
+**Response:**
+```json
+{
+  "indent_id": 42,
+  "item_name": "Aashirvaad Maida 1kg",
+  "quantity_required": 100.0,
+  "status": "pending"
+}
+```
+
+### Register a Vendor Lead Time (Indian Supplier Example)
 
 ```bash
-curl http://localhost:8000/supply-chain/lead-times \
+curl -X POST http://localhost:8000/supply-chain/lead-times \
+  -H "X-Client-Role: owner" -H "X-Client-PIN: $PIN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vendor_name": "Amul Cooperative Dairy",
+    "ingredient_name": "Fresh Milk 1L",
+    "lead_days": 1,
+    "last_price_per_unit": 68.0,
+    "notes": "Daily morning delivery, no MOQ"
+  }'
+```
+
+### View Vendor Optimization Recommendations
+
+```bash
+curl http://localhost:8000/insights/vendor-optimization \
   -H "X-Client-Role: owner" -H "X-Client-PIN: $PIN"
 ```
+
+Returns best vendor per ingredient (lowest price + shortest lead time). The `vendor_savings_inr` KPI on the dashboard shows total potential savings across all ingredient-vendor combinations.
 
 ---
 
