@@ -20,9 +20,10 @@ from .security import hash_pin
 logger = logging.getLogger(__name__)
 
 # Named local system users seeded only when explicitly enabled in development.
+# ``pin_env_var`` is the environment variable that must supply this user's PIN.
 LOCAL_SEED_USERS: list[dict[str, str]] = [
-    {"username": "rahul@olympus.ai", "role": "admin"},
-    {"username": "helen@olympus.ai", "role": "operations"},
+    {"username": "rahul@olympus.ai", "role": "admin", "pin_env_var": "RAHUL_PIN"},
+    {"username": "helen@olympus.ai", "role": "operations", "pin_env_var": "HELEN_PIN"},
 ]
 
 
@@ -47,6 +48,7 @@ def seed_users(
     default_admin_pin: Optional[str],
     environment: str = "development",
     seed_local_users: bool = False,
+    local_user_pins: Optional[dict[str, str]] = None,
 ) -> None:
     """Seed the primary admin and, when explicitly enabled in development, the
     named local system users.
@@ -58,9 +60,17 @@ def seed_users(
       raised so the problem surfaces at startup rather than being silently
       skipped.
     - rahul@olympus.ai / helen@olympus.ai are seeded **only** when both
-      ``environment == "development"`` and ``seed_local_users is True``.  If
-      the pin is absent in that case the operation is logged and skipped
-      without raising (optional users should not break startup).
+      ``environment == "development"`` and ``seed_local_users is True``.  Each
+      user is seeded independently using the PIN supplied in ``local_user_pins``
+      (keyed by username).  If a user's PIN is absent the user is skipped with
+      a warning; missing optional-user PINs never raise.
+
+    Parameters
+    ----------
+    local_user_pins:
+        Mapping of ``{username: pin}`` for the optional local users.  Users
+        whose username is not present in this mapping (or whose value is an
+        empty string) are skipped with a warning log.
     """
     # ── Primary admin ──────────────────────────────────────────────────────
     primary_missing = not session.query(User).filter(
@@ -74,16 +84,18 @@ def seed_users(
 
     # ── Optional local users (development + explicit opt-in only) ──────────
     if environment.lower() == "development" and seed_local_users:
-        if not default_admin_pin:
-            logger.warning(
-                "Skipping local user seeding (rahul/helen): DEFAULT_ADMIN_PIN is not set"
-            )
-        else:
-            for u_data in LOCAL_SEED_USERS:
-                created = ensure_user(
-                    session, u_data["username"], u_data["role"], default_admin_pin
+        pins = local_user_pins or {}
+        for u_data in LOCAL_SEED_USERS:
+            pin = pins.get(u_data["username"])
+            if not pin:
+                logger.warning(
+                    "Skipping local user %s: no PIN provided (set %s env var)",
+                    u_data["username"],
+                    u_data["pin_env_var"],
                 )
-                if created:
-                    logger.info("Seeded local user %s (%s)", u_data["username"], u_data["role"])
+                continue
+            created = ensure_user(session, u_data["username"], u_data["role"], pin)
+            if created:
+                logger.info("Seeded local user %s (%s)", u_data["username"], u_data["role"])
 
     session.commit()

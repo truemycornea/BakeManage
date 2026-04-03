@@ -111,12 +111,18 @@ def _ensure_requirements_locked() -> None:
 
 
 def _seed_admin_user(session: Session) -> None:
+    local_pins: dict[str, str] = {}
+    if settings.rahul_pin:
+        local_pins["rahul@olympus.ai"] = settings.rahul_pin
+    if settings.helen_pin:
+        local_pins["helen@olympus.ai"] = settings.helen_pin
     seed_users(
         session,
         default_admin_username=settings.default_admin_username,
         default_admin_pin=settings.default_admin_pin,
         environment=settings.environment,
         seed_local_users=settings.seed_local_users,
+        local_user_pins=local_pins,
     )
 
 

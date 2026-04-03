@@ -57,6 +57,8 @@ class Settings(BaseModel):
     default_admin_username: str = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
     default_admin_pin: str | None = os.getenv("DEFAULT_ADMIN_PIN")
     seed_local_users: bool = os.getenv("SEED_LOCAL_USERS", "false").strip().lower() in ("true", "1", "yes")
+    rahul_pin: str | None = os.getenv("RAHUL_PIN")
+    helen_pin: str | None = os.getenv("HELEN_PIN")
     fernet_key: str = os.getenv("FERNET_KEY", "")
 
     @field_validator("fernet_key", mode="after")
