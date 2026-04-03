@@ -333,3 +333,174 @@ class WasteRecord(Base):
     notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logged_by: Mapped[str] = mapped_column(String(64), default="staff")
     logged_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Feature 4 — Bi-Directional Batch Traceability  (v3)
+# ---------------------------------------------------------------------------
+
+class BatchLot(Base):
+    """Production batch — links recipe → ingredients used → finished product quantity."""
+    __tablename__ = "batch_lots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    batch_number: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    recipe_id: Mapped[int | None] = mapped_column(ForeignKey("recipes.id"), nullable=True)
+    quantity_produced: Mapped[float] = mapped_column(Float, nullable=False)
+    unit_of_measure: Mapped[str] = mapped_column(String(32), default="units")
+    status: Mapped[str] = mapped_column(String(32), default="produced")  # produced | dispatched | recalled | consumed
+    allergen_flags: Mapped[str | None] = mapped_column(String(255), nullable=True)  # comma-separated
+    notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    produced_by: Mapped[str] = mapped_column(String(128), default="kitchen")
+    produced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    best_before: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    recipe: Mapped["Recipe | None"] = relationship("Recipe")
+    ingredients: Mapped[List["BatchIngredient"]] = relationship(
+        "BatchIngredient", back_populates="batch", cascade="all, delete-orphan"
+    )
+
+
+class BatchIngredient(Base):
+    """Ingredient consumed in a batch — enables bi-directional trace."""
+    __tablename__ = "batch_ingredients"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey("batch_lots.id"), nullable=False)
+    inventory_item_id: Mapped[int | None] = mapped_column(ForeignKey("inventory_items.id"), nullable=True)
+    ingredient_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity_used: Mapped[float] = mapped_column(Float, nullable=False)
+    unit_of_measure: Mapped[str] = mapped_column(String(32), default="kg")
+    lot_number: Mapped[str | None] = mapped_column(String(128), nullable=True)  # supplier lot ref
+
+    batch: Mapped["BatchLot"] = relationship("BatchLot", back_populates="ingredients")
+    inventory_item: Mapped["InventoryItem | None"] = relationship("InventoryItem")
+
+
+# ---------------------------------------------------------------------------
+# Feature 5 Enhancement — GSTR-1 / GSTR-3B Reconciliation  (v3)
+# ---------------------------------------------------------------------------
+
+class GSTREntry(Base):
+    """GSTR-1 invoice-level entry capturing outward supply details."""
+    __tablename__ = "gstr_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    invoice_number: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    invoice_date: Mapped[date] = mapped_column(Date, nullable=False)
+    period_month: Mapped[int] = mapped_column(Integer, nullable=False)   # 1-12
+    period_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    gstin: Mapped[str | None] = mapped_column(String(15), nullable=True)  # customer GSTIN
+    taxable_value: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    cgst: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    sgst: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    igst: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    total_tax: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    invoice_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    gst_rate_pct: Mapped[float] = mapped_column(Float, nullable=False)   # 0, 5, 12, 18
+    supply_type: Mapped[str] = mapped_column(String(32), default="B2C")  # B2B | B2C | export
+    filed_status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | filed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Feature 9 — Offline-First Sync Queue  (v3)
+# ---------------------------------------------------------------------------
+
+class SyncQueueEntry(Base):
+    """Buffered operation from an offline client — replayed on reconnect."""
+    __tablename__ = "sync_queue"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    client_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)   # create | update | delete
+    resource: Mapped[str] = mapped_column(String(64), nullable=False)    # stock | sale | waste | proofing
+    payload: Mapped[str] = mapped_column(String, nullable=False)          # JSON blob
+    status: Mapped[str] = mapped_column(String(16), default="pending")   # pending | processed | failed
+    error_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Feature 14 — Employee Performance Analytics  (v3)
+# ---------------------------------------------------------------------------
+
+class Employee(Base):
+    """Staff member record linked to shift logs and performance tracking."""
+    __tablename__ = "employees"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(64), nullable=False, default="kitchen")
+    # kitchen | biller | supervisor | delivery
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    joining_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    shift_logs: Mapped[List["ShiftLog"]] = relationship(
+        "ShiftLog", back_populates="employee", cascade="all, delete-orphan"
+    )
+
+
+class ShiftLog(Base):
+    """Per-shift performance record for kitchen and billing staff."""
+    __tablename__ = "shift_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    shift_date: Mapped[date] = mapped_column(Date, nullable=False)
+    shift_type: Mapped[str] = mapped_column(String(16), default="morning")  # morning | afternoon | evening | night
+    hours_worked: Mapped[float] = mapped_column(Float, default=8.0)
+    items_produced: Mapped[int] = mapped_column(Integer, default=0)
+    items_sold: Mapped[int] = mapped_column(Integer, default=0)
+    waste_events: Mapped[int] = mapped_column(Integer, default=0)
+    waste_cost_inr: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    quality_pass_count: Mapped[int] = mapped_column(Integer, default=0)
+    quality_fail_count: Mapped[int] = mapped_column(Integer, default=0)
+    revenue_generated_inr: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    logged_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    employee: Mapped["Employee"] = relationship("Employee", back_populates="shift_logs")
+
+
+# ---------------------------------------------------------------------------
+# Feature 15 — QR-Based Table Ordering  (v3)
+# ---------------------------------------------------------------------------
+
+class DiningTable(Base):
+    """Physical table with a unique QR code for dine-in ordering."""
+    __tablename__ = "dining_tables"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    table_number: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
+    seats: Mapped[int] = mapped_column(Integer, default=4)
+    location: Mapped[str] = mapped_column(String(64), default="main")  # main | terrace | private
+    qr_token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    orders: Mapped[List["TableOrder"]] = relationship(
+        "TableOrder", back_populates="table", cascade="all, delete-orphan"
+    )
+
+
+class TableOrder(Base):
+    """Order placed by guests via QR scan — routed to kitchen display."""
+    __tablename__ = "table_orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    table_id: Mapped[int] = mapped_column(ForeignKey("dining_tables.id"), nullable=False)
+    order_items: Mapped[str] = mapped_column(String, nullable=False)  # JSON array [{name, qty, price}]
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | preparing | ready | served | cancelled
+    special_instructions: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    guest_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    placed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    served_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    table: Mapped["DiningTable"] = relationship("DiningTable", back_populates="orders")

@@ -10,6 +10,7 @@ call sites.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -21,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 # Named local system users seeded only when explicitly enabled in development.
 # ``pin_env_var`` is the environment variable that must supply this user's PIN.
+# ``pin_env_var`` is the environment variable that supplies the PIN for each
+# user; if the variable is absent the user is silently skipped (never raises).
 LOCAL_SEED_USERS: list[dict[str, str]] = [
     {"username": "rahul@olympus.ai", "role": "admin", "pin_env_var": "RAHUL_PIN"},
     {"username": "helen@olympus.ai", "role": "operations", "pin_env_var": "HELEN_PIN"},
@@ -71,6 +74,9 @@ def seed_users(
         Mapping of ``{username: pin}`` for the optional local users.  Users
         whose username is not present in this mapping (or whose value is an
         empty string) are skipped with a warning log.
+      ``environment == "development"`` and ``seed_local_users is True``.  If
+      the pin is absent in that case the operation is logged and skipped
+      without raising (optional users should not break startup).
     """
     # ── Primary admin ──────────────────────────────────────────────────────
     primary_missing = not session.query(User).filter(
@@ -90,6 +96,11 @@ def seed_users(
             if not pin:
                 logger.warning(
                     "Skipping local user %s: no PIN provided (set %s env var)",
+        for u_data in LOCAL_SEED_USERS:
+            pin = os.environ.get(u_data["pin_env_var"])
+            if not pin:
+                logger.warning(
+                    "Skipping local user %s: %s env var is not set",
                     u_data["username"],
                     u_data["pin_env_var"],
                 )

@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bakemanage
+          POSTGRES_PASSWORD: bakemanage
+          POSTGRES_DB: bakemanage
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg2://bakemanage:bakemanage@localhost:5432/bakemanage
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/0
+      REDIS_URL: redis://localhost:6379/0
+      ENVIRONMENT: development
+      ENFORCE_HTTPS: "false"
+      # Non-sensitive configuration — plain environment variables.
+      JWT_EXPIRY_MINUTES: "30"
+      DEFAULT_ADMIN_USERNAME: ${{ vars.DEFAULT_ADMIN_USERNAME }}
+      # Sensitive credentials are read from GitHub Secrets — never hardcoded.
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      DEFAULT_ADMIN_PIN: ${{ secrets.DEFAULT_ADMIN_PIN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: pytest tests/ -v --ignore=tests/test_api_all_phases.py
+
+      - name: Start API server for integration tests
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          echo $! > /tmp/uvicorn.pid
+        env:
+          DATABASE_URL: postgresql+psycopg2://bakemanage:bakemanage@localhost:5432/bakemanage
+
+      - name: Wait for API to be ready
+        run: |
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:8000/health && break || sleep 2
+          done
+
+      - name: Run integration tests
+        run: pytest tests/test_api_all_phases.py -v
+
+      - name: Stop API server
+        if: always()
+        run: |
+          if [ -f /tmp/uvicorn.pid ]; then
+            kill "$(cat /tmp/uvicorn.pid)" || true
+          fi

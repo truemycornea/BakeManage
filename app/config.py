@@ -5,7 +5,7 @@ import base64
 import os
 from typing import Dict, List
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def _default_fernet_key() -> str:
@@ -60,6 +60,17 @@ class Settings(BaseModel):
     rahul_pin: str | None = os.getenv("RAHUL_PIN")
     helen_pin: str | None = os.getenv("HELEN_PIN")
     fernet_key: str = os.getenv("FERNET_KEY", "")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", os.getenv("GAIS_BM_APIK", ""))
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+
+    @model_validator(mode="after")
+    def ensure_jwt_secret(self) -> "Settings":
+        env = str(self.environment or "development").lower()
+        if env != "development" and self.jwt_secret == "change-this-secret":
+            raise ValueError(
+                "JWT_SECRET must be set to a strong secret in non-development environments"
+            )
+        return self
 
     @field_validator("fernet_key", mode="after")
     def ensure_fernet_key(cls, value: str, info):  # type: ignore[override]
