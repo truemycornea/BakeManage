@@ -2,18 +2,34 @@
 BakeManage Platform — Comprehensive API Integration Test Plan
 Covers Phase 1 (MVP), Phase 2 (Hardening), Phase 3 (Enterprise)
 All 38 endpoints tested with authenticated requests.
+
+Credential configuration (env-driven to stay in sync with the running server):
+  BOOTSTRAP_PIN        — PIN used by X-Client-PIN header (default: "123456")
+  DEFAULT_ADMIN_PIN    — PIN for /auth/login (default: value of BOOTSTRAP_PIN)
+  DEFAULT_ADMIN_USERNAME — admin username for /auth/login (default: "admin")
+  TEST_CLIENT_ROLE     — role used in X-Client-Role header (default: "owner")
 """
 from __future__ import annotations
 
 import io
+import os
 import time
 
 import httpx
 import pytest
 
+# ---------------------------------------------------------------------------
+# Credentials — read from environment so tests and the running server always
+# agree, regardless of whether secrets or local defaults are in use.
+# ---------------------------------------------------------------------------
+_BOOTSTRAP_PIN: str = os.environ.get("BOOTSTRAP_PIN", "123456")
+_ADMIN_PIN: str = os.environ.get("DEFAULT_ADMIN_PIN", _BOOTSTRAP_PIN)
+_ADMIN_USERNAME: str = os.environ.get("DEFAULT_ADMIN_USERNAME", "admin")
+_CLIENT_ROLE: str = os.environ.get("TEST_CLIENT_ROLE", "owner")
+
 BASE = "http://localhost:8000"
-HEADERS = {"X-Client-Role": "owner", "X-Client-PIN": "sandbox1234"}
-AUTH_CREDS = {"username": "admin", "pin": "sandbox1234"}
+HEADERS = {"X-Client-Role": _CLIENT_ROLE, "X-Client-PIN": _BOOTSTRAP_PIN}
+AUTH_CREDS = {"username": _ADMIN_USERNAME, "pin": _ADMIN_PIN}
 
 # ── Shared state ──────────────────────────────────────────────────────────────
 _jwt_token: str = ""
@@ -28,9 +44,38 @@ def _jwt_headers() -> dict:
     return {"Authorization": f"Bearer {_jwt_token}"}
 
 
+
 _stock_item_id: int = 0
 _recipe_id: int = 0
 _asset_id: int = 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  GUARDRAIL — credential alignment
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestCredentialAlignment:
+    """Guardrail: assert test credentials match the server's runtime config.
+
+    This test intentionally runs before any authenticated endpoint so that a
+    credential mismatch surfaces immediately with a clear diagnostic rather
+    than as a cascade of opaque 403s.
+    """
+
+    def test_bootstrap_pin_env_matches_server(self) -> None:
+        """BOOTSTRAP_PIN in this process must equal the value the server uses.
+
+        The server reads BOOTSTRAP_PIN from the environment at import time and
+        hashes it.  We can verify indirectly: a health/metrics call with the
+        test PIN must return 200, not 403.  A 403 here means PIN mismatch —
+        check that BOOTSTRAP_PIN is set consistently for both server and tests.
+        """
+        r = httpx.get(f"{BASE}/health/metrics", headers=HEADERS, timeout=10)
+        assert r.status_code != 403, (
+            f"PIN mismatch detected: server rejected X-Client-PIN from BOOTSTRAP_PIN env var. "
+            f"Ensure the server process and this test process share the same BOOTSTRAP_PIN "
+            f"(current value: {'(set)' if os.environ.get('BOOTSTRAP_PIN') else '(default: 123456)'})."
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -100,7 +145,7 @@ class TestPhase1Auth:
         r = httpx.get(f"{BASE}/users/me", headers={"Authorization": f"Bearer {_jwt_token}"}, timeout=10)
         assert r.status_code == 200
         body = r.json()
-        assert body.get("username") == "admin"
+        assert body.get("username") == _ADMIN_USERNAME
 
 
 # ══════════════════════════════════════════════════════════════════════════════

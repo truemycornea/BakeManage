@@ -92,7 +92,7 @@ def test_unknown_role_rejected(client):
     r = client.post(
         "/cost/compute",
         json={"components": [], "overhead": 0},
-        headers={"X-Client-Role": "ghost", "X-Client-PIN": os.environ.get("BOOTSTRAP_PIN", "sandbox1234")},
+        headers={"X-Client-Role": "ghost", "X-Client-PIN": os.environ.get("BOOTSTRAP_PIN", "123456")},
     )
     assert r.status_code == 403
 
