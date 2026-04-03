@@ -25,7 +25,7 @@
 # │  ┌──────────────────────────────┬──────────────────────────────────┐   │
 # │  │ Secret name                  │ What to put there                │   │
 # │  ├──────────────────────────────┼──────────────────────────────────┤   │
-# │  │ GOOGLE_AI_STUDIO_API_KEY     │ The key from step 1              │   │
+# │  │ GAIS_BM_APIK                 │ The key from step 1              │   │
 # │  │ JWT_SECRET                   │ A strong random string (32+ chars)│   │
 # │  │ DEFAULT_ADMIN_PIN            │ Your admin PIN (e.g. 6 digits)   │   │
 # │  │ DATABASE_URL                 │ Your production Postgres URL      │   │
@@ -100,7 +100,7 @@ jobs:
       BOOTSTRAP_PIN:            ${{ secrets.BOOTSTRAP_PIN }}
 
       # ── Google AI Studio ───────────────────────────────────────────────────
-      GOOGLE_AI_STUDIO_API_KEY: ${{ secrets.GOOGLE_AI_STUDIO_API_KEY }}
+      GAIS_BM_APIK: ${{ secrets.GAIS_BM_APIK }}
 
     steps:
       - name: Checkout repository
@@ -117,14 +117,14 @@ jobs:
 
       # ── Validate Google AI Studio API key ──────────────────────────────────
       - name: Validate Google AI Studio API key
-        if: ${{ env.GOOGLE_AI_STUDIO_API_KEY != '' }}
+        if: ${{ env.GAIS_BM_APIK != '' }}
         run: |
           python - <<'EOF'
           import os
           import sys
           from google import genai
 
-          api_key = os.environ["GOOGLE_AI_STUDIO_API_KEY"]
+          api_key = os.environ["GAIS_BM_APIK"]
           client = genai.Client(api_key=api_key)
 
           try:
@@ -141,9 +141,9 @@ jobs:
           EOF
 
       - name: Warn when API key is not configured
-        if: ${{ env.GOOGLE_AI_STUDIO_API_KEY == '' }}
+        if: ${{ env.GAIS_BM_APIK == '' }}
         run: |
-          echo "⚠️  GOOGLE_AI_STUDIO_API_KEY is not set — Gemini VLM OCR will"
+          echo "⚠️  GAIS_BM_APIK is not set — Gemini VLM OCR will"
           echo "    use the deterministic stub.  Add the secret to enable real AI."
 
       # ── Run unit tests (non-integration, no live server needed) ───────────
@@ -188,7 +188,7 @@ jobs:
           FERNET_KEY=${{ secrets.FERNET_KEY }}
           PIN_PEPPER=${{ secrets.PIN_PEPPER || 'ci-pin-pepper' }}
           BOOTSTRAP_PIN=${{ secrets.BOOTSTRAP_PIN || '123456' }}
-          GOOGLE_AI_STUDIO_API_KEY=${{ secrets.GOOGLE_AI_STUDIO_API_KEY }}
+          GAIS_BM_APIK=${{ secrets.GAIS_BM_APIK }}
           EOF
 
       - name: Build and start services

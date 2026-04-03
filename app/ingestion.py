@@ -58,7 +58,7 @@ def parse_structural_layout(file_bytes: bytes, content_type: str) -> dict[str, A
 def simulate_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
     """Extract invoice data from an image.
 
-    When ``GOOGLE_AI_STUDIO_API_KEY`` is configured, this uses the Gemini Vision
+    When ``GAIS_BM_APIK`` is configured, this uses the Gemini Vision
     model for real OCR.  Otherwise it falls back to a deterministic stub so the
     rest of the pipeline keeps working without credentials.
     """
