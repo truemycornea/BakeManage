@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import date, datetime, timedelta
+import logging
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
 from typing import Any
@@ -13,12 +14,21 @@ from sqlalchemy.orm import Session
 from . import models
 from .schemas import InvoiceItemPayload, InvoicePayload
 
+logger = logging.getLogger(__name__)
+
 try:
     from docling.parsers.pdf_parser import PDFParser
     from docling.parsers.image_parser import ImageParser
 except ImportError:  # pragma: no cover - optional dependency safety
     PDFParser = None
     ImageParser = None
+
+try:
+    from google import genai as _google_genai
+    _GENAI_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional dependency safety
+    _google_genai = None  # type: ignore[assignment]
+    _GENAI_AVAILABLE = False
 
 
 def parse_structural_layout(file_bytes: bytes, content_type: str) -> dict[str, Any]:
@@ -46,6 +56,113 @@ def parse_structural_layout(file_bytes: bytes, content_type: str) -> dict[str, A
 
 
 def simulate_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
+    """Extract invoice data from an image.
+
+    When ``GAIS_BM_APIK`` is configured, this uses the Gemini Vision
+    model for real OCR.  Otherwise it falls back to a deterministic stub so the
+    rest of the pipeline keeps working without credentials.
+    """
+    from .config import settings
+
+    if _GENAI_AVAILABLE and settings.google_ai_studio_api_key:
+        try:
+            return _gemini_vlm_ocr(image_bytes, settings.google_ai_studio_api_key)
+        except Exception as exc:  # pragma: no cover - network / quota errors
+            logger.warning("Gemini OCR failed, falling back to stub: %s", exc)
+
+    return _stub_vlm_ocr(image_bytes)
+
+
+def _gemini_vlm_ocr(image_bytes: bytes, api_key: str) -> InvoicePayload:  # pragma: no cover
+    """Call Gemini Vision to extract structured invoice data from an image."""
+    import json
+    import re
+
+    client = _google_genai.Client(api_key=api_key)
+
+    prompt = (
+        "You are an invoice OCR system. Extract the invoice data from the image "
+        "and return ONLY a valid JSON object — no markdown, no explanation — with "
+        "this exact structure:\n"
+        '{"vendor_name": "string", "invoice_number": "string", '
+        '"invoice_date": "YYYY-MM-DD", "total_amount": "0.00", '
+        '"items": [{"item_name": "string", "quantity": 0.0, "unit_price": "0.00", '
+        '"tax_rate": "0.00", "expiration_date": "YYYY-MM-DD or null", '
+        '"category": "string", "unit_of_measure": "string", "vertical": "string"}]}'
+    )
+
+    import PIL.Image as PILImage
+    pil_image = PILImage.open(BytesIO(image_bytes))
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[prompt, pil_image],
+    )
+    raw = response.text.strip()
+
+    # Strip optional markdown fences
+    raw = re.sub(r"^```(?:json)?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
+
+    data = json.loads(raw)
+
+    items: list[InvoiceItemPayload] = []
+    for item in data.get("items", []):
+        exp_raw = item.get("expiration_date")
+        expiration_date: date | None = None
+        if exp_raw and exp_raw != "null":
+            try:
+                expiration_date = date.fromisoformat(exp_raw)
+            except ValueError:
+                expiration_date = None
+        items.append(
+            InvoiceItemPayload(
+                item_name=str(item.get("item_name", "Unknown")),
+                quantity=float(item.get("quantity", 1.0)),
+                unit_price=Decimal(str(item.get("unit_price", "0.00"))),
+                tax_rate=Decimal(str(item.get("tax_rate", "0.00"))),
+                expiration_date=expiration_date,
+                category=str(item.get("category", "general")),
+                unit_of_measure=str(item.get("unit_of_measure", "unit")),
+                vertical=str(item.get("vertical", "restaurant")),
+            )
+        )
+
+    if not items:
+        items.append(
+            InvoiceItemPayload(
+                item_name="Unknown",
+                quantity=1,
+                unit_price=Decimal("0.00"),
+                tax_rate=Decimal("0"),
+            )
+        )
+
+    invoice_date_raw = data.get("invoice_date")
+    invoice_date: date | None = None
+    if invoice_date_raw:
+        try:
+            invoice_date = date.fromisoformat(invoice_date_raw)
+        except ValueError:
+            invoice_date = date.today()
+
+    total = Decimal(str(data.get("total_amount", "0.00")))
+    if total == Decimal("0"):
+        total = sum(
+            (item.unit_price * Decimal(item.quantity))
+            * (Decimal("1") + (item.tax_rate or Decimal("0")) / Decimal("100"))
+            for item in items
+        ).quantize(Decimal("0.01"))
+
+    return InvoicePayload(
+        vendor_name=str(data.get("vendor_name", "Unknown Vendor")),
+        invoice_date=invoice_date or date.today(),
+        invoice_number=str(data.get("invoice_number", f"INV-{int(datetime.now(timezone.utc).timestamp())}")),
+        items=items,
+        total_amount=total.quantize(Decimal("0.01")),
+    )
+
+
+def _stub_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
     fingerprint = hashlib.sha256(image_bytes).hexdigest()[:8]
     items = [
         InvoiceItemPayload(
