@@ -57,6 +57,7 @@ class Settings(BaseModel):
     default_admin_username: str = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
     default_admin_pin: str | None = os.getenv("DEFAULT_ADMIN_PIN")
     fernet_key: str = os.getenv("FERNET_KEY", "")
+    google_ai_studio_api_key: str | None = os.getenv("GOOGLE_AI_STUDIO_API_KEY")
 
     @field_validator("fernet_key", mode="after")
     def ensure_fernet_key(cls, value: str, info):  # type: ignore[override]
