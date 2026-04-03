@@ -337,7 +337,8 @@ async def system_status(
 # ---------------------------------------------------------------------------
 
 @app.post("/auth/login", response_model=TokenResponse)
-async def login(payload: AuthRequest, session: Session = Depends(get_session)) -> TokenResponse:
+@limiter.limit("5/minute")
+async def login(request: Request, payload: AuthRequest, session: Session = Depends(get_session)) -> TokenResponse:
     user = session.query(User).filter(User.username == payload.username).first()
     if user is None or not verify_pin(payload.pin, user.hashed_pin, user.salt):
         raise HTTPException(status_code=401, detail="Invalid credentials")

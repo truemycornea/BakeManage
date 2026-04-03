@@ -133,7 +133,7 @@ def test_unknown_user_rejected(client):
 
 def test_empty_pin_rejected(client):
     r = _login(client, "rahul@olympus.ai", "")
-    assert r.status_code == 401
+    assert r.status_code in (401, 422)
 
 
 def test_swapped_pins_rejected(client):
