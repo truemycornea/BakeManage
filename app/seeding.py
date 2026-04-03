@@ -47,9 +47,9 @@ def seed_users(
 
             if not pin:
                 logger.warning(
-                    "Skipping local user %s: no PIN provided (expected key %r in local_user_pins)",
+                    "Skipping local user %s: no PIN provided (set %s env var)",
                     username,
-                    username,
+                    u_data["pin_env_var"],
                 )
                 continue
 
