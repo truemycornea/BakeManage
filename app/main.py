@@ -110,6 +110,13 @@ def _ensure_requirements_locked() -> None:
 
 
 def _seed_admin_user(session: Session) -> None:
+    users_to_seed = [
+        {"username": settings.default_admin_username, "role": "admin"},
+    ]
+
+    environment = str(getattr(settings, "environment", "") or "").lower()
+    seed_local_users = bool(getattr(settings, "seed_local_users", False))
+    if environment == "development" and seed_local_users:
     primary_user = {"username": settings.default_admin_username, "role": "admin"}
     optional_users_to_seed = [
         {"username": "rahul@olympus.ai", "role": "admin"},
