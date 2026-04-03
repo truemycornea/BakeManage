@@ -85,10 +85,13 @@ jobs:
       ENVIRONMENT: ci
 
       # ── Application secrets (non-empty fallbacks keep unit tests green) ───
-      JWT_SECRET:               ${{ secrets.JWT_SECRET || 'ci-unit-test-jwt-secret-minimum-32chars' }}
+      # Fallback values are used only when secrets are not configured.
+      # JWT_SECRET uses the run ID so it is unique per run and never static.
+      JWT_SECRET:               ${{ secrets.JWT_SECRET || format('ci-unit-test-jwt-{0}-{1}', github.run_id, github.run_attempt) }}
       DEFAULT_ADMIN_PIN:        ${{ secrets.DEFAULT_ADMIN_PIN || '123456' }}
       FERNET_KEY:               ${{ secrets.FERNET_KEY }}
       PIN_PEPPER:               ${{ secrets.PIN_PEPPER }}
+      # sandbox1234 matches the default used in test files via os.environ.get("BOOTSTRAP_PIN", "sandbox1234")
       BOOTSTRAP_PIN:            ${{ secrets.BOOTSTRAP_PIN || 'sandbox1234' }}
 
       # ── Google AI Studio ───────────────────────────────────────────────────
