@@ -23,7 +23,7 @@ This root document maps the strategic blueprints (`bakemanagerootv1.md`, `bakema
 - **Definitions:**
   - DoR: Story has acceptance criteria, data contracts, negative paths, and test hooks.
   - DoD: Merged, tested (`pytest`), docs updated, feature flags/config toggles documented.
-- **Backlog grooming:** Keep epic priorities E1 → E4 → E5 → E6; pull only DoR-ready stories.
+- **Backlog grooming:** Keep epic priorities E1 → E2 → E3 → E4 → E5 → E6; pull only DoR-ready stories.
 - **Increment checkpoints:** Each sprint must ship at least one production-hardening item (E3/E4) plus one value item (E1/E5).
 
 ## Implementation Plan (Actions & Owners)
