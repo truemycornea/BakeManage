@@ -66,15 +66,38 @@ class TestCredentialAlignment:
         """BOOTSTRAP_PIN in this process must equal the value the server uses.
 
         The server reads BOOTSTRAP_PIN from the environment at import time and
-        hashes it.  We can verify indirectly: a health/metrics call with the
-        test PIN must return 200, not 403.  A 403 here means PIN mismatch —
-        check that BOOTSTRAP_PIN is set consistently for both server and tests.
+        hashes it. We can verify indirectly: a health/metrics call with the
+        test headers must return 200. If it returns 403, inspect the response
+        detail to distinguish PIN mismatch from an unauthorized client role.
         """
         r = httpx.get(f"{BASE}/health/metrics", headers=HEADERS, timeout=10)
-        assert r.status_code != 403, (
-            f"PIN mismatch detected: server rejected X-Client-PIN from BOOTSTRAP_PIN env var. "
-            f"Ensure the server process and this test process share the same BOOTSTRAP_PIN "
-            f"(current value: {'(set)' if os.environ.get('BOOTSTRAP_PIN') else '(default: 123456)'})."
+
+        detail = ""
+        try:
+            payload = r.json()
+            if isinstance(payload, dict):
+                detail = str(payload.get("detail", ""))
+        except ValueError:
+            detail = ""
+
+        assert r.status_code == 200, (
+            (
+                f"PIN mismatch detected: server rejected X-Client-PIN from BOOTSTRAP_PIN env var. "
+                f"Ensure the server process and this test process share the same BOOTSTRAP_PIN "
+                f"(current value: {'(set)' if os.environ.get('BOOTSTRAP_PIN') else '(default: 123456)'}). "
+                f"Server detail: {detail or '<no detail>'}."
+            )
+            if r.status_code == 403 and "invalid pin" in detail.lower()
+            else (
+                f"Client role is not authorized for /health/metrics: X-Client-Role={_CLIENT_ROLE!r}. "
+                f"Ensure TEST_CLIENT_ROLE matches a role permitted by the server. "
+                f"Server detail: {detail or '<no detail>'}."
+            )
+            if r.status_code == 403 and ("role not authorized" in detail.lower() or "not authorized" in detail.lower())
+            else (
+                f"Expected GET {BASE}/health/metrics to return 200 for credential alignment guardrail, "
+                f"but got {r.status_code}. Response body: {r.text}"
+            )
         )
 
 
