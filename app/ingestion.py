@@ -76,9 +76,11 @@ def simulate_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
 def _gemini_vlm_ocr(image_bytes: bytes, api_key: str) -> InvoicePayload:  # pragma: no cover
     """Call Gemini Vision to extract structured invoice data from an image."""
     import json
+    import os
     import re
 
     client = _google_genai.Client(api_key=api_key)
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
     prompt = (
         "You are an invoice OCR system. Extract the invoice data from the image "
@@ -94,7 +96,7 @@ def _gemini_vlm_ocr(image_bytes: bytes, api_key: str) -> InvoicePayload:  # prag
     import PIL.Image as PILImage
     pil_image = PILImage.open(BytesIO(image_bytes))
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model=model,
         contents=[prompt, pil_image],
     )
     raw = response.text.strip()

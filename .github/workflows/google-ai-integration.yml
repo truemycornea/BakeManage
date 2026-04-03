@@ -36,6 +36,8 @@
 # │  │                              │ from JWT_SECRET if omitted        │   │
 # │  │ PIN_PEPPER (optional)        │ Random string pepper for PINs     │   │
 # │  │ BOOTSTRAP_PIN (optional)     │ Bootstrap PIN — defaults to 123456│   │
+# │  │ GEMINI_MODEL (optional)      │ Gemini model to use for validation│   │
+# │  │                              │ Defaults to gemini-2.5-flash      │   │
 # │  └──────────────────────────────┴──────────────────────────────────┘   │
 # │                                                                         │
 # │  That's it.  Push any commit and this workflow runs automatically.      │
@@ -102,6 +104,9 @@ jobs:
       # ── Google AI Studio ───────────────────────────────────────────────────
       GAIS_BM_APIK: ${{ secrets.GAIS_BM_APIK }}
 
+      # ── Gemini model — override via GEMINI_MODEL repo secret/var if needed ─
+      GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -125,16 +130,17 @@ jobs:
           from google import genai
 
           api_key = os.environ["GAIS_BM_APIK"]
-          client = genai.Client(api_key=api_key)
+          model   = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+          client  = genai.Client(api_key=api_key)
 
           try:
               response = client.models.generate_content(
-                  model="gemini-2.0-flash",
+                  model=model,
                   contents="Reply with only the word: OK",
               )
               text = response.text.strip()
               print(f"Gemini API responded: {text!r}")
-              print("✅  Google AI Studio API key is valid and Gemini is reachable.")
+              print(f"✅  Google AI Studio API key is valid and {model} is reachable.")
           except Exception as exc:
               print(f"❌  Gemini API validation failed: {exc}", file=sys.stderr)
               sys.exit(1)
