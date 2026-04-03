@@ -8,7 +8,7 @@ Python-based FastAPI microservice for multimodal document ingestion and dynamic 
 - PostgreSQL persistence via SQLAlchemy with models for vendors, invoices, inventory, and recipes
 - Celery workers for FEFO inventory deductions and cost of goods sold calculations
 - Dockerized multi-stage build for production deployment
-- Basic pytest coverage for ingestion and costing utilities
+- Comprehensive pytest suite covering ingestion, costing, and integration workflows
 
 ## Planning
 - SCRUM-aligned backlog and AI execution guidance: [bakemanageroot_scrum.md](./bakemanageroot_scrum.md)
