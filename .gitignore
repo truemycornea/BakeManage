@@ -39,3 +39,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# External credentials and API key files — never commit
+External/

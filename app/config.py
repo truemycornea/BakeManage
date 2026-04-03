@@ -57,12 +57,8 @@ class Settings(BaseModel):
     default_admin_username: str = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
     default_admin_pin: str | None = os.getenv("DEFAULT_ADMIN_PIN")
     fernet_key: str = os.getenv("FERNET_KEY", "")
-    google_ai_studio_api_key: str | None = os.getenv("GAIS_BM_APIK")
-    redis_url: str = Field(default=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-    jwt_secret: str = Field(default=os.getenv("JWT_SECRET", "change-this-secret"))
-    jwt_expiry_minutes: int = Field(default=int(os.getenv("JWT_EXPIRY_MINUTES", "30")))
-    default_admin_username: str = Field(default=os.getenv("DEFAULT_ADMIN_USERNAME", "rahul@olympus.ai"))
-    default_admin_pin: str | None = Field(default=os.getenv("DEFAULT_ADMIN_PIN"))
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", os.getenv("GAIS_BM_APIK", ""))
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
 
     @model_validator(mode="after")
     def ensure_jwt_secret(self) -> "Settings":

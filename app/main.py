@@ -82,6 +82,7 @@ from .tasks import (
     monitor_four_signals,
     validate_requirements_locked,
 )
+from . import gemini as _gemini
 
 # ---------------------------------------------------------------------------
 # Application setup
@@ -1832,4 +1833,118 @@ async def waste_report(
             for k, v in items_sorted[:10]
         ],
         "recent_events": recent,
+    }
+
+
+# ---------------------------------------------------------------------------
+# AI Insights  (Gemini 3 Flash — google-genai SDK)
+# ---------------------------------------------------------------------------
+
+class AIInsightRequest(BaseModel):
+    query: str
+    complexity: str | None = None          # "operational" | "insight" | "analytical" | None (auto)
+    include_modules: list[str] | None = None   # ["stock", "sales", "waste", "proofing"] or None=all
+
+
+@app.post("/ai/insights", response_model=dict)
+async def ai_insights(
+    payload: AIInsightRequest,
+    session: Session = Depends(get_session),
+    role: str = Depends(authorize_request),
+) -> dict:
+    """
+    Natural-language AI insights powered by Gemini 3 Flash.
+
+    Automatically fetches live platform data, sends it as context to Gemini,
+    and returns structured insights.  Complexity is auto-detected from the
+    query text but can be overridden: operational | insight | analytical.
+
+    Thinking budget is managed internally:
+      - operational: thinkingBudget=0, maxOutputTokens=500  (fastest)
+      - insight:     thinkingBudget=0, maxOutputTokens=700
+      - analytical:  auto thinking,    maxOutputTokens=1800 (deepest)
+    """
+    require_domain(role, "health")
+
+    if not payload.query or not payload.query.strip():
+        raise HTTPException(status_code=422, detail="query must not be empty")
+
+    modules = set(payload.include_modules or ["stock", "sales", "waste", "proofing"])
+
+    # -- Gather live context ---------------------------------------------------
+    context: dict = {}
+
+    if "stock" in modules:
+        expiring = (
+            session.query(InventoryItem)
+            .filter(InventoryItem.expiration_date.isnot(None))
+            .order_by(InventoryItem.expiration_date)
+            .limit(10)
+            .all()
+        )
+        context["expiring_stock"] = [
+            {"item": i.name, "qty": float(i.quantity_on_hand), "expires": str(i.expiration_date)}
+            for i in expiring
+        ]
+        context["total_stock_skus"] = session.query(InventoryItem).count()
+
+    if "sales" in modules:
+        from datetime import date as _date
+        today_start = datetime.combine(_date.today(), datetime.min.time())
+        sales_today = session.query(SaleRecord).filter(SaleRecord.sold_at >= today_start).all()
+        context["sales_today"] = {
+            "transaction_count": len(sales_today),
+            "revenue_inr": round(sum(float(s.total_amount) for s in sales_today), 2),
+        }
+
+    if "waste" in modules:
+        recent_waste = session.query(WasteRecord).order_by(WasteRecord.logged_at.desc()).limit(5).all()
+        context["recent_waste"] = [
+            {"item": w.item_name, "qty": w.quantity_wasted, "cause": w.waste_cause,
+             "cost_inr": float(w.estimated_cost) if w.estimated_cost else 0}
+            for w in recent_waste
+        ]
+
+    if "proofing" in modules:
+        last_proofing = (
+            session.query(ProofingTelemetry)
+            .order_by(ProofingTelemetry.created_at.desc())
+            .limit(3)
+            .all()
+        )
+        context["proofing_readings"] = [
+            {"temp_c": p.temperature_c, "humidity": p.humidity_percent, "status": p.status}
+            for p in last_proofing
+        ]
+
+    # -- Resolve complexity ----------------------------------------------------
+    complexity: _gemini.QueryComplexity | None = None
+    if payload.complexity:
+        try:
+            complexity = _gemini.QueryComplexity(payload.complexity)
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail=f"complexity must be one of: {[c.value for c in _gemini.QueryComplexity]}",
+            )
+
+    # -- Call Gemini -----------------------------------------------------------
+    try:
+        result = _gemini.ask(
+            payload.query.strip(),
+            context_data=context,
+            complexity=complexity,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Gemini error: {exc}")
+
+    return {
+        "insights": result["text"],
+        "model": result["model"],
+        "complexity_used": result["complexity"],
+        "thinking_budget": result["thinking_budget"],
+        "tokens": result["tokens"],
+        "context_modules": sorted(modules),
     }
