@@ -52,7 +52,7 @@ class Settings(BaseModel):
     redis_url: str = Field(default=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     jwt_secret: str = Field(default=os.getenv("JWT_SECRET", "change-this-secret"))
     jwt_expiry_minutes: int = Field(default=int(os.getenv("JWT_EXPIRY_MINUTES", "60")))
-    default_admin_username: str = Field(default=os.getenv("DEFAULT_ADMIN_USERNAME", "admin") or "admin")
+    default_admin_username: str = Field(default=os.getenv("DEFAULT_ADMIN_USERNAME") or "admin")
     default_admin_pin: str | None = Field(default=os.getenv("DEFAULT_ADMIN_PIN") or None)
     seed_local_users: bool = Field(
         default=os.getenv("SEED_LOCAL_USERS", "false").strip().lower() in ("true", "1", "yes")
