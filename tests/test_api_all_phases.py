@@ -5,7 +5,10 @@ All 38 endpoints tested with authenticated requests.
 
 Credential configuration (env-driven to stay in sync with the running server):
   BOOTSTRAP_PIN        — PIN used by X-Client-PIN header (default: "123456")
-  DEFAULT_ADMIN_PIN    — PIN for /auth/login (default: value of BOOTSTRAP_PIN)
+  DEFAULT_ADMIN_PIN    — PIN for /auth/login (default: "123456"); MUST be set on
+                         a fresh database to match what the server seeded the
+                         admin user with — the server raises RuntimeError at
+                         startup when this is absent and the admin row is missing.
   DEFAULT_ADMIN_USERNAME — admin username for /auth/login (default: "admin")
   TEST_CLIENT_ROLE     — role used in X-Client-Role header (default: "owner")
 """
@@ -21,9 +24,15 @@ import pytest
 # ---------------------------------------------------------------------------
 # Credentials — read from environment so tests and the running server always
 # agree, regardless of whether secrets or local defaults are in use.
+#
+# DEFAULT_ADMIN_PIN uses an explicit "123456" default (matching the CI default
+# in .github/workflows/ci.yml and app/config.py bootstrap_pin default).  It
+# does NOT fall back to BOOTSTRAP_PIN to avoid silently using a wrong PIN:
+# the server requires DEFAULT_ADMIN_PIN at startup on a fresh database and
+# will raise RuntimeError if it is absent (see app/seeding.py).
 # ---------------------------------------------------------------------------
 _BOOTSTRAP_PIN: str = os.environ.get("BOOTSTRAP_PIN", "123456")
-_ADMIN_PIN: str = os.environ.get("DEFAULT_ADMIN_PIN", _BOOTSTRAP_PIN)
+_ADMIN_PIN: str = os.environ.get("DEFAULT_ADMIN_PIN", "123456")
 _ADMIN_USERNAME: str = os.environ.get("DEFAULT_ADMIN_USERNAME", "admin")
 _CLIENT_ROLE: str = os.environ.get("TEST_CLIENT_ROLE", "owner")
 

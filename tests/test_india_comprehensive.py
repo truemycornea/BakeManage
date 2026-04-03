@@ -15,11 +15,17 @@ BASE_URL = "http://localhost:8000"
 
 # ---------------------------------------------------------------------------
 # Credentials — env-driven so tests and the running server always agree.
-# BOOTSTRAP_PIN is used for X-Client-PIN; DEFAULT_ADMIN_PIN (or BOOTSTRAP_PIN
-# when unset) is used for /auth/login; DEFAULT_ADMIN_USERNAME for the username.
+#
+# BOOTSTRAP_PIN is used for X-Client-PIN headers.
+# DEFAULT_ADMIN_PIN is used for /auth/login.  It MUST be set on a fresh
+# database to match the PIN the server used when seeding the admin user —
+# app/seeding.py raises RuntimeError at startup if DEFAULT_ADMIN_PIN is absent
+# and the admin row does not yet exist.  The default "123456" matches both
+# the CI workflow fallback and app/config.py's bootstrap_pin default.
+# DEFAULT_ADMIN_USERNAME is the admin username for /auth/login.
 # ---------------------------------------------------------------------------
 _BOOTSTRAP_PIN: str = os.environ.get("BOOTSTRAP_PIN", "123456")
-_ADMIN_PIN: str = os.environ.get("DEFAULT_ADMIN_PIN", _BOOTSTRAP_PIN)
+_ADMIN_PIN: str = os.environ.get("DEFAULT_ADMIN_PIN", "123456")
 _ADMIN_USERNAME: str = os.environ.get("DEFAULT_ADMIN_USERNAME", "admin")
 
 HEADERS  = {"X-Client-Role": "owner", "X-Client-PIN": _BOOTSTRAP_PIN}
