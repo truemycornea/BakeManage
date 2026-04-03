@@ -46,6 +46,13 @@ def client():
 
     session = next(get_session())
     try:
+        # Remove any stale entries so ensure_user always inserts fresh
+        # records with the expected PIN hash, regardless of DB state.
+        session.query(User).filter(
+            User.username.in_(["rahul@olympus.ai", "helen@olympus.ai"])
+        ).delete(synchronize_session=False)
+        session.commit()
+
         ensure_user(session, "rahul@olympus.ai", "admin", RAHUL_PIN)
         ensure_user(session, "helen@olympus.ai", "operations", HELEN_PIN)
         session.commit()
