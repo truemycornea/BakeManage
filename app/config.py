@@ -8,11 +8,6 @@ from typing import Dict, List
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-def _default_fernet_key() -> str:
-    seed = b"bakemanage-fernet-key-32-bytes!!"
-    return base64.urlsafe_b64encode(seed).decode("utf-8")
-
-
 class Settings(BaseModel):
     database_url: str = Field(
         default=os.getenv(
@@ -24,13 +19,11 @@ class Settings(BaseModel):
     celery_result_backend: str = Field(
         default=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
     )
-    environment: str = Field(default=os.getenv("ENVIRONMENT", "development"))
     enforce_https: bool = Field(
         default=os.getenv("ENFORCE_HTTPS", "true").strip().lower() not in ("false", "0", "no")
     )
     cache_ttl_seconds: int = Field(default=300)
     cache_namespace: str = Field(default="bakemanage")
-    fernet_key: str = Field(default=os.getenv("FERNET_KEY", _default_fernet_key()))
     pin_pepper: str = Field(default=os.getenv("PIN_PEPPER", "bake-pin-pepper"))
     bootstrap_pin: str = Field(default=os.getenv("BOOTSTRAP_PIN", "123456"))
     anomaly_threshold: float = Field(default=0.35)

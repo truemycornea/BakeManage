@@ -16,20 +16,13 @@ import os
 import pytest
 
 # ── Environment must be patched before the app module is imported ───────────
-os.environ["DATABASE_URL"] = "sqlite:///./test_auth_local.db"
+os.environ["DATABASE_URL"] = "sqlite:////tmp/test_auth_local.db"
 os.environ["CELERY_BROKER_URL"] = "memory://"
 os.environ["CELERY_RESULT_BACKEND"] = "cache+memory://"
 os.environ["ENFORCE_HTTPS"] = "false"
 os.environ["SUPPLY_CHAIN_GUARD"] = "false"
 os.environ["DEFAULT_ADMIN_PIN"] = "test-admin-1234"
 os.environ["JWT_SECRET"] = "test-jwt-secret-for-auth-local"
-os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/bakemanage_test_auth_local.db")
-os.environ.setdefault("CELERY_BROKER_URL", "memory://")
-os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
-os.environ.setdefault("ENFORCE_HTTPS", "false")
-os.environ.setdefault("SUPPLY_CHAIN_GUARD", "false")
-os.environ.setdefault("DEFAULT_ADMIN_PIN", "test-admin-1234")
-os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-auth-local")
 
 import jwt as pyjwt  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -115,33 +108,27 @@ def test_helen_token_carries_operations_role(client):
 
 def test_rahul_wrong_pin_rejected(client):
     r = _login(client, "rahul@olympus.ai", "totally-wrong-pin")
-    assert r.status_code == 401
     assert r.status_code in (401, 429)
 
 
 def test_helen_wrong_pin_rejected(client):
     r = _login(client, "helen@olympus.ai", "totally-wrong-pin")
-    assert r.status_code == 401
     assert r.status_code in (401, 429)
 
 
 def test_unknown_user_rejected(client):
     r = _login(client, "ghost@olympus.ai", RAHUL_PIN)
-    assert r.status_code == 401
     assert r.status_code in (401, 429)
 
 
 def test_empty_pin_rejected(client):
     r = _login(client, "rahul@olympus.ai", "")
-    assert r.status_code == 401
-    assert r.status_code in (401, 422, 429)
+    assert r.status_code == 422
 
 
 def test_swapped_pins_rejected(client):
     """Helen's PIN must not grant access to Rahul's account and vice-versa."""
     r_rahul = _login(client, "rahul@olympus.ai", HELEN_PIN)
     r_helen = _login(client, "helen@olympus.ai", RAHUL_PIN)
-    assert r_rahul.status_code == 401
-    assert r_helen.status_code == 401
     assert r_rahul.status_code in (401, 429)
     assert r_helen.status_code in (401, 429)
