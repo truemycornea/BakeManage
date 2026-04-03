@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from PIL import Image, ImageStat
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
@@ -126,7 +127,11 @@ def _seed_admin_user(session: Session) -> None:
             hashed, salt = hash_pin(settings.default_admin_pin)
             user = User(username=u_data["username"], role=u_data["role"], hashed_pin=hashed, salt=salt)
             session.add(user)
-    session.commit()
+            try:
+                session.commit()
+            except IntegrityError:
+                # Another instance seeded this user concurrently; safe to ignore.
+                session.rollback()
 
 
 class CredentialRequest(BaseModel):

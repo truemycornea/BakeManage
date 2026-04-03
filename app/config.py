@@ -5,7 +5,7 @@ import base64
 import os
 from typing import Dict, List
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def _default_fernet_key() -> str:
@@ -50,13 +50,20 @@ class Settings(BaseModel):
             "auditor": ["inventory", "health"],
         }
     )
-    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    environment: str = os.getenv("ENVIRONMENT", "development")
-    jwt_secret: str = os.getenv("JWT_SECRET", "change-this-secret")
-    jwt_expiry_minutes: int = int(os.getenv("JWT_EXPIRY_MINUTES", "30"))
-    default_admin_username: str = os.getenv("DEFAULT_ADMIN_USERNAME", "rahul@olympus.ai")
-    default_admin_pin: str | None = os.getenv("DEFAULT_ADMIN_PIN")
-    fernet_key: str = os.getenv("FERNET_KEY", "")
+    redis_url: str = Field(default=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+    jwt_secret: str = Field(default=os.getenv("JWT_SECRET", "change-this-secret"))
+    jwt_expiry_minutes: int = Field(default=int(os.getenv("JWT_EXPIRY_MINUTES", "30")))
+    default_admin_username: str = Field(default=os.getenv("DEFAULT_ADMIN_USERNAME", "rahul@olympus.ai"))
+    default_admin_pin: str | None = Field(default=os.getenv("DEFAULT_ADMIN_PIN"))
+
+    @model_validator(mode="after")
+    def ensure_jwt_secret(self) -> "Settings":
+        env = str(self.environment or "development").lower()
+        if env != "development" and self.jwt_secret == "change-this-secret":
+            raise ValueError(
+                "JWT_SECRET must be set to a strong secret in non-development environments"
+            )
+        return self
 
     @field_validator("fernet_key", mode="after")
     def ensure_fernet_key(cls, value: str, info):  # type: ignore[override]
