@@ -72,7 +72,8 @@ def _fetch_from_vault(app_name: str, vault_addr: str, vault_token: str) -> dict[
             if value:
                 resolved[env_var] = value
         except Exception as exc:  # noqa: BLE001
-            print(f"[inject_secrets] Warning: could not read {path}: {exc}", file=sys.stderr)
+            # Log only the exception type — do not log path or value to avoid leaking secret metadata
+            print(f"[inject_secrets] Warning: could not read Vault key '{env_var}': {type(exc).__name__}", file=sys.stderr)
     return resolved
 
 
@@ -124,8 +125,11 @@ def main() -> None:
         secrets = _fetch_from_env()
 
     env_content = _build_env_file(secrets)
+    # Write with owner-only permissions (0o600) — this file contains sensitive secrets
+    output_path.touch(mode=0o600, exist_ok=True)
     output_path.write_text(env_content, encoding="utf-8")
-    print(f"[inject_secrets] Wrote {output_path.resolve()}")
+    output_path.chmod(0o600)
+    print(f"[inject_secrets] Wrote {output_path.resolve()} (mode 0600)")
 
 
 if __name__ == "__main__":
