@@ -7,8 +7,52 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  lint-and-security:
+    name: Lint & Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Secrets scan — detect hardcoded credentials
+        run: |
+          echo "=== Scanning for hardcoded secrets ==="
+          FOUND=$(git grep -rn -P '(password|secret|token|api_key|apikey)\s*=\s*["\x27][^$<{][^"'\'']{2,}["\x27]' \
+              -- ':!.env.example' ':!*.md' ':!tests/' ':!app/config.py' 2>/dev/null || true)
+          if [ -n "$FOUND" ]; then
+            FILTERED=$(echo "$FOUND" | grep -v -E 'change-this-secret|your-|placeholder|example|test|fake|mock' || true)
+            if [ -n "$FILTERED" ]; then
+              echo "FAIL: Potential hardcoded secret detected. Use environment variables instead."
+              echo "$FILTERED"
+              exit 1
+            fi
+          fi
+          echo "PASS: No hardcoded secrets found."
+
+      - name: Check requirements.txt pins
+        run: |
+          echo "=== Verifying all dependencies are pinned ==="
+          if grep -v '^\s*#' requirements.txt | grep -v '^\s*$' | grep -qv '=='; then
+            echo "FAIL: Unpinned dependency detected. All dependencies must use '=='."
+            exit 1
+          fi
+          echo "PASS: All dependencies are pinned."
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint-and-security
     permissions:
       contents: read
 
@@ -44,13 +88,11 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       ENVIRONMENT: development
       ENFORCE_HTTPS: "false"
+      OLYMPUS_APP_NAME: bakemanage
       # Non-sensitive configuration — plain environment variables.
       JWT_EXPIRY_MINUTES: "30"
       DEFAULT_ADMIN_USERNAME: ${{ vars.DEFAULT_ADMIN_USERNAME || 'admin' }}
       # Sensitive credentials — read from GitHub Secrets with a safe CI default.
-      # The default value here MUST match the default in app/config.py (bootstrap_pin: "123456")
-      # and the default used by tests when BOOTSTRAP_PIN is unset.
-      # To use a custom PIN, set BOOTSTRAP_PIN and DEFAULT_ADMIN_PIN as repository secrets.
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
       DEFAULT_ADMIN_PIN: ${{ secrets.DEFAULT_ADMIN_PIN || '123456' }}
       BOOTSTRAP_PIN: ${{ secrets.BOOTSTRAP_PIN || '123456' }}
@@ -77,10 +119,10 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg2://bakemanage:bakemanage@localhost:5432/bakemanage
 
-      - name: Wait for API to be ready
+      - name: Wait for API to be ready (healthz)
         run: |
-          for i in $(seq 1 15); do
-            curl -sf http://localhost:8000/health && break || sleep 2
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8000/healthz && break || sleep 2
           done
 
       - name: Run integration tests

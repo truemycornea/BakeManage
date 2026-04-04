@@ -1,0 +1,99 @@
+# gap_bakemanage_001_deploy.yml
+# Owner: GHCP (authored); AGAM (executes from Atlas or LXC 199)
+# Story: STORY-008 / EPIC-08 — AGAM-Ready Deployment Artefacts
+# Sprint: Ares
+# Status: 🔷 CODED — artefact exists, awaiting AGAM execution post-May
+#
+# Execution (AGAM on Atlas):
+#   ansible-playbook infra/ansible/gap_bakemanage_001_deploy.yml \
+#     -i infra/ansible/inventory/olympus.yml \
+#     --tags deploy \
+#     --check --diff   # dry-run first
+#   ansible-playbook infra/ansible/gap_bakemanage_001_deploy.yml \
+#     -i infra/ansible/inventory/olympus.yml \
+#     --tags deploy    # apply
+#
+# Pre-requisites (AGAM checklist):
+#   [ ] Vault reachable: curl -sf https://vault.olympus.ai/v1/sys/health
+#   [ ] DNS resolves:    dig bakemanage.olympus.ai @10.10.30.53
+#   [ ] SSH accessible:  ssh bakemanage-lxc 'echo ok'
+#   [ ] .env rendered:   scripts/inject_secrets.py writes /opt/bakemanage/.env
+---
+- name: "Deploy BakeManage to Olympus LXC"
+  hosts: bakemanage_app
+  gather_facts: false
+  tags: [deploy, bakemanage]
+
+  vars:
+    app_name: bakemanage
+    app_dir: /opt/bakemanage
+    compose_file: "{{ app_dir }}/docker-compose.yml"
+    vault_addr: "{{ lookup('env', 'VAULT_ADDR') | default('https://vault.olympus.ai') }}"
+    olympus_app_name: "{{ lookup('env', 'OLYMPUS_APP_NAME') | default('bakemanage') }}"
+
+  pre_tasks:
+    - name: "Pre-flight: Verify Vault is reachable"
+      ansible.builtin.uri:
+        url: "{{ vault_addr }}/v1/sys/health"
+        method: GET
+        status_code: [200, 429, 472, 473]
+        timeout: 10
+      register: _vault_health
+      failed_when: _vault_health.status not in [200, 429, 472, 473]
+
+    - name: "Pre-flight: Verify app directory exists"
+      ansible.builtin.stat:
+        path: "{{ app_dir }}"
+      register: _app_dir_stat
+      failed_when: not _app_dir_stat.stat.exists
+
+    - name: "Pre-flight: Verify docker compose is available"
+      ansible.builtin.command: docker compose version
+      changed_when: false
+
+  tasks:
+    - name: "Inject secrets from Vault into .env"
+      ansible.builtin.command:
+        cmd: "python3 {{ app_dir }}/scripts/inject_secrets.py"
+        chdir: "{{ app_dir }}"
+      environment:
+        VAULT_ADDR: "{{ vault_addr }}"
+        VAULT_TOKEN: "{{ lookup('env', 'VAULT_TOKEN') }}"
+        OLYMPUS_APP_NAME: "{{ olympus_app_name }}"
+      changed_when: true
+      no_log: true  # suppress secret values from logs
+
+    - name: "Pull latest images"
+      ansible.builtin.command:
+        cmd: docker compose pull
+        chdir: "{{ app_dir }}"
+      changed_when: true
+      tags: [pull]
+
+    - name: "Deploy via Docker Compose (rolling update)"
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans
+        chdir: "{{ app_dir }}"
+      changed_when: true
+      tags: [up]
+
+    - name: "Wait for API healthz to pass"
+      ansible.builtin.uri:
+        url: "http://localhost:8000/healthz"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: _healthz
+      retries: 12
+      delay: 5
+      until: _healthz.status == 200
+
+  post_tasks:
+    - name: "Evidence: Record deployment entry"
+      ansible.builtin.debug:
+        msg: >
+          [EVIDENCE] Story: STORY-008 | Sprint: Ares |
+          Action: docker compose up -d | Host: {{ inventory_hostname }} |
+          Healthz: {{ _healthz.json | default({}) }} |
+          Timestamp: {{ ansible_date_time.iso8601 | default('unknown') }}
+      tags: [evidence]

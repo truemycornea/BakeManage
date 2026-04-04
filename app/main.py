@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import random
 import time
 import threading
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from io import BytesIO
 
@@ -176,6 +177,34 @@ if settings.enforce_https:
     app.add_middleware(HTTPSRedirectMiddleware)
 
 
+# ---------------------------------------------------------------------------
+# Authentik SSO middleware stub (Olympus platform integration)
+# Disabled by default (SSO_ENFORCE=false) for cloud-first development.
+# When Olympus platform is live, set SSO_ENFORCE=true and NPM + Authentik
+# Outpost will inject X-Auth-Request-* headers automatically.
+# ---------------------------------------------------------------------------
+
+_SSO_ENFORCE: bool = os.getenv("SSO_ENFORCE", "false").strip().lower() == "true"
+_SSO_PUBLIC_PATHS: frozenset[str] = frozenset({
+    "/healthz", "/health", "/health/extended", "/metrics",
+    "/docs", "/openapi.json", "/login",
+})
+
+
+@app.middleware("http")
+async def _sso_middleware(request: Request, call_next):
+    """Forward Authentik SSO headers to request state; enforce SSO when SSO_ENFORCE=true."""
+    user = request.headers.get("X-Auth-Request-User")
+    email = request.headers.get("X-Auth-Request-Email")
+    groups = [g for g in request.headers.get("X-Auth-Request-Groups", "").split(",") if g]
+    request.state.sso_user = user
+    request.state.sso_email = email
+    request.state.sso_groups = groups
+    if _SSO_ENFORCE and not user and request.url.path not in _SSO_PUBLIC_PATHS:
+        return JSONResponse(status_code=401, content={"detail": "Authentication required"})
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def _track_requests(request: Request, call_next):
     """Record request counters for /metrics Prometheus endpoint."""
@@ -252,6 +281,35 @@ async def health(session: Session = Depends(get_session)) -> dict[str, str]:
             content={"status": "degraded", "unhealthy": errors},
         )
     return {"status": "ok"}
+
+
+@app.get("/healthz")
+async def healthz(session: Session = Depends(get_session)) -> dict[str, str]:
+    """Olympus-standard liveness probe — returns status, version, and timestamp."""
+    errors: list[str] = []
+    try:
+        session.execute(__import__("sqlalchemy").text("SELECT 1"))
+    except Exception:
+        errors.append("db")
+    try:
+        redis_client.ping()
+    except Exception:
+        errors.append("redis")
+    if errors:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "degraded",
+                "version": app.version,
+                "unhealthy": errors,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    return {
+        "status": "ok",
+        "version": app.version,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @app.get("/health/extended")
@@ -819,6 +877,11 @@ async def store_credentials(
 async def health_metrics(role: str = Depends(authorize_request)) -> PlainTextResponse:
     """Native Prometheus text-format metrics endpoint (Phase 2 v2.1)."""
     require_domain(role, "health")
+    return _build_prometheus_response()
+
+
+def _build_prometheus_response() -> PlainTextResponse:
+    """Build Prometheus text-format metrics payload (shared by /health/metrics and /metrics)."""
     uptime_seconds = time.time() - _prom_start_time
     lines: list[str] = []
 
@@ -853,6 +916,16 @@ async def health_metrics(role: str = Depends(authorize_request)) -> PlainTextRes
     lines.append(f"bakemanage_redis_cache_misses_total {cache_misses}")
 
     return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
+
+
+@app.get("/metrics")
+async def public_metrics() -> PlainTextResponse:
+    """Public Prometheus scrape endpoint (Olympus-standard).
+
+    Exposes the same metrics as /health/metrics without authentication.
+    Prometheus and Uptime Kuma scrape this endpoint; no sensitive data is included.
+    """
+    return _build_prometheus_response()
 
 
 # ---------------------------------------------------------------------------
