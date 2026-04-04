@@ -1,12 +1,19 @@
+networks:
+  bakemanage_net:
+    driver: bridge
+
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: bakemanage
       POSTGRES_PASSWORD: bakemanage
       POSTGRES_DB: bakemanage
     volumes:
       - bakemanage_pgdata:/var/lib/postgresql/data
+    networks:
+      - bakemanage_net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bakemanage -d bakemanage"]
       interval: 5s
@@ -15,6 +22,9 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - bakemanage_net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -25,21 +35,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: bakemanage:sandbox
+    image: bakemanage:${VERSION:-latest}
+    restart: unless-stopped
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     environment:
       SERVICE: api
+      OLYMPUS_APP_NAME: bakemanage
     env_file:
       - .env
     ports:
       - "8000:8000"
+    networks:
+      - bakemanage_net
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -49,12 +63,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: bakemanage:sandbox
+    image: bakemanage:${VERSION:-latest}
+    restart: unless-stopped
     command: celery -A app.tasks.celery_app worker --loglevel=info
     environment:
       SERVICE: worker
+      OLYMPUS_APP_NAME: bakemanage
     env_file:
       - .env
+    networks:
+      - bakemanage_net
     depends_on:
       db:
         condition: service_healthy
@@ -62,15 +80,24 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping --timeout 5 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   frontend:
     image: nginx:alpine
+    restart: unless-stopped
     volumes:
       - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./frontend/lucide.min.js:/usr/share/nginx/html/lucide.min.js:ro
     ports:
       - "3001:80"
+    networks:
+      - bakemanage_net
     depends_on:
       api:
         condition: service_healthy

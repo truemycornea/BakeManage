@@ -1,0 +1,14 @@
+# Olympus platform inventory — BakeManage app hosts
+# Owner: GHCP (authored); AGAM (maintains values at runtime)
+# Status: 🔷 CODED — IP/hostname filled by AGAM when LXC is allocated
+#
+# Replace <bakemanage-lxc-ip> with the actual LXC IP from docs/PROJECT_BRAIN.md
+# FQDN: bakemanage.olympus.ai — registered in AdGuard via GHCP-06 onboard
+---
+all:
+  hosts:
+    bakemanage_app:
+      ansible_host: "<bakemanage-lxc-ip>"
+      ansible_user: bakemanage
+      ansible_ssh_private_key_file: "~/.ssh/olympus_deploy"
+      ansible_python_interpreter: /usr/bin/python3
