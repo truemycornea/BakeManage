@@ -72,8 +72,8 @@ def _fetch_from_vault(app_name: str, vault_addr: str, vault_token: str) -> dict[
             if value:
                 resolved[env_var] = value
         except Exception as exc:  # noqa: BLE001
-            # Log only the exception type — do not log path or value to avoid leaking secret metadata
-            print(f"[inject_secrets] Warning: could not read Vault key '{env_var}': {type(exc).__name__}", file=sys.stderr)
+            # Log only the exception type — do not log path, value, or secret identifiers to avoid leaking secret metadata
+            print(f"[inject_secrets] Warning: could not read one or more Vault keys (error type: {type(exc).__name__})", file=sys.stderr)
     return resolved
 
 
