@@ -1,334 +1,206 @@
-# Deep Research Prompt 3 — AI/ML Strategy, Operations & Cost Optimisation
+# Prompt 3 — Perplexity Pro (GitHub Connected + Web Search)
 
-**Intended AI Platform:** Google AI Studio (Gemini 1.5 Pro / 2.0 Flash), Perplexity (Deep Research), GitHub Copilot (Agent Mode)
-**Output Document Title:** `ResearchInsight3_AI_ML_Ops.md`
-**Purpose:** Generate a deep-insight document covering BakeManage's complete AI/ML strategy, deployment operations on Google Cloud via Antigravity, cost optimisation architecture, and the MCP Hub orchestration layer — enabling the development team to implement AI features and production operations with maximum impact at minimum cost.
-
----
-
-## Context You Must Read Before Answering
-
-BakeManage 3.0 is an **India-native, AI-augmented bakery ERP** with these AI/ML components (existing or planned):
-
-- **Multimodal Invoice Ingestion:** Image/PDF/Excel → structured inventory data. Currently simulated VLM OCR; target: Docling + Tesseract (local, free) + optional Gemini Vision (premium tier).
-- **Proofing Telemetry Anomaly Detection:** Temperature/humidity/CO₂ sensor data → anomaly scores using time-series analysis. Existing ML model in `app/`.
-- **Demand Forecasting:** ML forecasting for perishable SKU demand. Target: upgrade to Prophet or SARIMA.
-- **RAG-based AI Assistant:** Bakery SOP/recipe/knowledge base Q&A. Planned: pgvector + local LLM (Ollama/Mistral) + optional Gemini 1.5.
-- **AI Cost Constraints:** Architecture must minimise per-call API costs. Avoid paying for AI API interactions where local/cached solutions exist.
-
-**Infrastructure:**
-
-- Google Cloud: Cloud SQL (PostgreSQL), Memorystore (Redis), GCS, Artifact Registry, Antigravity (managed container service / GKE Autopilot).
-- CI/CD: GitHub Actions → Antigravity deployments.
-- MCP Hub: deployed and available for orchestrating AI agents, status checks, and automation.
-- Monitoring: Prometheus + Grafana, OpenTelemetry, structured JSON logs → Cloud Logging.
-
-**SCRUM Epics relevant to this prompt:**
-
-- **Epic A3:** Robust OCR & Ingestion (local Docling/Tesseract + optional Gemini Vision).
-- **Epic B3:** Advanced AI & Analytics (RAG assistant, Prophet/SARIMA forecasting, analytics dashboards).
-- **Epic A4:** CI/CD & quality gates (Antigravity deployment, automated testing).
-- **Epic C1:** Multi-tenant SaaS (AI cost attribution per tenant, quota management).
+**Platform:** Perplexity Pro — paste this entire prompt into a new conversation.
+**GitHub connection:** In Perplexity settings, connect your GitHub account and authorise access to `truemycornea/BakeManage`. Perplexity will read the repo alongside its web search.
+**What Perplexity will do:** Combine live web research (with citations) and your GitHub repo context to produce a business intelligence and technical validation document with real-world data.
+**Output:** Save the response as `ResearchInsight3_PerplexityValidation.md` in the repo root.
 
 ---
 
-## Research Tasks — Answer All Sections Thoroughly
+## Your Role
 
-### Task 1 — AI/ML Architecture Blueprint
+You are a senior business analyst, market researcher, and technical validator with real-time web access. Read the GitHub repo `truemycornea/BakeManage` (specifically `README.md` and `ResearchDoc1.md`) AND search the web for current, cited data to answer every question below.
 
-Produce a **complete AI/ML architecture** for BakeManage 3.0 covering all AI components:
-
-1. **Component inventory:** List every AI/ML component (existing + planned), its input/output, latency requirement, cost model (per-call vs fixed), and whether it runs locally or calls an external API.
-
-2. **Local-first AI strategy:** Design a "local-first, cloud-optional" AI architecture where:
-   - All AI features work offline or with local models by default (zero recurring API cost for free/starter tier).
-   - Premium external APIs (Gemini Vision, Gemini 1.5) are activated per-tenant via config flag and billed usage-metered.
-   - Model serving stack: Ollama on a dedicated worker VM/container; which models to pre-load (Mistral 7B, Llava, nomic-embed-text).
-
-3. **AI service architecture diagram (described in text):**
-   - Components: `AIRouter` service, `OCRService`, `EmbeddingService`, `LLMService`, `ForecastingService`, `TelemetryAnomalyService`.
-   - How they communicate (REST, gRPC, Celery tasks, or direct import).
-   - Where each runs (same container as FastAPI, separate worker, separate VM).
-   - Data flows between components.
-
-4. **Model registry & versioning:** How to version, store, and deploy ML models (Prophet, anomaly detector) — use MLflow or a simpler approach for a lean startup; justify.
-
-5. **AI observability:** What metrics to track for each AI component — accuracy drift, latency, token usage, cost per tenant, error rates; how to surface these in Grafana.
+**Priority rule:** Always prefer real data with citations over estimates. If a number cannot be verified with a source, say so and give a reasoned estimate with your methodology.
 
 ---
 
-### Task 2 — Multimodal Invoice Ingestion (Epic A3) — Complete Implementation
+## BakeManage 3.0 — What It Is (Read Repo for Full Context)
 
-Design the **production-grade, cost-optimised** invoice ingestion pipeline:
+BakeManage is an **open-source, India-native, AI-augmented bakery ERP + POS + Android app** (FastAPI + PostgreSQL + React + Kotlin + Google Cloud). Key facts:
 
-1. **OCR provider comparison table:**
-
-   | Criterion | Docling (local) | Tesseract (local) | PaddleOCR (local) | Gemini Vision API | Google Document AI | Azure Form Recognizer |
-   |-----------|----------------|-------------------|-------------------|-------------------|-------------------|----------------------|
-   | Cost | Free | Free | Free | Per-image (metered) | Per-page (metered) | Per-page (metered) |
-   | Accuracy (printed invoices) | ? | ? | ? | ? | ? | ? |
-   | Accuracy (handwritten) | ? | ? | ? | ? | ? | ? |
-   | Structured data extraction | ? | ? | ? | ? | ? | ? |
-   | Self-hostable | Yes | Yes | Yes | No | No | No |
-   | India vendor invoice format support | ? | ? | ? | ? | ? | ? |
-   | Language support (Tamil/Malayalam script) | ? | ? | ? | ? | ? | ? |
-
-   Research and fill this table with real data. Recommend primary (local) and premium (API) providers with justification.
-
-2. **Ingestion pipeline implementation:**
-   - Full Python implementation of an `InvoiceIngestionService` class with:
-     - `ingest(file: bytes, mime_type: str, tenant_id: str, provider: str = "auto") -> InvoiceResult`
-     - Provider auto-selection logic (free tier → local; premium tier → Gemini Vision).
-     - Retry with fallback: if local OCR confidence < threshold → escalate to API (with tenant quota check).
-     - Structured output schema: `InvoiceResult` (vendor, date, line items, GST breakdown, total).
-   - Post-OCR NLP: entity extraction for Indian vendor invoice formats (GSTIN, HSN codes, quantity units like kg/g/pcs).
-   - Deduplication: how to detect and reject duplicate invoice uploads.
-
-3. **Indian invoice format handling:**
-   - Research common vendor invoice formats used by Indian food ingredient suppliers.
-   - What are the mandatory fields (GSTIN, invoice number, date, HSN/SAC, GST rate, CGST/SGST/IGST amounts)?
-   - How does Docling/Tesseract handle vernacular language text mixed with English on invoices?
-
-4. **Template-based extraction fallback:** Design a configurable template system where admin can define extraction rules (bounding boxes + field names) for recurring vendor invoice formats — eliminating API calls for known vendors.
-
-5. **Accuracy measurement:** Define precision/recall metrics for invoice extraction; design a labelled test dataset of 50+ diverse Indian invoice samples; CI gate: fail if precision < 85%.
+- **Existing:** multimodal invoice ingestion, FEFO inventory, GST multi-slab billing, ML demand forecasting, proofing telemetry, loyalty — 97/97 tests passing. No POS UI, no Android app yet.
+- **USPs:** (1) AI invoice ingestion (image/PDF/Excel → inventory), (2) IoT proofing telemetry anomaly detection, (3) India-native GST calculator in POS, (4) ML perishable demand forecasting + waste tracking, (5) open-source self-hostable
+- **Target:** Indian SME bakeries (standalone 1–3 outlets, South India priority: Kerala, Tamil Nadu, Karnataka, Andhra Pradesh, Telangana)
+- **Model:** Free self-hosted → Bakery Pro (₹2,499/outlet/month) → Chain Enterprise (₹7,999+/outlet/month) → white-label
+- **Competitors:** VasyERP, LOGIC ERP, Petpooja, Posist, FlexiBake, Cybake, FoodReady.ai, Zoho Books
 
 ---
 
-### Task 3 — Demand Forecasting Upgrade (Epic B3)
+## Research Section 1 — Indian Bakery Market (Cite All Numbers)
 
-Design the **production forecasting system** for perishable bakery SKU demand:
+Search for and answer with citations:
 
-1. **Model selection:**
-   - Compare: Facebook Prophet vs SARIMA vs LightGBM (gradient boosting) vs NeuralProphet for the bakery use case.
-   - Key requirements: handles daily seasonality, weekly patterns, Indian public holidays (Onam, Diwali, Christmas, Eid), intermittent demand for slow-moving SKUs, cold-start for new products.
-   - Recommend primary model + ensemble strategy.
+1. **Market size:** How many bakery establishments exist in India (organised + unorganised)? What is the Indian bakery industry revenue (₹ crore / USD billion) in 2024–2025? What is the projected CAGR to 2030? Cite: IBEF, NASSCOM, Statista, CII reports, or similar.
 
-2. **Feature engineering:**
-   - What features to extract from existing tables (`sales`, `inventory`, `pos_sales`, `telemetry`) to feed the forecast model.
-   - External features to integrate: Indian public holiday calendar (source: `holidays` Python library), weather data (OpenMeteo API — free), local event calendar.
-   - Feature importance analysis: which features contribute most to bakery demand (day-of-week, temperature, holidays, promotions)?
+2. **Software penetration:** What percentage of Indian SME bakeries currently use ERP or POS software? What is the penetration rate vs other F&B segments (restaurants, QSR)? Cite market research or industry surveys.
 
-3. **Implementation plan:**
-   - Full Python pseudocode (detailed enough to implement) for:
-     - `ForecastTrainer`: train Prophet model per SKU, save model to MLflow/GCS, evaluate on validation set.
-     - `ForecastPredictor`: load model, generate 7/14/30-day forecasts, return with confidence intervals.
-     - Celery task: `retrain_forecasts` — scheduled weekly, retrains models for all active SKUs.
-   - Cold-start strategy: for new SKUs with < 4 weeks of history, use category-level prior or similar-SKU transfer.
+3. **South India bakery density:** How many organised bakeries operate in Kerala, Tamil Nadu, Karnataka, Andhra Pradesh, and Telangana combined? Which city has the highest density (Chennai, Bengaluru, Kochi, Hyderabad)? Cite state-level FSSAI registration data or trade association data if available.
 
-4. **Forecast accuracy targets:**
-   - Define MAPE, RMSE, and bias targets for bakery demand forecasting.
-   - Research industry benchmarks for perishable food demand forecasting accuracy.
-   - Design A/B testing framework to compare model versions.
+4. **Digital adoption drivers:** What are the top 3 reasons Indian bakery owners are adopting digital tools right now? (GST compliance, Swiggy/Zomato integration, FSSAI hygiene mandates, labour management?) Cite news articles, FSSAI press releases, or GST portal reports.
 
-5. **Business impact integration:**
-   - How forecast output flows into: purchasing recommendations, production scheduling, waste reduction alerts, inventory ordering triggers.
-   - FastAPI endpoints: `GET /analytics/forecast/{sku_id}?days=14` — what does the response schema look like?
+5. **TAM/SAM/SOM calculation:** Based on your research, calculate:
+   - TAM: Total potential annual SaaS revenue if all 50,000+ organised Indian bakeries paid ₹1,500/month average
+   - SAM: Subset in Tier 1+2 cities with > ₹1 lakh/month revenue, smartphone-equipped
+   - SOM: Realistic 3-year capture for a bootstrapped startup with South India focus
 
 ---
 
-### Task 4 — RAG-based AI Bakery Assistant (Epic B3)
+## Research Section 2 — Competitor Intelligence (Real Pricing + Feature Data)
 
-Design the **complete RAG implementation** for BakeManage's AI Assistant feature:
+For each competitor, **visit their website** and report current pricing, features, and any recent news:
 
-1. **Knowledge base structure:**
-   - What documents should be ingested: bakery SOPs, recipes, FSSAI compliance guides, equipment manuals, vendor contracts, training materials.
-   - Metadata schema for each document type (source, date, language, bakery_id, category, access_level).
-   - Multi-tenant isolation: how to ensure Bakery A's recipes never appear in Bakery B's search results.
+1. **VasyERP** (vasyerp.com) — current pricing for bakery module, key features, whether it supports GST e-invoicing, any India-specific bakery features, Android app availability, AI features if any
 
-2. **Embedding & retrieval:**
-   - Embedding model options comparison (local vs API):
-     - `nomic-embed-text` (Ollama, local, free, 768-dim)
-     - `mxbai-embed-large` (Ollama, local, free, 1024-dim)
-     - `text-embedding-004` (Google, 0.00025$/1K tokens)
-     - `text-embedding-3-small` (OpenAI, 0.02$/1M tokens)
-   - pgvector configuration: index type (HNSW vs IVFFlat), parameters for < 100ms retrieval at 1M vectors.
-   - Hybrid search: combine vector similarity with keyword BM25 search (pgvector + pg_trgm or Elasticsearch) — when does hybrid outperform pure vector?
+2. **LOGIC ERP** (logicerp.com) — same fields
 
-3. **LLM selection & prompting:**
-   - Local option: Mistral 7B Instruct via Ollama — system prompt design for a "Bakery Operations Assistant".
-   - Premium option: Gemini 1.5 Flash via API — when to route to this vs local.
-   - System prompt template for the AI assistant (domain-restricted, South Indian bakery context, multilingual response support).
-   - Few-shot examples for bakery-specific QA (waste reduction, recipe scaling, FEFO queries, GST questions).
+3. **Petpooja** (petpooja.com) — pricing tiers, POS features, aggregator integrations (Swiggy/Zomato), Android app quality, regional language support
 
-4. **Guardrails & safety:**
-   - Prompt injection defences: input sanitisation, system prompt structure, output validation.
-   - Domain restriction: how to detect and refuse out-of-domain queries (e.g., "write me a poem" from a bakery management app).
-   - PII detection: what PII might appear in bakery documents and how to redact before LLM processing.
-   - RAGAS evaluation setup: faithfulness, answer relevance, context precision — automate in nightly CI run.
+4. **Posist** (posist.com) — enterprise vs SME positioning, pricing model (per outlet?), cloud vs on-prem, India-specific features
 
-5. **Cost modelling for RAG:**
-   - At 100 tenants, each making 10 AI queries/day, with average context of 2000 tokens and 500-token response:
-     - Local LLM (Ollama on a 2×A100 or T4 VM): cost per day vs per month.
-     - Gemini 1.5 Flash: cost per day vs per month at current pricing.
-   - Break-even: at what query volume does local GPU VM become cheaper than API?
-   - Caching strategy: semantic caching (cache similar queries using embedding similarity) — what tools exist (GPTCache, Redis with vector support) and what hit rate to expect?
+5. **FlexiBake** (flexibake.com) — UK/global bakery ERP; pricing; India availability/localisation; AI features
+
+6. **Cybake** (cybake.com) — same as FlexiBake
+
+7. **FoodReady.ai** (foodready.ai) — US-based bakery ERP with AI features; pricing; AI capabilities vs BakeManage's planned AI
+
+8. **Zoho Books + Inventory** (zoho.com) — pricing for a small bakery using both products; is it a realistic DIY alternative?
+
+Then produce:
+- **Feature comparison table** (rows: POS, Android app, GST e-invoicing, aggregator integration, AI/OCR, demand forecasting, proofing/IoT, regional languages, open-source, self-host, price/outlet/month)
+- **Pricing comparison table** with source URL and date accessed for each competitor
+- **BakeManage's biggest competitive gaps** (what competitors have that BakeManage currently lacks)
+- **BakeManage's strongest differentiators** (what BakeManage has or plans that no competitor has)
 
 ---
 
-### Task 5 — Proofing Telemetry & Anomaly Detection
+## Research Section 3 — Technical Choices Validation (Search + Reasoning)
 
-Extend the existing proofing telemetry module with **production-grade anomaly detection**:
+Validate BakeManage's planned technical choices with current data:
 
-1. **Sensor data model:** What are typical proofing chamber sensor readings for Indian bakeries? Normal ranges for temperature (°C), relative humidity (%), CO₂ (ppm) by product type (bread, croissant, cake, bun).
+1. **OCR for Indian invoices:**
+   - Search for current accuracy benchmarks of Docling, Tesseract 5.x, and PaddleOCR on printed Indian GST invoices
+   - What is the current Gemini Vision API pricing for image-to-text extraction ($/1000 images)?
+   - Does any study or blog post compare OCR tools specifically on Tamil or Malayalam script? Cite it.
+   - Recommendation: which tool should BakeManage use as the free-tier default?
 
-2. **Anomaly detection algorithm options:**
-   - Statistical: Z-score, IQR, CUSUM.
-   - ML: Isolation Forest, LSTM Autoencoder, Prophet-based anomaly (anomaly = deviation from expected trend).
-   - Compare for: latency (must alert within 60 seconds of anomaly), compute cost, explainability (baker must understand why an alert fired), false positive rate.
-   - Recommend primary algorithm with justification.
+2. **Google Cloud GPU availability in India (asia-south1 Mumbai):**
+   - Search GCP documentation: which GPU types (T4, L4, A100) are available in `asia-south1` as of 2025–2026?
+   - What is the current on-demand price per hour for an `n1-standard-4` with 1×T4 GPU in `asia-south1`?
+   - Is Cloud Run GPU support available in `asia-south1`? (Search GCP Cloud Run GPU documentation)
+   - At what LLM query volume (queries/day) does running Ollama on a T4 VM become cheaper than calling Gemini 1.5 Flash API?
 
-3. **Alert design:**
-   - Severity levels: Warning (outside normal range), Critical (product at risk), Emergency (equipment failure).
-   - Notification channels: in-app push, WhatsApp message, SMS (via Twilio/MSG91).
-   - Alert fatigue prevention: debounce logic, alert suppression windows, escalation paths.
+3. **Prophet vs alternatives for perishable demand forecasting:**
+   - Search for academic papers or engineering blog posts comparing Prophet vs SARIMA vs LightGBM for food/perishable demand forecasting
+   - What MAPE benchmarks have been reported for bakery or perishable food demand forecasting in published studies?
+   - What is the `holidays` Python library's support for Indian public holidays (Onam, Diwali, Pongal, Eid, Christmas)? Is it maintained and accurate?
 
-4. **Model training data requirements:**
-   - How much historical telemetry data is needed to train an anomaly model per bakery?
-   - Cold-start: what to do for new bakeries with no historical data (use community prior data? Define safe ranges manually?).
+4. **pgvector performance:**
+   - Search for benchmarks: pgvector HNSW index query latency at 100K and 1M vectors with 768-dim embeddings
+   - Is pgvector production-ready for a startup-scale RAG application (< 1M chunks)? Any notable production case studies?
 
-5. **FastAPI endpoint extension:** `GET /telemetry/anomalies?start=<date>&end=<date>` — response schema, query optimisation (time-series index on PostgreSQL), integration with Grafana alerting.
-
----
-
-### Task 6 — Google Cloud Antigravity Deployment Architecture
-
-Design the **complete production deployment** for BakeManage 3.0 on Google Cloud via Antigravity:
-
-1. **Antigravity service definition:**
-   - What Google Cloud service does "Antigravity" map to? (Cloud Run, GKE Autopilot, or a specific managed offering?) — clarify and design accordingly.
-   - Service configuration for each BakeManage component: FastAPI API server, Celery workers, Ollama LLM server, Prometheus, Grafana.
-   - Container sizing: CPU/memory requests and limits per service.
-   - Autoscaling rules: scale-out triggers (CPU > 70%, RPS thresholds, queue depth > 100 for Celery).
-
-2. **Multi-environment setup (dev/staging/prod):**
-   - GCP project structure: separate projects or shared project with environment-based resource naming?
-   - Cloud SQL: instance sizing per environment; private IP + VPC peering vs public IP + Cloud SQL Auth Proxy.
-   - Memorystore (Redis): sizing, HA configuration for prod.
-   - GCS: bucket structure for media, backups, ML model artifacts, logs.
-
-3. **Network & security architecture:**
-   - VPC design: subnets for API tier, worker tier, database tier, Ollama tier (GPU).
-   - Cloud Armor: WAF rules relevant to the BakeManage API (OWASP core rule set, rate limiting by IP/tenant).
-   - Load balancer: Cloud Load Balancing configuration with health checks (using `/health/extended`).
-   - IAM: service accounts per component with least-privilege roles.
-
-4. **GPU compute for Ollama:**
-   - GCP machine types with T4 GPU availability in India region (`asia-south1`).
-   - Cost estimate: T4 GPU VM (n1-standard-4 + 1×T4) — per hour, per month; compare with API cost alternative.
-   - Spot/preemptible strategy: can Ollama run on spot instances safely? How to handle preemption gracefully.
-   - Alternative: Cloud Run on GPU (if available in asia-south1) — research current availability.
-
-5. **Zero-downtime deployment:**
-   - Blue-green deployment strategy for Antigravity/Cloud Run services.
-   - Database migration strategy: how to run Alembic migrations safely during rolling deployments.
-   - Feature flags: how to use LaunchDarkly or a homegrown flag system to enable features progressively.
-
-6. **Disaster recovery & backup:**
-   - RTO and RPO targets for BakeManage (recommended: RTO < 4 hours, RPO < 1 hour for bakery data).
-   - Cloud SQL automated backup + PITR configuration.
-   - Multi-region failover plan (active-passive to another GCP India region).
-   - GCS versioning for ML model artifacts and uploaded invoices.
+5. **React Native vs Kotlin/Jetpack Compose for India:**
+   - Search for developer hiring data: React Native vs Kotlin developer availability and salary ranges in South India (Bengaluru, Chennai, Kochi, Hyderabad) in 2025
+   - Search Stack Overflow Developer Survey or similar for technology preference among Indian mobile developers
+   - Recommendation: which framework is the better choice for BakeManage's Android app given India developer market and offline-first requirements?
 
 ---
 
-### Task 7 — MCP Hub Orchestration Layer
+## Research Section 4 — Regulatory & Compliance Landscape (India, 2025)
 
-Design the **complete MCP Hub integration** for BakeManage:
+Research and cite current regulatory requirements:
 
-1. **What is MCP Hub:** Research and explain the Model Context Protocol (MCP) Hub — what it is, how it works, available tools and integrations as of 2025–2026.
+1. **GST e-invoicing for SaaS:**
+   - What is the current GST e-invoicing turnover threshold for B2B businesses in India (as of FY 2025-26)?
+   - Must BakeManage generate e-invoices through the IRP (Invoice Registration Portal) for its own SaaS subscriptions?
+   - What HSN/SAC code applies to a SaaS ERP software subscription in India?
+   - What are the GSTR-1 and GSTR-3B filing obligations for a SaaS startup billing ₹50L–₹5 Cr ARR?
+   - Cite: GST Council notifications, CBIC circular numbers, GST portal documentation
 
-2. **BakeManage MCP tool definitions:** For each of these tools, provide the complete MCP tool schema (name, description, input schema, output schema, implementation notes):
-   - `bakemanage_api_health` — check API health and return status of all services.
-   - `bakemanage_inventory_query` — query current stock levels, FEFO batches, low-stock alerts.
-   - `bakemanage_pos_summary` — get daily/weekly POS summary (revenue, top SKUs, waste).
-   - `bakemanage_telemetry_status` — get latest proofing chamber status and active anomalies.
-   - `bakemanage_scrum_status` — query GitHub Projects API for current sprint status, open issues, blocking items.
-   - `bakemanage_deploy_trigger` — trigger a staging or production deployment via Antigravity API.
-   - `bakemanage_test_run` — trigger GitHub Actions CI workflow and return results.
-   - `bakemanage_log_query` — query Cloud Logging for recent errors or anomalies.
+2. **FSSAI compliance features for bakeries:**
+   - What are the current FSSAI mandatory record-keeping requirements for licensed food businesses (bakeries)?
+   - What food labelling requirements (FSSAI Food Safety and Standards Regulations) apply to packaged bakery products?
+   - How can BakeManage embed FSSAI compliance as a product feature (regulatory moat)? Search for bakery-specific FSSAI guidance.
+   - Cite: FSSAI official website, FSSAI regulations gazette notifications
 
-3. **MCP Hub orchestration workflows:**
-   - **Daily Operations Workflow:** MCP Hub agent runs morning health check (all services up?), inventory status (low stock alerts?), sales summary (yesterday's performance vs forecast), telemetry status (any proofing chamber issues?).
-   - **SCRUM Sprint Workflow:** MCP Hub queries sprint board, identifies blocked stories, surfaces to developer with context from `bakemanage_api_health` and `bakemanage_test_run`.
-   - **Deployment Workflow:** Developer approves deploy → MCP Hub triggers `bakemanage_test_run` (wait for pass) → triggers `bakemanage_deploy_trigger` (staging) → runs smoke tests → promotes to prod.
+3. **DPDP Act 2023 for SaaS:**
+   - What does India's Digital Personal Data Protection Act 2023 require of a B2B SaaS company processing bakery owner and customer data?
+   - What are the data localisation requirements — must data be stored within India?
+   - What consent management and data principal rights must BakeManage implement?
+   - Cite: DPDP Act 2023 official text, MeitY notifications, legal analysis from Indian law firms
 
-4. **MCP Hub security:** How to authenticate MCP tool calls to BakeManage API (service account tokens, scoped to read-only for monitoring tools vs read-write for deploy tools).
+4. **UPI recurring payments (mandate):**
+   - Does Razorpay support UPI AutoPay (e-mandate) for SaaS subscription billing in India?
+   - What is the current NPCI limit on UPI AutoPay mandate amounts per transaction?
+   - What is Razorpay's current fee structure for subscription payments (UPI, cards, net banking)?
+   - Cite: Razorpay documentation, NPCI circular
 
-5. **AI agent integration:** How Gemini (via Google AI Studio) or GitHub Copilot can invoke MCP Hub tools as part of a multi-agent workflow — e.g., Copilot writes code, triggers test run via MCP, reads failure logs, iterates.
-
----
-
-### Task 8 — Cost Optimisation Masterplan
-
-Produce a **comprehensive cost optimisation plan** across all dimensions:
-
-1. **AI/API cost reduction tactics (priority: highest spend categories):**
-   - Semantic caching: cache LLM responses for semantically similar queries; implementation with Redis + pgvector similarity check.
-   - Batching: batch embedding requests; batch OCR jobs for off-peak processing.
-   - Model distillation: can a smaller fine-tuned model replace a large API-called model for bakery-specific tasks (e.g., invoice parsing)?
-   - Prompt compression: techniques to reduce token count without losing accuracy (remove boilerplate, compress context).
-   - Quota enforcement: per-tenant hard limits on AI API calls per month; credit-based system.
-
-2. **Infrastructure cost reduction:**
-   - Rightsizing: how to continuously right-size Cloud Run / Antigravity instances based on actual usage.
-   - Committed Use Discounts (CUDs) and Sustained Use Discounts on GCP — when to apply and estimated savings.
-   - Cold start mitigation for Cloud Run: min-instances vs cost trade-off.
-   - Cloud SQL: read replicas for analytics queries (offload from primary), connection pooling with PgBouncer or Cloud SQL Proxy.
-   - Celery worker scaling: scale-to-zero for off-hours (bakeries are closed at night).
-
-3. **Database cost optimisation:**
-   - Partitioning: time-partition `telemetry_readings`, `audit_logs`, `llm_interactions` tables for efficient archival.
-   - Archival policy: move data older than 90 days to GCS as Parquet; serve analytics from archived data via BigQuery (usage-based, no persistent cost).
-   - Index pruning: identify and remove unused indexes; automate via `pg_stat_user_indexes`.
-
-4. **Monitoring & alerting cost:**
-   - Prometheus retention: how long to retain raw metrics vs downsampled; Thanos or VictoriaMetrics for long-term storage at lower cost.
-   - Cloud Logging: filter and exclude debug-level logs from billable log ingestion; estimate log volume per tenant.
-
-5. **Total cost of ownership (TCO) model:**
-   - Produce a cost model spreadsheet structure (describe rows and formulas) covering:
-     - 10 tenants, 100 tenants, 1000 tenants.
-     - Monthly cost breakdown by category (compute, DB, Redis, storage, AI APIs, logging, monitoring, support tools).
-     - Revenue per tier assumption; gross margin at each scale point.
-   - Target: achieve > 60% gross margin at 100+ tenants.
+5. **PCI-DSS scope for BakeManage:**
+   - Since BakeManage uses Razorpay as the payment gateway and does NOT store card numbers (only payment tokens), what PCI-DSS SAQ (Self-Assessment Questionnaire) level applies?
+   - What are the minimum technical controls required at BakeManage's SAQ level?
+   - Cite: PCI SSC documentation, Razorpay compliance documentation
 
 ---
 
-## Output Format Requirements
+## Research Section 5 — Startup Funding & Benchmarks (India SaaS, 2024–2025)
 
-The document you produce (`ResearchInsight3_AI_ML_Ops.md`) must:
+Research the Indian B2B SaaS funding landscape:
 
-- Begin with an **"AI/ML at a Glance"** summary table listing every AI component, its status (existing/planned), cost model, and priority.
-- Include all **8 Tasks** as numbered sections.
-- Provide **complete Python code** (not pseudocode) for: `InvoiceIngestionService`, `ForecastTrainer`, `ForecastPredictor`, RAG query pipeline, and anomaly detection service.
-- Include **deployment YAML/config** for Antigravity/Cloud Run services.
-- Include **MCP tool JSON schemas** for all 8 tools in Task 7.
-- Include a **"Cost Calculator"** appendix with formulas for estimating monthly AI and infra spend at different tenant scales.
-- End with an **"AI Optimisation Priority Matrix"** (effort vs impact for each optimisation tactic).
-- Be saved to the repo as `ResearchInsight3_AI_ML_Ops.md` in the root directory.
+1. **SME SaaS benchmarks:**
+   - What are typical ARR, MoM growth rate, and net revenue retention (NRR) expectations for an Indian B2B SaaS startup raising a Seed/Angel round? A Series A?
+   - What is the average monthly churn rate for Indian SME SaaS products (where SME customers have < 100 employees)?
+   - What LTV:CAC ratio do Indian Series A investors expect? Cite: Tracxn, Inc42, Nasscom SaaS reports, or VC blogs
+
+2. **Comparable startup funding:**
+   - Search for recent funding rounds (2023–2025) in Indian restaurant/food SaaS or ERP SaaS: Petpooja, Posist, similar companies. What were their ARR/customer count at raise? What valuations?
+   - Are there any Indian bakery-specific SaaS startups that have raised funding? Search Inc42, VCCircle, Entrackr.
+
+3. **AI-augmented team productivity:**
+   - Search for studies or case studies (2024–2025) on developer productivity with GitHub Copilot Business: what % productivity gain is reported? What task types benefit most?
+   - What is the current cost of GitHub Copilot Business per developer per month?
+   - What is the current cost of Google AI Studio API credits (Gemini 1.5 Flash, Gemini 1.5 Pro) for a startup?
+
+4. **Developer hiring costs (South India, 2025):**
+   - What are current salary ranges for: senior FastAPI/Python developer, Kotlin Android developer, React TypeScript developer, DevOps/GCP engineer in Bengaluru, Chennai, and Kochi?
+   - Cite: Naukri, LinkedIn Salary, Glassdoor, or AmbitionBox India data
+
+5. **Bootstrapping vs funding:**
+   - At ₹2,499/month per bakery customer, how many paying customers does BakeManage need to cover a team of 4 (2 developers + 1 sales + 1 founder) at average South India salaries?
+   - What is the realistic CAC for a field-sales-driven Indian B2B SaaS targeting SME bakeries?
 
 ---
 
-## How to Use This Prompt
+## Research Section 6 — GCP Infrastructure Cost Estimates (asia-south1, Current Pricing)
 
-### With Google AI Studio (Gemini 1.5 Pro / 2.0 Flash — Recommended)
+Search GCP pricing pages and produce a **monthly cost estimate table** for `asia-south1` (Mumbai) region:
 
-Upload `ResearchDoc1.md` and this prompt file. Instruct:
+| Resource | Spec | Monthly Cost (USD) | Monthly Cost (INR) | Notes |
+|----------|------|-------------------|-------------------|-------|
+| Cloud Run (API) | 2 vCPU, 4GB, min 1 instance, ~100K req/month | ? | ? | |
+| Cloud Run (Celery worker) | 2 vCPU, 4GB, scale-to-zero | ? | ? | |
+| Cloud SQL PostgreSQL | db-n1-standard-2, 50GB SSD, single zone | ? | ? | |
+| Memorystore Redis | 1GB, basic tier | ? | ? | |
+| GCS Storage | 100GB + 1M operations/month | ? | ? | |
+| Artifact Registry | 10GB | ? | ? | |
+| GPU VM for Ollama | n1-standard-4 + 1×T4 (preemptible) | ? | ? | T4 in asia-south1? |
+| Cloud Armor | WAF, 1M request evaluations/month | ? | ? | |
+| Cloud Logging | 10GB/month ingestion | ? | ? | |
+| Gemini 1.5 Flash API | 1M tokens/month (100 tenants × 10 queries) | ? | ? | |
+| **Total (10 tenants)** | | ? | ? | |
+| **Total (100 tenants)** | | ? | ? | |
 
-> "You are a senior AI/ML engineer and cloud architect specialising in Python, Google Cloud, and LLM-powered applications. Using the attached context documents, produce `ResearchInsight3_AI_ML_Ops.md` covering all 8 tasks in complete detail. For all AI component designs, provide working Python code. For all infrastructure designs, provide Cloud Run / Antigravity service configurations. For cost modelling, use real GCP pricing from the `asia-south1` (Mumbai) region. Prioritise the 'local-first, cloud-optional' AI philosophy throughout."
+Cite: GCP pricing calculator, GCP pricing pages (cloud.google.com/pricing), Google AI pricing page.
 
-### With Perplexity (Deep Research Mode)
+---
 
-> "Research the following for an India-based, AI-augmented bakery ERP startup (BakeManage 3.0) running on Google Cloud in the Mumbai region: (1) best open-source OCR tools for Indian vendor invoices including Tamil/Malayalam text, (2) cost comparison of Ollama-hosted local LLMs vs Gemini Flash API for a RAG assistant at 100K queries/month, (3) best time-series forecasting models for perishable food demand, (4) Google Cloud GPU availability (T4/L4) in asia-south1 and pricing 2025, (5) Model Context Protocol (MCP) Hub capabilities and available tools for developer workflow automation, (6) Google Cloud Run GPU support status in asia-south1. Provide detailed, cited answers with current pricing data."
+## Output Instructions
 
-### With GitHub Copilot (Agent Mode)
+Produce the document `ResearchInsight3_PerplexityValidation.md` with:
 
-> "Read `ResearchDoc1.md` and `DeepResearchPrompt3_AI_ML_Ops.md` in full. Then implement the following in the BakeManage repo:
-> 1. Create `app/services/ai/ingestion.py` with the `InvoiceIngestionService` class supporting Docling (local) and Gemini Vision (premium) providers.
-> 2. Create `app/services/ai/forecasting.py` with `ForecastTrainer` and `ForecastPredictor` using Prophet.
-> 3. Create `app/services/ai/rag.py` with the RAG query pipeline using pgvector and Ollama.
-> 4. Create `app/services/ai/anomaly.py` with the proofing telemetry anomaly detector using Isolation Forest.
-> 5. Add corresponding FastAPI routes to `app/api/routes/ai.py`.
-> 6. Write tests in `tests/test_ai_services.py` for all services.
-> Follow existing patterns for config, dependency injection, and error handling. Maintain 90%+ test coverage."
+- **All 6 research sections** answered in full with cited sources (inline citations with URLs)
+- A **Sources & References** section at the end listing all URLs, access dates, and publication dates
+- A **Key Findings Summary** at the top: 10 bullet points of the most important validated insights (e.g., "TAM confirmed at ₹X Cr", "Gemini Vision costs ₹Y per invoice scan", "DPDP Act requires data localisation — store all bakery data in asia-south1")
+- A **Go/No-Go Recommendation** section: based on market research, is BakeManage's market opportunity real and large enough to justify building? What are the 3 biggest validated risks?
+- A **Revised Pricing Recommendation**: given actual competitor pricing and Indian bakery WTP research, should BakeManage's proposed pricing (₹2,499 / ₹7,999) be adjusted?
+- Format all competitor data, cost tables, and regulatory requirements in **tables** for easy scanning
+- If any data could not be found or verified, clearly state "Not found — estimated as follows:" and give methodology

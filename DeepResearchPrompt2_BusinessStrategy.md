@@ -1,244 +1,179 @@
-# Deep Research Prompt 2 — Business Strategy, Market Positioning & Monetisation
+# Prompt 2 — GitHub Copilot (In-Repo Agent)
 
-**Intended AI Platform:** Perplexity (Deep Research), Google AI Studio (Gemini 1.5 Pro), Google NotebookLM
-**Output Document Title:** `ResearchInsight2_BusinessStrategy.md`
-**Purpose:** Generate a deep-insight business strategy document that consolidates market intelligence, competitive analysis, monetisation models, go-to-market playbook, and financial projections for BakeManage 3.0 as a startup — enabling evidence-based prioritisation of SCRUM Epics and USPs.
-
----
-
-## Context You Must Read Before Answering
-
-BakeManage is an **open-source, India-native, AI-augmented bakery ERP + POS + Android app** targeting the Indian SME bakery market (₹150B+ sector, 9.9% CAGR projected 2026–2033). Key facts:
-
-- **Current product:** FastAPI-based ERP with multimodal invoice ingestion, FEFO inventory, proofing telemetry, GST billing, ML demand forecasting, waste tracking, loyalty — 97/97 tests passing.
-- **Missing:** POS UI, Android app, real aggregator integration, multi-tenant SaaS.
-- **Primary USPs:**
-  1. Multimodal ingestion (image/PDF/Excel invoices → inventory auto-update).
-  2. Proofing telemetry + anomaly scoring (IoT-aware).
-  3. India-specific GST multi-slab calculator integrated into POS & billing.
-  4. Menu engineering + waste tracking + ML demand forecasting for perishables.
-  5. Open-source self-hostable core + affordable managed SaaS.
-- **Target personas:** retail bakery owners (1–5 outlets), central kitchen managers, counter staff, accountants.
-- **Key competitors:** VasyERP, LOGIC ERP, FlexiBake, Cybake, FoodReady.ai, Petpooja, Posist.
-- **Monetisation (planned):** freemium open-source core → paid managed SaaS tiers → white-label for chains → data/analytics premium features.
-- **Team need:** lean 3–6 person startup team leveraging AI-assisted development (GitHub Copilot, Google AI Studio, Antigravity).
+**Platform:** GitHub Copilot — open this repo in VS Code, open Copilot Chat in Agent mode (`@workspace`), and paste this entire prompt.
+**Alternative:** Use GitHub Copilot in github.com → your repo → Copilot tab.
+**What Copilot will do:** Read the live codebase, implement the priority SCRUM epics with production-ready code, and produce a consolidated implementation document saved to the repo.
 
 ---
 
-## Research Tasks — Answer All Sections Thoroughly
+## Your Role
 
-### Task 1 — Market Sizing & Segmentation (India Focus)
+You are the AI coding agent for the `truemycornea/BakeManage` repository. You have full access to the codebase. Before writing a single line of code, read these files:
 
-1. **Total Addressable Market (TAM):** Research and quantify the Indian bakery industry by:
-   - Number of bakery establishments (organised vs unorganised, tier-1/2/3 cities).
-   - Current ERP/POS software penetration rate vs untapped market.
-   - Revenue opportunity in SaaS subscriptions, one-time licences, and professional services.
-   - Year-by-year projection 2025–2030 with growth drivers (GST compliance pressure, UPI adoption, aggregator penetration, food safety regulations).
+- `README.md` — full API map and feature overview
+- `ResearchDoc1.md` — product vision, SWOT, SCRUM epics, full tech spec
+- `app/` — all existing FastAPI modules, models, schemas, routes, services
+- `tests/` — existing test patterns (97/97 passing — you must not break any)
+- `.env.example` — all existing config keys
+- `docker-compose.yml`, `Dockerfile` — existing container setup
+- `requirements.txt` — existing dependencies
 
-2. **Serviceable Addressable Market (SAM):** Filter for bakeries that:
-   - Have smartphone/tablet access.
-   - Process > ₹1 lakh/month revenue (willing to pay for software).
-   - Are in Tier-1 and Tier-2 cities (priority launch markets: Kerala, Tamil Nadu, Karnataka, Andhra Pradesh, Telangana — South India first).
-
-3. **Serviceable Obtainable Market (SOM):** Estimate realistic 3-year customer acquisition with:
-   - Bootstrapped / angel-funded scenario.
-   - VC-backed scenario (Series A within 18 months).
-
-4. **Market segmentation:** Identify and size 4–5 distinct customer segments (e.g., standalone retail bakeries, artisan/cloud kitchens, bakery chains, central production facilities, hotel/restaurant bakery departments) with different willingness-to-pay and feature needs.
+Your job is **dual**:
+1. **Implement** the 4 MVP epics below in the repo (create/edit files, write tests)
+2. **Produce** a consolidated implementation brief (`ResearchInsight2_CopilotImplementation.md`) documenting every decision, pattern, and integration point
 
 ---
 
-### Task 2 — Competitive Intelligence Deep Dive
+## BakeManage 3.0 — Snapshot
 
-For **each competitor** listed below, research and document: target segment, pricing model, key features, weaknesses, India-specific limitations, tech stack indicators, and recent product news/funding:
-
-1. **VasyERP** (Indian, retail/bakery focus)
-2. **LOGIC ERP** (Indian, F&B/bakery)
-3. **Petpooja** (Indian, restaurant POS — indirect competitor)
-4. **Posist** (Indian, restaurant POS — indirect competitor)
-5. **FlexiBake** (UK/global, bakery ERP)
-6. **Cybake** (UK/global, bakery ERP)
-7. **FoodReady.ai** (US-based, bakery ERP with AI)
-8. **Zoho Books + Inventory** (Indian, generic ERP — used by some bakeries as DIY)
-
-Then produce:
-- **Feature comparison matrix** (rows = features, columns = competitors + BakeManage) with gap analysis highlighting BakeManage differentiators.
-- **Pricing comparison table** (per month, per outlet, what's included at each tier).
-- **Positioning map** (described in text — axes: India-native vs global, AI-native vs legacy, price vs features).
-- **Competitive moats BakeManage can build:** network effects, data flywheels, switching costs, open-source community, regional language lock-in.
+- **Stack:** FastAPI + PostgreSQL + Redis + Celery + SQLAlchemy 2.x + Alembic + JWT/PIN auth
+- **Frontend:** Single-file SPA → refactor to React 18 + TypeScript + Vite
+- **Android:** Kotlin + Jetpack Compose (new — create `android/` project)
+- **Cloud:** GCP Cloud Run (Antigravity) + Cloud SQL + Memorystore + GCS
+- **AI:** Docling/Tesseract OCR (local) + pgvector RAG + Prophet forecasting + Ollama (Mistral 7B)
+- **Users:** Indian bakery owners, counter staff — Android-first, offline-capable, multilingual
+- **Tests:** Maintain 90%+ coverage. Add tests for every new endpoint and service.
 
 ---
 
-### Task 3 — USP Validation & Prioritisation
+## Epic A1 — POS & Billing System (HIGHEST PRIORITY — implement first)
 
-For each of BakeManage's 5 USPs, research:
+Read existing `app/models/`, `app/schemas/`, `app/api/routes/`, `app/services/` to understand patterns. Then implement:
 
-1. **Customer pain validation:** What evidence exists (forums, reviews, social media, case studies) that Indian bakery owners experience this pain?
-2. **Willingness to pay:** What premium, if any, would bakery owners pay for this specific feature?
-3. **Build vs buy vs partner:** Is there an existing API/service that delivers this USP cheaper than building it (e.g., is there a GST calculation API service worth integrating vs building in-house)?
-4. **Defensibility score (1–5):** How easy is it for competitors to replicate this USP within 12 months?
-5. **Revenue impact estimate:** What additional MRR does this USP unlock?
+**Models** (`app/models/pos.py`):
+```
+Sale, SaleLine, Payment, PaymentMethod(enum: CASH/UPI/CARD), Receipt, TaxLine, Discount, OfflineQueue
+```
+- `Sale`: id, bakery_id, cashier_id, sale_date, subtotal, discount_amount, tax_amount, total, status(COMPLETED/VOIDED/PENDING_SYNC), idempotency_key, created_at
+- `SaleLine`: id, sale_id, product_id, batch_id (FEFO), quantity, unit_price, discount_pct, line_total
+- `TaxLine`: id, sale_id, hsn_code, gst_rate, taxable_amount, cgst, sgst, igst (cgst+sgst for intra-state, igst for inter-state)
+- `OfflineQueue`: id, bakery_id, device_id, payload_json, idempotency_key, status, retry_count, created_at
 
-Then produce a **USP prioritisation matrix** (impact × defensibility × build cost) and recommend which 2–3 USPs to invest most in for the MVP launch.
+**Schemas** (`app/schemas/pos.py`): Pydantic v2 request + response schemas for every model above.
 
----
+**GST Engine** (`app/services/gst.py`): Implement `calculate_gst(line_amount: Decimal, hsn_code: str, supplier_state: str, buyer_state: str) -> GSTResult` — returns `{cgst, sgst, igst, total_tax}`. Use intra-state = CGST+SGST, inter-state = IGST. Round per GST Act (round half up to 2 decimal places per tax component). Map HSN codes to correct GST slab (0/5/12/18/28%). Derive slab from a config dict in `app/config/gst_rates.py`.
 
-### Task 4 — Monetisation Architecture & Pricing Design
+**Routes** (`app/api/routes/pos.py`):
+- `POST /pos/sale` — validate payload, call FEFO stock decrement (`app/services/fefo.py` — check if exists, reuse or extend), compute GST via `calculate_gst`, create `Sale`+`SaleLine`+`TaxLine`+`Payment` in a single DB transaction, return receipt JSON. Use `idempotency_key` header to prevent duplicate sales.
+- `GET /pos/sale/{id}` — fetch sale with all relations (join `SaleLine`, `TaxLine`, `Payment`).
+- `GET /pos/daily_summary` — query param `?date=YYYY-MM-DD&bakery_id=X`; return total revenue, GST collected (CGST/SGST/IGST breakdown), top 5 SKUs by quantity, waste-adjusted margin if waste data available.
+- `POST /pos/sale/sync` — accept array of offline sale payloads from Android; process each idempotently (skip duplicates by `idempotency_key`); return per-item result (created/duplicate/error).
+- `GET /pos/receipt/{id}/pdf` — generate GST-compliant PDF receipt using `WeasyPrint`; include: bakery name/address/GSTIN, sale date/time, line items with HSN, CGST/SGST/IGST, total, payment method, receipt number.
 
-Design a **complete monetisation model** including:
-
-1. **Tier architecture (3–4 tiers):** Free/Community, Starter, Professional, Enterprise — for each tier define:
-   - Feature set (what's included/excluded).
-   - Pricing (monthly/annual, per outlet, per user, or flat).
-   - Target customer profile.
-   - Estimated ARPU and churn assumptions.
-
-2. **Usage-based add-ons** (bolt-on pricing):
-   - AI-powered OCR processing (per document scanned via premium vision API).
-   - WhatsApp CRM messages (per message or per batch).
-   - Aggregator integration (Swiggy/Zomato/ONDC — per order or flat fee).
-   - Multi-language packs (bundled or per language).
-   - Advanced analytics/forecasting (per outlet/month).
-
-3. **White-label/OEM pricing:** For bakery chains wanting their own branded app — one-time setup + monthly licence + revenue share model.
-
-4. **Freemium conversion strategy:** What features should be deliberately withheld from free tier to drive upgrade? Research best practices from comparable SaaS startups (Zoho, Tally, similar SME SaaS in India).
-
-5. **Payment localisation:** Razorpay subscription billing, GST invoicing for B2B SaaS (Indian TDS implications), UPI mandate for recurring payments — research regulatory and implementation requirements.
-
-6. **Revenue projections (3 years):**
-   - Year 1 (MVP launch, South India focus): customer count, MRR, ARR.
-   - Year 2 (national expansion, aggregator integrations): targets.
-   - Year 3 (multi-tenant SaaS, white-label): targets.
-   - Break-even analysis: when does MRR cover team + infra costs?
+**Tests** (`tests/test_pos.py` — minimum 15 test cases):
+- Happy path sale (cash, UPI, card)
+- FEFO batch correctly decremented (oldest batch first)
+- GST calculation: 5% slab intra-state, 18% slab inter-state, 0% exempt item
+- GST rounding edge case (amount that triggers rounding difference)
+- Idempotency: posting same sale twice returns same receipt, no duplicate DB row
+- Offline sync: bulk sync with 1 valid, 1 duplicate, 1 invalid — correct per-item results
+- Daily summary: correct aggregation across multiple sales
+- Receipt PDF: HTTP 200, content-type is application/pdf, non-empty body
+- Voided sale does not affect daily summary
+- Partial payment (insufficient amount) returns 422 with clear error
 
 ---
 
-### Task 5 — Go-to-Market (GTM) Strategy
+## Epic A4 — CI/CD & Repo Structure (implement alongside A1)
 
-1. **Launch market selection:** Justify starting with South India (Kerala, Tamil Nadu, Karnataka) — language advantage (app supports Malayalam/Tamil/Kannada), density of organised bakeries, UPI adoption, competitor presence gaps.
+**GitHub Actions workflows** — create these files in `.github/workflows/`:
 
-2. **Customer acquisition channels (ranked by CAC efficiency):**
-   - Direct sales (field sales reps in target cities).
-   - Digital marketing (Google Ads, Meta targeting bakery business owners).
-   - WhatsApp-based referral / word-of-mouth (leverage existing WhatsApp CRM feature).
-   - Partnerships: point-of-sale hardware vendors, flour/ingredient distributors as channel partners.
-   - Baker associations and FSSAI compliance communities.
-   - YouTube tutorials in regional languages (Malayalam, Tamil).
-   - Open-source community and GitHub ecosystem (developer-led growth for self-hosted tier).
+`ci.yml` — triggers on `pull_request` and `push` to `main`/`develop`:
+1. `ruff check .` and `ruff format --check .` (Python lint)
+2. `mypy app/` (type check)
+3. `pytest tests/ --cov=app --cov-report=xml --cov-fail-under=90` with PostgreSQL 15 and Redis 7 services via Docker
+4. Vite build (`cd frontend && npm ci && npm run build`) — skip if no frontend changes
+5. Trivy image scan (`docker build -t bakemanage:test . && trivy image --exit-code 1 --severity HIGH,CRITICAL bakemanage:test`)
+6. Upload coverage to Codecov
 
-3. **Onboarding funnel:** Research best practices for SME SaaS onboarding in India — what makes bakery owners abandon vs stick with new software. Design a 7-day activation checklist.
+`cd-staging.yml` — triggers on push to `develop`:
+1. Build and push Docker image to `asia-south1-docker.pkg.dev/bakemanage/api:${{ github.sha }}`
+2. Deploy to Cloud Run staging service `bakemanage-api-staging` using `google-github-actions/deploy-cloudrun`
+3. Run smoke tests: `curl -f https://staging-api.bakemanage.in/health/extended`
 
-4. **Retention strategy:** Feature stickiness analysis — which BakeManage features create the highest switching cost after 3 months of usage? How to engineer retention into product roadmap.
+`cd-prod.yml` — triggers on push to `main` with `environment: production` (requires manual approval):
+1. Same Docker build + push
+2. Deploy to Cloud Run prod `bakemanage-api-prod`
+3. Health check; if fails: automatically re-deploy previous image tag (rollback)
+4. Create GitHub Release with changelog
 
-5. **Partnerships & integrations as GTM levers:**
-   - Razorpay: co-marketing with payments partnership.
-   - Swiggy/Zomato: aggregator integration as acquisition lever.
-   - Android device OEMs (Samsung/Realme): pre-install or bundling deals.
-   - FSSAI compliance consultants: referral partnerships.
+`nightly.yml` — cron `0 1 * * *` (01:00 UTC = 06:30 IST):
+1. Run `pytest tests/ -m "slow or integrity"` for DB integrity checks
+2. Run Locust load test 60s with 50 users against staging, fail if p95 > 500ms
+3. Generate and commit test coverage trend to `docs/coverage-trend.json`
 
-6. **Community & open-source strategy:** How to build a developer community around the self-hosted version that feeds a commercial SaaS funnel. Research examples: GitLab, Plausible, Cal.com.
-
----
-
-### Task 6 — Unit Economics & Financial Model
-
-1. **Cost of Goods Sold (COGS) per customer/month:**
-   - Infrastructure: Cloud SQL + Compute + Redis + Storage per tenant (estimate from GCP pricing calculator).
-   - AI/API costs: OCR, LLM, WhatsApp, aggregator API fees per active tenant.
-   - Support cost per customer (estimate from comparable SME SaaS benchmarks).
-
-2. **Customer Acquisition Cost (CAC):**
-   - Blended CAC across channels.
-   - Payback period at different ARPU levels.
-
-3. **Lifetime Value (LTV):**
-   - Average contract length for Indian SME SaaS (research benchmarks).
-   - Expected monthly churn rate.
-   - LTV:CAC ratio targets (should be > 3x at scale).
-
-4. **Funding requirement:**
-   - Bootstrapped runway: what MRR is needed to be self-sustaining with a team of 4–6?
-   - Angel round: what milestone does ₹1–2 Cr fund? What does a credible angel pitch deck cover?
-   - Series A criteria: what ARR, retention, and growth rate does a Series A VC expect?
-
-5. **Capex vs Opex breakdown:**
-   - Engineering team cost (3-year plan, India-based developers + AI tools reducing headcount need).
-   - Infrastructure cost progression as tenant count grows (0 → 100 → 1000 tenants).
-   - AI tooling budget (GitHub Copilot Business, Google AI Studio API credits, Antigravity compute).
-   - Marketing budget allocation per channel.
+**Frontend scaffold** (`frontend/`):
+- Run `npm create vite@latest . -- --template react-ts` if `frontend/` is currently a single-file SPA
+- Install: `react-i18next`, `i18next`, `zustand`, `react-router-dom`, `axios`, `workbox-webpack-plugin`
+- Create page structure: `src/pages/{Dashboard,POS,Inventory,Telemetry,Analytics,Admin}.tsx`
+- Create POS components: `src/components/pos/{Cart,ProductGrid,PaymentModal,ReceiptModal}.tsx`
+- Create i18n directory: `src/i18n/locales/{en,ml,ta,kn,te}.json` with all UI strings
+- Add Vite config: code splitting by route, < 200KB initial bundle target
 
 ---
 
-### Task 7 — Regulatory, Compliance & Risk Landscape
+## Epic A3 — OCR & Invoice Ingestion (after A1 + A4)
 
-1. **GST compliance requirements for SaaS invoicing in India** — what BakeManage must do as a SaaS provider (e-invoicing thresholds, HSN codes for SaaS, GSTR-1/3B filing implications for a SaaS startup).
+Create `app/services/ai/ingestion.py`:
 
-2. **FSSAI regulations** affecting bakery customers — how BakeManage can embed compliance features (labelling requirements, shelf-life tracking, hygiene logs) as regulatory moat.
+```python
+class InvoiceIngestionService:
+    def ingest(self, file: bytes, mime_type: str, tenant_id: str, 
+               provider: str = "auto") -> InvoiceResult:
+        # "auto": check tenant tier → free → local Docling/Tesseract
+        #                            → paid → Gemini Vision if local confidence < 0.75
+        # Return InvoiceResult(vendor, gstin, invoice_no, date, 
+        #                      line_items, gst_breakdown, total)
+```
 
-3. **Data protection (DPDP Act 2023):** India's Digital Personal Data Protection Act — what BakeManage must do for data localisation, consent management, and data principal rights for its bakery customer data.
-
-4. **Payment compliance:** PCI-DSS scope for BakeManage (as a SaaS that facilitates but doesn't store card data — using Razorpay as payment gateway). What controls are required?
-
-5. **Top 5 business risks** for a bootstrapped BakeManage startup:
-   - For each risk: likelihood, impact, mitigation strategy, contingency plan.
-
----
-
-### Task 8 — Startup Team & Hiring Plan
-
-1. **Founding team composition:** For a lean AI-augmented development startup using GitHub Copilot + Google AI Studio, what roles are essential at founding stage vs first 12 months vs months 12–24?
-
-2. **Developer profiles needed (from ResearchDoc1.md):** Map each required skill to a role and hiring priority:
-   - FastAPI/Python backend
-   - React/TypeScript frontend
-   - Kotlin/Android
-   - DevOps (GCP + Docker + Antigravity)
-   - Data/AI (OCR, ML, RAG)
-   - Security
-
-3. **AI-augmented team productivity:** Research how much a team of 3–4 developers using GitHub Copilot + AI Studio can achieve vs a traditional team of 8–10. What types of tasks benefit most? What still requires human expertise?
-
-4. **Equity structure:** Typical Indian startup equity split for technical co-founders + early hires + ESOP pool + investor dilution.
-
-5. **Remote-first operations:** Tools and processes for a distributed South India–based team (GitHub Projects for SCRUM, Slack/Discord, Notion for docs, Loom for async reviews).
+- Implement local OCR path using `docling` library; if not installed, fall back to `pytesseract`
+- Extract Indian invoice mandatory fields: GSTIN (regex: `\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}`), HSN codes, CGST/SGST/IGST amounts
+- Deduplication: hash (vendor_gstin + invoice_no + invoice_date); reject duplicate if hash exists for bakery_id
+- Premium path (Gemini Vision): call `generativeai.GenerativeModel('gemini-1.5-flash')` with image + structured extraction prompt; only if tenant has `ocr_premium=True` in config and monthly quota not exceeded
+- Tests in `tests/test_ingestion.py`: local OCR on sample invoice image, deduplication rejection, GST field extraction accuracy
 
 ---
 
-## Output Format Requirements
+## Epic B1 — Multilingual UX Foundations (after A4 frontend scaffold)
 
-The document you produce (`ResearchInsight2_BusinessStrategy.md`) must:
-
-- Begin with a **1-page Executive Summary** covering: market opportunity, BakeManage's defensible position, recommended pricing model, 3-year revenue target, and top 3 immediate actions.
-- Include all **8 Tasks** as numbered sections with sub-sections.
-- Use **tables and matrices** for competitor analysis, pricing tiers, USP prioritisation, and financial model.
-- Cite **specific sources** (news articles, funding databases, competitor websites, NASSCOM/IBEF reports, FSSAI, GST portal) for all market data claims.
-- Include a **"Decision Log"** section at the end: list each major strategic decision recommended in the document with a one-sentence rationale.
-- Be saved to the repo as `ResearchInsight2_BusinessStrategy.md` in the root directory.
+In `frontend/src/i18n/`:
+- Implement `react-i18next` with language detection from user profile (stored in Zustand, persisted to `localStorage`)
+- Create translation keys for all POS UI strings in all 5 language files (`en`, `ml`, `ta`, `kn`, `te`)
+- Implement language switcher component in the app header
+- Backend: add `language_preference` column to `users` table (Alembic migration), expose via `PATCH /auth/profile`
 
 ---
 
-## How to Use This Prompt
+## What to Produce
 
-### With Perplexity (Deep Research Mode — Recommended)
+### 1. All code changes (commit to repo)
 
-Start a Deep Research session with the following system framing, then paste the full context and tasks:
+Create/edit files as described above. Commit with messages following conventional commits format:
+- `feat(pos): add Sale model, schemas, and FEFO-integrated POS endpoints`
+- `feat(pos): add GST calculation engine with multi-slab support`
+- `test(pos): add 15 POS endpoint tests covering GST, FEFO, offline sync`
+- `ci: add GitHub Actions workflows for CI, CD staging, CD prod, nightly`
+- `feat(frontend): scaffold React 18 + TypeScript + Vite with i18n structure`
+- etc.
 
-> "You are a senior startup strategist and market analyst specialising in Indian B2B SaaS, SME markets, and food-tech. I am building BakeManage 3.0, an India-native AI-augmented bakery ERP. Research the Indian bakery software market, competitive landscape, and optimal monetisation strategy, and produce a comprehensive business strategy document. Use real market data, cite sources, and provide specific actionable recommendations. The output should be investor-grade quality."
+### 2. Implementation document (`ResearchInsight2_CopilotImplementation.md`)
 
-Then paste all context and all 8 tasks from this document.
+Save to repo root. Include:
+- **Summary of all changes made** (files created/modified, lines of code, test count)
+- **Architecture decisions** — explain every non-obvious choice (e.g., why WeasyPrint over ReportLab, why Zustand over Redux Toolkit, why HNSW over IVFFlat for pgvector)
+- **Integration map** — how each new module connects to existing `app/` code (what it imports, what calls it)
+- **Test coverage report** — current coverage % per module after all additions
+- **Known gaps** — what was NOT implemented and needs human review or future sprint
+- **How to run locally** — updated developer setup steps including new dependencies
+- **SCRUM velocity** — estimated story points completed, remaining per epic
 
-### With Google AI Studio (Gemini 1.5 Pro)
+---
 
-Upload both `ResearchDoc1.md` and this prompt as context files. Then:
+## Constraints
 
-> "Using the attached documents as context, produce `ResearchInsight2_BusinessStrategy.md` covering all 8 research tasks. Ground your market analysis in verifiable data. For financial projections, use conservative, base, and optimistic scenarios. Be specific about India's bakery market geography (South India priority), regulatory environment (GST, FSSAI, DPDP Act), and payment ecosystem (UPI, Razorpay). Produce a document that a startup founder can use directly for investor conversations and product prioritisation decisions."
-
-### With Google NotebookLM
-
-1. Upload `ResearchDoc1.md`, competitor websites (as PDFs), relevant NASSCOM/IBEF reports, and this prompt file as sources.
-2. Ask: "Synthesise all sources to produce a comprehensive competitive analysis and business strategy for BakeManage 3.0. Identify market gaps, competitor weaknesses, and the optimal monetisation and GTM strategy for an India-first, AI-augmented bakery ERP startup."
-
-### With GitHub Copilot (Chat Mode — for business logic implementation)
-
-> "Read `ResearchDoc1.md` and `DeepResearchPrompt2_BusinessStrategy.md`. Based on the monetisation model and pricing tiers described, implement: (1) a `Subscription` SQLAlchemy model and Alembic migration, (2) a `POST /billing/subscribe` FastAPI endpoint that creates a Razorpay subscription, (3) feature-flag middleware that checks the tenant's active tier and blocks premium endpoints for free-tier users. Follow existing code patterns in `app/`."
+- Do **not** modify any existing passing test unless you are extending it (never delete tests)
+- Do **not** add external dependencies without adding them to `requirements.txt`
+- Follow existing code style exactly: function naming, import order, docstring format, error handling pattern (check how existing routes raise `HTTPException`)
+- Every new SQLAlchemy model must have a corresponding Alembic migration
+- Every new route must be registered in the FastAPI app router (check `app/main.py` or equivalent)
+- Pin all new dependency versions in `requirements.txt`
