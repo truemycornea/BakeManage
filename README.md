@@ -748,9 +748,9 @@ pytest -v
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | ✅ | `postgresql://user:pass@host:5432/dbname` |
+| `DATABASE_URL` | ✅ | `postgresql+psycopg2://user:pass@host:5432/dbname` |
 | `REDIS_URL` | ✅ | `redis://localhost:6379/0` |
-| `SECRET_KEY` | ✅ | JWT signing secret (32+ random chars) |
+| `JWT_SECRET` | ✅ | JWT signing secret (32+ random chars) |
 | `GEMINI_API_KEY` | Optional | Premium OCR path only (`ocr_premium=True` tenants) |
 | `DIPLOMAT_URL` | Optional | `http://diplomat.olympus.ai:8000` — LLM router |
 | `VAULT_ADDR` | Optional | HashiCorp Vault for Olympus deployments |
