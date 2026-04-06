@@ -10,6 +10,7 @@ These tests verify:
   4. A failed Gemini call (e.g. 404 / deprecated model) causes exit code 1.
   5. ``_gemini_vlm_ocr`` in ingestion.py respects ``GEMINI_MODEL`` too.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -22,6 +23,7 @@ from unittest.mock import MagicMock, patch
 # ---------------------------------------------------------------------------
 # Helper: run the inline validation script extracted from the workflow
 # ---------------------------------------------------------------------------
+
 
 def _run_validation(api_key: str, model_env: str | None, mock_client_cls) -> int:
     """Simulate the inline Python script from the workflow's validation step.
@@ -63,6 +65,7 @@ def _run_validation(api_key: str, model_env: str | None, mock_client_cls) -> int
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestGeminiModelDefault:
     """GEMINI_MODEL env var handling."""
@@ -180,9 +183,10 @@ class TestIngestionGeminiModel:
         )
 
         mock_models = MagicMock()
-        mock_models.generate_content.side_effect = (
-            lambda model, contents: (captured.append(model), mock_response)[1]
-        )
+        mock_models.generate_content.side_effect = lambda model, contents: (
+            captured.append(model),
+            mock_response,
+        )[1]
         mock_client = MagicMock()
         mock_client.models = mock_models
 
@@ -194,6 +198,7 @@ class TestIngestionGeminiModel:
                 with patch("PIL.Image.open", return_value=mock_pil_image):
                     # Force _GENAI_AVAILABLE = True for this test
                     import app.ingestion as ingestion_mod
+
                     original = ingestion_mod._GENAI_AVAILABLE
                     ingestion_mod._GENAI_AVAILABLE = True
                     try:
@@ -221,9 +226,10 @@ class TestIngestionGeminiModel:
         )
 
         mock_models = MagicMock()
-        mock_models.generate_content.side_effect = (
-            lambda model, contents: (captured.append(model), mock_response)[1]
-        )
+        mock_models.generate_content.side_effect = lambda model, contents: (
+            captured.append(model),
+            mock_response,
+        )[1]
         mock_client = MagicMock()
         mock_client.models = mock_models
 
@@ -235,6 +241,7 @@ class TestIngestionGeminiModel:
                 mock_genai.Client.return_value = mock_client
                 with patch("PIL.Image.open", return_value=mock_pil_image):
                     import app.ingestion as ingestion_mod
+
                     original = ingestion_mod._GENAI_AVAILABLE
                     ingestion_mod._GENAI_AVAILABLE = True
                     try:

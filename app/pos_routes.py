@@ -8,6 +8,7 @@ Endpoints:
   POST /pos/sale/sync         — bulk offline sync (idempotent per item)
   GET  /pos/receipt/{id}/pdf  — GST-compliant PDF receipt
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,7 +24,6 @@ from sqlalchemy.orm import Session
 from .database import get_session
 from .models import (
     Payment,
-    PaymentMethod,
     Sale,
     SaleLine,
     SaleStatus,
@@ -52,6 +52,7 @@ router = APIRouter(prefix="/pos", tags=["pos"])
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _compute_sale(
     payload: SaleIn,
     session: Session,
@@ -76,7 +77,9 @@ def _compute_sale(
         price = line_in.unit_price
         disc_pct = line_in.discount_pct / Decimal("100")
         line_pre_disc = qty * price
-        disc_amt = (line_pre_disc * disc_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        disc_amt = (line_pre_disc * disc_pct).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
         taxable = line_pre_disc - disc_amt
 
         hsn = line_in.hsn_code or "1905"  # default to bakery HSN
@@ -125,13 +128,13 @@ def _compute_sale(
     if effective_subtotal < 0:
         raise HTTPException(status_code=422, detail="Discount exceeds subtotal")
 
-    total_tax = sum(
-        tm["cgst"] + tm["sgst"] + tm["igst"] for tm in tax_map.values()
-    )
+    total_tax = sum(tm["cgst"] + tm["sgst"] + tm["igst"] for tm in tax_map.values())
     grand_total = effective_subtotal + total_tax
 
     # Validate payment amount
-    pay_amount = payload.payment_amount if payload.payment_amount is not None else grand_total
+    pay_amount = (
+        payload.payment_amount if payload.payment_amount is not None else grand_total
+    )
     if pay_amount < grand_total:
         raise HTTPException(
             status_code=422,
@@ -228,7 +231,9 @@ def _generate_pdf_receipt(sale: Sale) -> bytes:
             c.line(15 * mm, y, width - 15 * mm, y)
             y -= 4 * mm
 
-        def draw_text(text: str, font: str = "Helvetica", size: int = 10, indent: float = 15):
+        def draw_text(
+            text: str, font: str = "Helvetica", size: int = 10, indent: float = 15
+        ):
             nonlocal y
             c.setFont(font, size)
             c.drawString(indent * mm, y, text)
@@ -295,6 +300,7 @@ def _generate_pdf_receipt(sale: Sale) -> bytes:
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.post("/sale", response_model=ReceiptOut, status_code=201)
 async def create_sale(
     payload: SaleIn,
@@ -306,7 +312,9 @@ async def create_sale(
     require_domain(role, "pos")
 
     # Check for existing sale with same idempotency key
-    existing = session.query(Sale).filter(Sale.idempotency_key == idempotency_key).first()
+    existing = (
+        session.query(Sale).filter(Sale.idempotency_key == idempotency_key).first()
+    )
     if existing:
         return _sale_to_receipt(existing)
 
@@ -329,7 +337,9 @@ async def create_sale(
     except IntegrityError:
         session.rollback()
         # Race condition — another request with same key succeeded
-        existing = session.query(Sale).filter(Sale.idempotency_key == idempotency_key).first()
+        existing = (
+            session.query(Sale).filter(Sale.idempotency_key == idempotency_key).first()
+        )
         if existing:
             return _sale_to_receipt(existing)
         raise HTTPException(status_code=409, detail="Duplicate idempotency key")
@@ -366,7 +376,9 @@ async def daily_summary(
         try:
             target = _date.fromisoformat(date)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD") from exc
+            raise HTTPException(
+                status_code=422, detail="date must be YYYY-MM-DD"
+            ) from exc
     else:
         target = _date.today()
 
@@ -396,7 +408,9 @@ async def daily_summary(
             total_sgst += tl.sgst
             total_igst += tl.igst
         for sl in sale.lines:
-            sku_qty[sl.product_name] = sku_qty.get(sl.product_name, Decimal("0")) + sl.quantity
+            sku_qty[sl.product_name] = (
+                sku_qty.get(sl.product_name, Decimal("0")) + sl.quantity
+            )
 
     top_skus = sorted(
         [{"product_name": k, "quantity": float(v)} for k, v in sku_qty.items()],
@@ -434,7 +448,11 @@ async def sync_offline_sales(
         # Check for existing sale
         existing = session.query(Sale).filter(Sale.idempotency_key == key).first()
         if existing:
-            results.append(SyncResultItem(idempotency_key=key, result="duplicate", sale_id=existing.id))
+            results.append(
+                SyncResultItem(
+                    idempotency_key=key, result="duplicate", sale_id=existing.id
+                )
+            )
             continue
 
         try:
@@ -450,22 +468,36 @@ async def sync_offline_sales(
             payment.sale_id = sale.id
             session.add(payment)
             session.commit()
-            results.append(SyncResultItem(idempotency_key=key, result="created", sale_id=sale.id))
+            results.append(
+                SyncResultItem(idempotency_key=key, result="created", sale_id=sale.id)
+            )
         except IntegrityError:
             session.rollback()
             # Race condition — another request with same key won; return duplicate
             dup = session.query(Sale).filter(Sale.idempotency_key == key).first()
             if dup:
-                results.append(SyncResultItem(idempotency_key=key, result="duplicate", sale_id=dup.id))
+                results.append(
+                    SyncResultItem(
+                        idempotency_key=key, result="duplicate", sale_id=dup.id
+                    )
+                )
             else:
-                results.append(SyncResultItem(idempotency_key=key, result="error", error="Integrity error"))
+                results.append(
+                    SyncResultItem(
+                        idempotency_key=key, result="error", error="Integrity error"
+                    )
+                )
         except HTTPException as exc:
             session.rollback()
-            results.append(SyncResultItem(idempotency_key=key, result="error", error=exc.detail))
+            results.append(
+                SyncResultItem(idempotency_key=key, result="error", error=exc.detail)
+            )
         except Exception as exc:
             session.rollback()
             logger.exception("Unexpected error syncing sale %s", key)
-            results.append(SyncResultItem(idempotency_key=key, result="error", error=str(exc)))
+            results.append(
+                SyncResultItem(idempotency_key=key, result="error", error=str(exc))
+            )
 
     return results
 

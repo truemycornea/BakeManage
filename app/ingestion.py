@@ -25,6 +25,7 @@ except ImportError:  # pragma: no cover - optional dependency safety
 
 try:
     from google import genai as _google_genai
+
     _GENAI_AVAILABLE = True
 except ImportError:  # pragma: no cover - optional dependency safety
     _google_genai = None  # type: ignore[assignment]
@@ -36,7 +37,9 @@ def parse_structural_layout(file_bytes: bytes, content_type: str) -> dict[str, A
         try:
             parser = PDFParser()
             doc = parser.parse(file_bytes)
-            return doc.to_dict() if hasattr(doc, "to_dict") else {"pages": len(doc.pages)}
+            return (
+                doc.to_dict() if hasattr(doc, "to_dict") else {"pages": len(doc.pages)}
+            )
         except Exception as exc:  # pragma: no cover - defensive guard
             return {"layout": "pdf_parse_failed", "reason": str(exc)}
 
@@ -44,7 +47,9 @@ def parse_structural_layout(file_bytes: bytes, content_type: str) -> dict[str, A
         try:
             parser = ImageParser()
             doc = parser.parse(file_bytes)
-            return doc.to_dict() if hasattr(doc, "to_dict") else {"pages": len(doc.pages)}
+            return (
+                doc.to_dict() if hasattr(doc, "to_dict") else {"pages": len(doc.pages)}
+            )
         except Exception as exc:  # pragma: no cover - defensive guard
             return {"layout": "image_parse_failed", "reason": str(exc)}
 
@@ -73,7 +78,9 @@ def simulate_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
     return _stub_vlm_ocr(image_bytes)
 
 
-def _gemini_vlm_ocr(image_bytes: bytes, api_key: str) -> InvoicePayload:  # pragma: no cover
+def _gemini_vlm_ocr(
+    image_bytes: bytes, api_key: str
+) -> InvoicePayload:  # pragma: no cover
     """Call Gemini Vision to extract structured invoice data from an image."""
     import json
     import os
@@ -94,6 +101,7 @@ def _gemini_vlm_ocr(image_bytes: bytes, api_key: str) -> InvoicePayload:  # prag
     )
 
     import PIL.Image as PILImage
+
     pil_image = PILImage.open(BytesIO(image_bytes))
     response = client.models.generate_content(
         model=model,
@@ -158,7 +166,11 @@ def _gemini_vlm_ocr(image_bytes: bytes, api_key: str) -> InvoicePayload:  # prag
     return InvoicePayload(
         vendor_name=str(data.get("vendor_name", "Unknown Vendor")),
         invoice_date=invoice_date or date.today(),
-        invoice_number=str(data.get("invoice_number", f"INV-{int(datetime.now(timezone.utc).timestamp())}")),
+        invoice_number=str(
+            data.get(
+                "invoice_number", f"INV-{int(datetime.now(timezone.utc).timestamp())}"
+            )
+        ),
         items=items,
         total_amount=total.quantize(Decimal("0.01")),
     )
@@ -169,9 +181,14 @@ def _stub_vlm_ocr(image_bytes: bytes) -> InvoicePayload:
     fingerprint = hashlib.sha256(image_bytes).hexdigest()[:8]
     # Rotate through realistic Indian bakery supplier names based on fingerprint
     _indian_vendors = [
-        "Amul Dairy Ltd", "ITC Foods Ltd", "Patanjali Ayurved Ltd",
-        "Hindustan Unilever Ltd", "Everest Spices Ltd", "Tata Consumer Products",
-        "RSGSM Atta Mills", "MTR Foods Pvt Ltd",
+        "Amul Dairy Ltd",
+        "ITC Foods Ltd",
+        "Patanjali Ayurved Ltd",
+        "Hindustan Unilever Ltd",
+        "Everest Spices Ltd",
+        "Tata Consumer Products",
+        "RSGSM Atta Mills",
+        "MTR Foods Pvt Ltd",
     ]
     vendor_idx = int(fingerprint[:2], 16) % len(_indian_vendors)
     vendor_name = _indian_vendors[vendor_idx]
@@ -227,7 +244,11 @@ def parse_excel_invoice(file_bytes: bytes) -> InvoicePayload:
     records = df.to_dict(orient="records")
     items: list[InvoiceItemPayload] = []
     for record in records:
-        if "item_name" not in record or "quantity" not in record or "unit_price" not in record:
+        if (
+            "item_name" not in record
+            or "quantity" not in record
+            or "unit_price" not in record
+        ):
             continue
         expiration_value = record.get("expiration_date")
         expiration_date = (
@@ -258,8 +279,20 @@ def parse_excel_invoice(file_bytes: bytes) -> InvoicePayload:
             )
         )
 
-    vendor_name = str(records[0].get("vendor_name", "Unknown Vendor")) if records else "Unknown Vendor"
-    invoice_number = str(records[0].get("invoice_number", f"EXCEL-{int(datetime.utcnow().timestamp())}")) if records else f"EXCEL-{int(datetime.utcnow().timestamp())}"
+    vendor_name = (
+        str(records[0].get("vendor_name", "Unknown Vendor"))
+        if records
+        else "Unknown Vendor"
+    )
+    invoice_number = (
+        str(
+            records[0].get(
+                "invoice_number", f"EXCEL-{int(datetime.utcnow().timestamp())}"
+            )
+        )
+        if records
+        else f"EXCEL-{int(datetime.utcnow().timestamp())}"
+    )
     invoice_date = (
         pd.to_datetime(records[0].get("date")).date()
         if records and records[0].get("date") is not None
@@ -283,7 +316,9 @@ def parse_excel_invoice(file_bytes: bytes) -> InvoicePayload:
 
 def persist_invoice(session: Session, payload: InvoicePayload) -> models.Invoice:
     vendor = (
-        session.query(models.Vendor).filter(models.Vendor.name == payload.vendor_name).first()
+        session.query(models.Vendor)
+        .filter(models.Vendor.name == payload.vendor_name)
+        .first()
     )
     if vendor is None:
         vendor = models.Vendor(name=payload.vendor_name)

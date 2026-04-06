@@ -31,7 +31,9 @@ def _safe_decimal(value: float | str | Decimal) -> Decimal:
         return Decimal("0")
 
 
-def apply_fefo_deduction(session: Session, item_name: str, required_qty: float) -> float:
+def apply_fefo_deduction(
+    session: Session, item_name: str, required_qty: float
+) -> float:
     remaining = required_qty
     items: Iterable[InventoryItem] = (
         session.execute(
@@ -69,7 +71,9 @@ def compute_cost_from_components(
 
 
 def evaluate_margin(
-    selling_price: Decimal | float | str, components: Iterable[dict], overhead: Decimal | float | str
+    selling_price: Decimal | float | str,
+    components: Iterable[dict],
+    overhead: Decimal | float | str,
 ) -> tuple[Decimal, Decimal, bool]:
     total_cost = compute_cost_from_components(components, overhead)
     price = _safe_decimal(selling_price)
@@ -97,7 +101,11 @@ def calculate_anomaly_score(
 
 
 def record_health_signal(
-    session: Session, latency_ms: float, rpm: float, error_rate: float, saturation_percent: float
+    session: Session,
+    latency_ms: float,
+    rpm: float,
+    error_rate: float,
+    saturation_percent: float,
 ) -> HealthSignal:
     score = calculate_anomaly_score(latency_ms, rpm, error_rate, saturation_percent)
     signal = HealthSignal(
@@ -113,7 +121,9 @@ def record_health_signal(
     return signal
 
 
-def log_anomaly_event(session: Session, source: str, score: float, action: str, succeeded: bool) -> None:
+def log_anomaly_event(
+    session: Session, source: str, score: float, action: str, succeeded: bool
+) -> None:
     event = AnomalyEvent(
         source=source,
         score=score,
@@ -177,17 +187,24 @@ def compute_cogs_task(recipe_id: int, overhead: float | str | Decimal = 0) -> De
 def cache_inventory_state_task() -> dict:
     session = SessionLocal()
     try:
-        rows = (
-            session.execute(
-                select(InventoryItem.name, InventoryItem.quantity_on_hand, InventoryItem.category)
+        rows = session.execute(
+            select(
+                InventoryItem.name,
+                InventoryItem.quantity_on_hand,
+                InventoryItem.category,
             )
-            .all()
-        )
+        ).all()
         summary = [
-            {"name": row.name, "quantity_on_hand": row.quantity_on_hand, "category": row.category}
+            {
+                "name": row.name,
+                "quantity_on_hand": row.quantity_on_hand,
+                "category": row.category,
+            }
             for row in rows
         ]
-        cache_inventory_snapshot(f"{settings.cache_namespace}:inventory", {"inventory": summary})
+        cache_inventory_snapshot(
+            f"{settings.cache_namespace}:inventory", {"inventory": summary}
+        )
         return {"inventory": summary}
     finally:
         session.close()
@@ -201,7 +218,9 @@ def monitor_four_signals() -> dict:
         rpm = random.uniform(100, 1800)
         error_rate = random.uniform(0, 3)
         saturation_percent = random.uniform(40, 85)
-        signal = record_health_signal(session, latency_ms, rpm, error_rate, saturation_percent)
+        signal = record_health_signal(
+            session, latency_ms, rpm, error_rate, saturation_percent
+        )
         remediation_task = None
         if signal.anomaly_score >= settings.anomaly_threshold:
             remediation_task = auto_remediate.delay(signal.anomaly_score)
@@ -232,7 +251,9 @@ def auto_remediate(score: float) -> dict:
         log_anomaly_event(session, "health_monitor", score, action, succeeded)
         needs_human = not succeeded or score >= settings.error_budget_percent
         if needs_human:
-            logger.warning("Human intervention requested due to anomaly score %.3f", score)
+            logger.warning(
+                "Human intervention requested due to anomaly score %.3f", score
+            )
         return {"action": action, "succeeded": succeeded, "human_notified": needs_human}
     finally:
         session.close()
@@ -263,7 +284,11 @@ def persist_proofing_telemetry(payload: dict[str, float | str]) -> dict:
             },
             ttl=settings.cache_ttl_seconds,
         )
-        return {"id": telemetry.id, "status": telemetry.status, "anomaly_score": telemetry.anomaly_score}
+        return {
+            "id": telemetry.id,
+            "status": telemetry.status,
+            "anomaly_score": telemetry.anomaly_score,
+        }
     finally:
         session.close()
 
@@ -273,7 +298,9 @@ def cached_inventory_state() -> dict | None:
 
 
 @celery_app.task
-def validate_requirements_locked(path: str = "requirements.txt") -> Tuple[bool, list[str]]:
+def validate_requirements_locked(
+    path: str = "requirements.txt",
+) -> Tuple[bool, list[str]]:
     if not settings.supply_chain_guard:
         return True, []
     try:

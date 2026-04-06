@@ -26,6 +26,8 @@ def cache_get(client: redis.Redis, key: str) -> Any | None:
         return json.loads(raw)
     except json.JSONDecodeError:
         return None
+
+
 class InMemoryCache:
     def __init__(self) -> None:
         self._store: dict[str, tuple[Any, float]] = {}
@@ -50,14 +52,18 @@ class InMemoryCache:
 
 def get_cache_client() -> redis.Redis | InMemoryCache:
     try:
-        client: redis.Redis = redis.Redis.from_url(settings.celery_broker_url, decode_responses=True)
+        client: redis.Redis = redis.Redis.from_url(
+            settings.celery_broker_url, decode_responses=True
+        )
         client.ping()
         return client
     except Exception:
         return InMemoryCache()
 
 
-def cache_inventory_snapshot(key: str, snapshot: dict[str, Any], ttl: Optional[int] = None) -> None:
+def cache_inventory_snapshot(
+    key: str, snapshot: dict[str, Any], ttl: Optional[int] = None
+) -> None:
     client = get_cache_client()
     serialized = json.dumps(snapshot)
     if hasattr(client, "set"):

@@ -9,6 +9,7 @@ Verifies:
 - Swapped PINs are rejected.
 - Unknown users are rejected.
 """
+
 from __future__ import annotations
 
 import os
@@ -67,6 +68,7 @@ def client():
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _login(client: TestClient, username: str, pin: str):
     return client.post("/auth/login", json={"username": username, "pin": pin})
 
@@ -78,6 +80,7 @@ def _decode_token(token: str) -> dict:
 # ---------------------------------------------------------------------------
 # rahul@olympus.ai — admin
 # ---------------------------------------------------------------------------
+
 
 def test_rahul_login_succeeds(client):
     r = _login(client, "rahul@olympus.ai", RAHUL_PIN)
@@ -96,6 +99,7 @@ def test_rahul_token_carries_admin_role(client):
 # helen@olympus.ai — operations
 # ---------------------------------------------------------------------------
 
+
 def test_helen_login_succeeds(client):
     r = _login(client, "helen@olympus.ai", HELEN_PIN)
     assert r.status_code == 200, r.text
@@ -112,6 +116,7 @@ def test_helen_token_carries_operations_role(client):
 # ---------------------------------------------------------------------------
 # Negative: incorrect PINs must be rejected
 # ---------------------------------------------------------------------------
+
 
 def test_rahul_wrong_pin_rejected(client):
     r = _login(client, "rahul@olympus.ai", "totally-wrong-pin")

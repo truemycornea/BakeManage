@@ -1,5 +1,6 @@
 # BakeManage IP Assignment: All contributions assign IP to BakeManage (c) 2026
 """Pydantic v2 schemas for the POS & Billing system (Epic A1)."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -12,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # ---------------------------------------------------------------------------
 # Request schemas
 # ---------------------------------------------------------------------------
+
 
 class SaleLineIn(BaseModel):
     product_name: str = Field(min_length=1, max_length=255)
@@ -48,6 +50,7 @@ class OfflineSyncRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------
+
 
 class TaxLineOut(BaseModel):
     hsn_code: str

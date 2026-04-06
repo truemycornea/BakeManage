@@ -13,7 +13,7 @@ from io import BytesIO
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, Request, Response
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -33,7 +33,12 @@ from .cache import cache_inventory_snapshot, clear_namespace
 from .tasks import cached_inventory_state
 from .config import settings
 from .database import Base, engine, get_session
-from .ingestion import parse_excel_invoice, parse_structural_layout, persist_invoice, simulate_vlm_ocr
+from .ingestion import (
+    parse_excel_invoice,
+    parse_structural_layout,
+    persist_invoice,
+    simulate_vlm_ocr,
+)
 from .models import (
     BatchIngredient,
     BatchLot,
@@ -79,7 +84,6 @@ from .security import (
     encrypt_api_key,
     enforce_https,
     filter_fields,
-    hash_pin,
     require_domain,
     require_role,
     verify_pin,
@@ -92,7 +96,6 @@ from .tasks import (
     compute_cost_from_components,
     evaluate_margin,
     monitor_four_signals,
-    validate_requirements_locked,
 )
 from . import gemini as _gemini
 from .pos_routes import router as pos_router
@@ -105,7 +108,7 @@ redis_client = get_redis_client()
 
 # Prometheus-style in-memory counters (thread-safe, reset on restart)
 _prom_lock = threading.Lock()
-_prom_requests: dict[str, int] = defaultdict(int)   # key: "method:path:status"
+_prom_requests: dict[str, int] = defaultdict(int)  # key: "method:path:status"
 _prom_cache_hits: int = 0
 _prom_start_time: float = time.time()
 
@@ -189,10 +192,17 @@ app.include_router(pos_router)
 # ---------------------------------------------------------------------------
 
 _SSO_ENFORCE: bool = os.getenv("SSO_ENFORCE", "false").strip().lower() == "true"
-_SSO_PUBLIC_PATHS: frozenset[str] = frozenset({
-    "/healthz", "/health", "/health/extended", "/metrics",
-    "/docs", "/openapi.json", "/login",
-})
+_SSO_PUBLIC_PATHS: frozenset[str] = frozenset(
+    {
+        "/healthz",
+        "/health",
+        "/health/extended",
+        "/metrics",
+        "/docs",
+        "/openapi.json",
+        "/login",
+    }
+)
 
 
 @app.middleware("http")
@@ -200,12 +210,16 @@ async def _sso_middleware(request: Request, call_next):
     """Forward Authentik SSO headers to request state; enforce SSO when SSO_ENFORCE=true."""
     user = request.headers.get("X-Auth-Request-User")
     email = request.headers.get("X-Auth-Request-Email")
-    groups = [g for g in request.headers.get("X-Auth-Request-Groups", "").split(",") if g]
+    groups = [
+        g for g in request.headers.get("X-Auth-Request-Groups", "").split(",") if g
+    ]
     request.state.sso_user = user
     request.state.sso_email = email
     request.state.sso_groups = groups
     if _SSO_ENFORCE and not user and request.url.path not in _SSO_PUBLIC_PATHS:
-        return JSONResponse(status_code=401, content={"detail": "Authentication required"})
+        return JSONResponse(
+            status_code=401, content={"detail": "Authentication required"}
+        )
     return await call_next(request)
 
 
@@ -226,9 +240,13 @@ async def _https_enforcement(request: Request, call_next):
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:  # pragma: no cover
+async def unhandled_exception_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:  # pragma: no cover
     monitor_four_signals.delay()
-    return JSONResponse(status_code=500, content={"detail": "Internal error, remediation queued"})
+    return JSONResponse(
+        status_code=500, content={"detail": "Internal error, remediation queued"}
+    )
 
 
 @app.get("/docs", include_in_schema=False)
@@ -244,6 +262,7 @@ async def custom_swagger_ui_html():
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _analyze_browning(image_bytes: bytes) -> QualityAssessment:
     try:
         with Image.open(BytesIO(image_bytes)) as img:
@@ -252,18 +271,23 @@ def _analyze_browning(image_bytes: bytes) -> QualityAssessment:
             mean_intensity = stat.mean[0]
             variance = stat.var[0] if stat.var else 0
             browning_score = round(min(mean_intensity / 255 * 100, 100), 2)
-            uniformity = round(max(0, 100 - min(variance ** 0.5, 100)), 2)
+            uniformity = round(max(0, 100 - min(variance**0.5, 100)), 2)
             verdict = "optimal" if 40 <= browning_score <= 78 else "adjust_batch"
             return QualityAssessment(
-                browning_score=browning_score, uniformity_score=uniformity, verdict=verdict
+                browning_score=browning_score,
+                uniformity_score=uniformity,
+                verdict=verdict,
             )
     except Exception as exc:  # pragma: no cover - defensive fallback
-        raise HTTPException(status_code=400, detail=f"Failed to analyze image: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Failed to analyze image: {exc}"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
 # Health endpoints (no auth)
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 async def health(session: Session = Depends(get_session)) -> dict[str, str]:
@@ -348,45 +372,52 @@ async def system_status(
     """Owner-only: live system metrics — DB record counts, service liveness, golden signals."""
     require_domain(role, "health")
     # Live DB counts
-    stock_count    = session.query(InventoryItem).count()
-    quality_count  = session.query(QualityInspection).count()
+    stock_count = session.query(InventoryItem).count()
+    quality_count = session.query(QualityInspection).count()
     proofing_count = session.query(ProofingTelemetry).count()
-    cred_count     = session.query(ServiceCredential).count()
-    qi_pass        = session.query(QualityInspection).filter(QualityInspection.status == "optimal").count()
-    loyalty_count  = session.query(LoyaltyRecord).count()
+    cred_count = session.query(ServiceCredential).count()
+    qi_pass = (
+        session.query(QualityInspection)
+        .filter(QualityInspection.status == "optimal")
+        .count()
+    )
+    loyalty_count = session.query(LoyaltyRecord).count()
     lead_time_count = session.query(SupplierLeadTime).count()
-    indent_count   = session.query(StockIndent).count()
+    indent_count = session.query(StockIndent).count()
     transfer_count = session.query(StockTransfer).count()
-    waste_count    = session.query(WasteRecord).count()
+    waste_count = session.query(WasteRecord).count()
     # Simulated resource metrics (no psutil in container)
-    cpu_pct   = round(random.uniform(8, 45), 1)
-    ram_pct   = round(random.uniform(30, 65), 1)
-    disk_pct  = round(random.uniform(15, 40), 1)
-    latency   = random.randint(18, 110)
+    cpu_pct = round(random.uniform(8, 45), 1)
+    ram_pct = round(random.uniform(30, 65), 1)
+    disk_pct = round(random.uniform(15, 40), 1)
+    latency = random.randint(18, 110)
     queue_depth = random.randint(0, 12)
     ai_tokens_used = random.randint(1200, 8500)
     services = [
         {"name": "FastAPI / uvicorn", "status": "healthy"},
-        {"name": "PostgreSQL 16",     "status": "healthy"},
-        {"name": "Redis 7.4",         "status": "healthy"},
-        {"name": "Celery Worker",     "status": "healthy"},
+        {"name": "PostgreSQL 16", "status": "healthy"},
+        {"name": "Redis 7.4", "status": "healthy"},
+        {"name": "Celery Worker", "status": "healthy"},
     ]
     return {
         "resources": {"cpu_pct": cpu_pct, "ram_pct": ram_pct, "disk_pct": disk_pct},
         "services": services,
         "queue": {"depth": queue_depth, "latency_ms": latency},
-        "ai_usage": {"tokens_used_session": ai_tokens_used, "ocr_jobs_run": proofing_count},
+        "ai_usage": {
+            "tokens_used_session": ai_tokens_used,
+            "ocr_jobs_run": proofing_count,
+        },
         "db_record_counts": {
-            "stock_items":          stock_count,
-            "quality_inspections":  quality_count,
-            "proofing_readings":    proofing_count,
-            "service_credentials":  cred_count,
-            "quality_pass":         qi_pass,
-            "loyalty_customers":    loyalty_count,
-            "supplier_lead_times":  lead_time_count,
-            "stock_indents":        indent_count,
-            "stock_transfers":      transfer_count,
-            "waste_records":        waste_count,
+            "stock_items": stock_count,
+            "quality_inspections": quality_count,
+            "proofing_readings": proofing_count,
+            "service_credentials": cred_count,
+            "quality_pass": qi_pass,
+            "loyalty_customers": loyalty_count,
+            "supplier_lead_times": lead_time_count,
+            "stock_indents": indent_count,
+            "stock_transfers": transfer_count,
+            "waste_records": waste_count,
         },
     }
 
@@ -395,9 +426,12 @@ async def system_status(
 # JWT auth endpoints (enterprise)
 # ---------------------------------------------------------------------------
 
+
 @app.post("/auth/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
-async def login(request: Request, payload: AuthRequest, session: Session = Depends(get_session)) -> TokenResponse:
+async def login(
+    request: Request, payload: AuthRequest, session: Session = Depends(get_session)
+) -> TokenResponse:
     user = session.query(User).filter(User.username == payload.username).first()
     if user is None or not verify_pin(payload.pin, user.hashed_pin, user.salt):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -406,7 +440,9 @@ async def login(request: Request, payload: AuthRequest, session: Session = Depen
 
 
 @app.get("/users/me", response_model=UserOut)
-async def me(user: User = Depends(require_role("admin", "operator", "viewer"))) -> UserOut:
+async def me(
+    user: User = Depends(require_role("admin", "operator", "viewer")),
+) -> UserOut:
     return user
 
 
@@ -426,12 +462,17 @@ async def update_profile(
         raise HTTPException(status_code=404, detail="User not found")
     db_user.language_preference = payload.language_preference
     session.commit()
-    return {"id": db_user.id, "username": db_user.username, "language_preference": db_user.language_preference}
+    return {
+        "id": db_user.id,
+        "username": db_user.username,
+        "language_preference": db_user.language_preference,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Ingestion endpoints  (PIN-based sandbox auth)
 # ---------------------------------------------------------------------------
+
 
 @app.post("/ingest/image", response_model=dict)
 async def ingest_image(
@@ -463,7 +504,8 @@ async def ingest_document(
 
     # Normalise MIME: browsers sometimes send application/octet-stream
     is_excel = (
-        ct in {
+        ct
+        in {
             "application/vnd.ms-excel",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/octet-stream",
@@ -487,7 +529,7 @@ async def ingest_document(
     else:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported document type '{ct}'. Upload .xlsx, .xls, or .pdf"
+            detail=f"Unsupported document type '{ct}'. Upload .xlsx, .xls, or .pdf",
         )
 
     persist_invoice(session, invoice_payload)
@@ -498,6 +540,7 @@ async def ingest_document(
 # ---------------------------------------------------------------------------
 # Costing endpoints  (PIN-based)
 # ---------------------------------------------------------------------------
+
 
 @app.post("/cost/compute", response_model=CostComputationResponse)
 async def compute_cost(
@@ -521,7 +564,9 @@ async def compute_cost(
 
 @app.post("/recipes/{recipe_id}/cogs/queue")
 async def queue_cogs(
-    recipe_id: int, request: CostComputationRequest, role: str = Depends(authorize_request)
+    recipe_id: int,
+    request: CostComputationRequest,
+    role: str = Depends(authorize_request),
 ) -> dict[str, str]:
     require_domain(role, "costing")
     task = compute_cogs_task.delay(recipe_id, request.overhead)
@@ -541,6 +586,7 @@ async def queue_inventory_deduction(
 # Inventory endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/inventory/hot")
 async def get_inventory_hot(
     session: Session = Depends(get_session),
@@ -551,7 +597,9 @@ async def get_inventory_hot(
     if cached:
         return {"cached": True, "items": cached}
     items = (
-        session.query(InventoryItem.name, InventoryItem.quantity_on_hand, InventoryItem.unit_price)
+        session.query(
+            InventoryItem.name, InventoryItem.quantity_on_hand, InventoryItem.unit_price
+        )
         .order_by(InventoryItem.name.asc())
         .all()
     )
@@ -576,6 +624,7 @@ async def cached_inventory(role: str = Depends(authorize_request)) -> dict:
 # ---------------------------------------------------------------------------
 # Proofing / quality endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.post("/telemetry/proofing", response_model=ProofingTelemetryResponse)
 async def ingest_proofing_telemetry(
@@ -648,7 +697,11 @@ async def quality_browning_check(
     )
     session.add(record)
     session.commit()
-    notes = "Target browning band met" if status == "pass" else "Adjust bake time/temperature"
+    notes = (
+        "Target browning band met"
+        if status == "pass"
+        else "Adjust bake time/temperature"
+    )
     return BrowningResult(score=score, status=status, notes=notes)
 
 
@@ -700,6 +753,7 @@ async def validate_quality(
 # Dashboard KPI summary  (PIN-based, §2 OptimisedPPv1)
 # ---------------------------------------------------------------------------
 
+
 @app.get("/dashboard/summary", response_model=dict)
 async def dashboard_summary(
     session: Session = Depends(get_session),
@@ -707,6 +761,7 @@ async def dashboard_summary(
 ) -> dict:
     """Aggregated KPIs for the operations dashboard."""
     from datetime import date as _date
+
     stock_count = session.query(InventoryItem).count()
     qi_total = session.query(QualityInspection).count()
     qi_pass = (
@@ -719,20 +774,32 @@ async def dashboard_summary(
 
     # Real sales data — today's revenue and items sold
     today_start = datetime.combine(_date.today(), datetime.min.time())
-    today_sales = session.query(SaleRecord).filter(SaleRecord.sold_at >= today_start).all()
+    today_sales = (
+        session.query(SaleRecord).filter(SaleRecord.sold_at >= today_start).all()
+    )
     revenue_today = round(sum(float(s.total_amount) for s in today_sales), 2)
     items_sold_today = int(sum(s.quantity_sold for s in today_sales))
 
     # Weekly savings proxy: items expiring soon avoided via FEFO
-    week_start = datetime.combine(_date.today() - __import__("datetime").timedelta(days=7), datetime.min.time())
-    weekly_sales = session.query(SaleRecord).filter(SaleRecord.sold_at >= week_start).all()
-    cost_saved_week = round(sum(float(s.total_amount) for s in weekly_sales) * 0.05, 2)  # 5% FEFO savings estimate
+    week_start = datetime.combine(
+        _date.today() - __import__("datetime").timedelta(days=7), datetime.min.time()
+    )
+    weekly_sales = (
+        session.query(SaleRecord).filter(SaleRecord.sold_at >= week_start).all()
+    )
+    cost_saved_week = round(
+        sum(float(s.total_amount) for s in weekly_sales) * 0.05, 2
+    )  # 5% FEFO savings estimate
 
     expiring_soon = (
         session.query(InventoryItem)
         .filter(
             InventoryItem.expiration_date.is_not(None),
-            InventoryItem.expiration_date <= (__import__("datetime").date.today() + __import__("datetime").timedelta(days=7)),
+            InventoryItem.expiration_date
+            <= (
+                __import__("datetime").date.today()
+                + __import__("datetime").timedelta(days=7)
+            ),
         )
         .count()
     )
@@ -744,7 +811,11 @@ async def dashboard_summary(
         if lr.last_price_per_unit is not None:
             by_ingredient[lr.ingredient_name].append(float(lr.last_price_per_unit))
     vendor_savings = round(
-        sum(max(prices) - min(prices) for prices in by_ingredient.values() if len(prices) > 1),
+        sum(
+            max(prices) - min(prices)
+            for prices in by_ingredient.values()
+            if len(prices) > 1
+        ),
         2,
     )
 
@@ -768,13 +839,14 @@ async def dashboard_summary(
 # Stock Management  (§6 OptimisedPPv1)
 # ---------------------------------------------------------------------------
 
+
 class StockAddRequest(BaseModel):
     name: str
     quantity_on_hand: float
     unit_of_measure: str = "kg"
     category: str = "general"
     unit_price: float = 0.0
-    expiration_date: str | None = None   # ISO date string YYYY-MM-DD
+    expiration_date: str | None = None  # ISO date string YYYY-MM-DD
 
 
 @app.get("/stock/items", response_model=dict)
@@ -785,6 +857,7 @@ async def stock_list(
     """List all inventory items sorted by expiry (soonest first, nulls last)."""
     require_domain(role, "inventory")
     from datetime import date as _date
+
     items = (
         session.query(InventoryItem)
         .order_by(
@@ -799,17 +872,25 @@ async def stock_list(
         days_left: int | None = None
         if it.expiration_date:
             days_left = (it.expiration_date - today).days
-        results.append({
-            "id": it.id,
-            "name": it.name,
-            "quantity_on_hand": float(it.quantity_on_hand),
-            "unit_of_measure": it.unit_of_measure,
-            "category": it.category,
-            "unit_price": float(it.unit_price),
-            "expiration_date": it.expiration_date.isoformat() if it.expiration_date else None,
-            "days_until_expiry": days_left,
-        })
-    expiring_soon = sum(1 for r in results if r["days_until_expiry"] is not None and r["days_until_expiry"] <= 7)
+        results.append(
+            {
+                "id": it.id,
+                "name": it.name,
+                "quantity_on_hand": float(it.quantity_on_hand),
+                "unit_of_measure": it.unit_of_measure,
+                "category": it.category,
+                "unit_price": float(it.unit_price),
+                "expiration_date": it.expiration_date.isoformat()
+                if it.expiration_date
+                else None,
+                "days_until_expiry": days_left,
+            }
+        )
+    expiring_soon = sum(
+        1
+        for r in results
+        if r["days_until_expiry"] is not None and r["days_until_expiry"] <= 7
+    )
     return {"total": len(results), "expiring_soon": expiring_soon, "items": results}
 
 
@@ -822,12 +903,15 @@ async def stock_add(
     """Manually add a stock item (barcode / direct entry)."""
     require_domain(role, "inventory")
     from datetime import date as _date
+
     exp_date: _date | None = None
     if payload.expiration_date:
         try:
             exp_date = _date.fromisoformat(payload.expiration_date)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail="expiration_date must be YYYY-MM-DD") from exc
+            raise HTTPException(
+                status_code=422, detail="expiration_date must be YYYY-MM-DD"
+            ) from exc
     item = InventoryItem(
         name=payload.name,
         quantity_on_hand=payload.quantity_on_hand,
@@ -843,7 +927,9 @@ async def stock_add(
         "name": item.name,
         "quantity_on_hand": float(item.quantity_on_hand),
         "unit_of_measure": item.unit_of_measure,
-        "expiration_date": item.expiration_date.isoformat() if item.expiration_date else None,
+        "expiration_date": item.expiration_date.isoformat()
+        if item.expiration_date
+        else None,
     }
 
 
@@ -856,6 +942,7 @@ async def stock_expiring(
     """Items expiring within `days` days."""
     require_domain(role, "inventory")
     from datetime import date as _date, timedelta
+
     cutoff = _date.today() + timedelta(days=days)
     items = (
         session.query(InventoryItem)
@@ -881,6 +968,7 @@ async def stock_expiring(
 # ---------------------------------------------------------------------------
 # Credentials and system health  (PIN-based)
 # ---------------------------------------------------------------------------
+
 
 @app.post("/credentials", response_model=dict)
 async def store_credentials(
@@ -931,14 +1019,20 @@ def _build_prometheus_response() -> PlainTextResponse:
         cache_misses = info.get("keyspace_misses", 0)
     except Exception:
         cache_hits, cache_misses = 0, 0
-    lines.append("# HELP bakemanage_redis_cache_hits_total Redis keyspace hits since server start")
+    lines.append(
+        "# HELP bakemanage_redis_cache_hits_total Redis keyspace hits since server start"
+    )
     lines.append("# TYPE bakemanage_redis_cache_hits_total counter")
     lines.append(f"bakemanage_redis_cache_hits_total {cache_hits}")
-    lines.append("# HELP bakemanage_redis_cache_misses_total Redis keyspace misses since server start")
+    lines.append(
+        "# HELP bakemanage_redis_cache_misses_total Redis keyspace misses since server start"
+    )
     lines.append("# TYPE bakemanage_redis_cache_misses_total counter")
     lines.append(f"bakemanage_redis_cache_misses_total {cache_misses}")
 
-    return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
+    return PlainTextResponse(
+        "\n".join(lines) + "\n", media_type="text/plain; version=0.0.4"
+    )
 
 
 @app.get("/metrics")
@@ -954,6 +1048,7 @@ async def public_metrics() -> PlainTextResponse:
 # ---------------------------------------------------------------------------
 # Sales recording
 # ---------------------------------------------------------------------------
+
 
 class SaleRequest(BaseModel):
     product_name: str
@@ -1004,11 +1099,14 @@ async def sales_daily(
     """Daily sales summary and line items. Pass ?date=YYYY-MM-DD for a specific day; defaults to today."""
     require_domain(role, "costing")
     from datetime import date as _date
+
     if date:
         try:
             target_date = _date.fromisoformat(date)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD") from exc
+            raise HTTPException(
+                status_code=422, detail="date must be YYYY-MM-DD"
+            ) from exc
     else:
         target_date = _date.today()
     today_start = datetime.combine(target_date, datetime.min.time())
@@ -1043,6 +1141,7 @@ async def sales_daily(
 # Recipe Library  (§12 OptimisedPPv1)
 # ---------------------------------------------------------------------------
 
+
 @app.get("/recipes", response_model=dict)
 async def list_recipes(
     session: Session = Depends(get_session),
@@ -1065,15 +1164,17 @@ async def list_recipes(
         ]
         total_ingredient_cost = sum(i["cost"] for i in ingredients)
         total_cost = round(total_ingredient_cost + float(r.overhead_cost), 2)
-        result.append({
-            "id": r.id,
-            "name": r.name,
-            "overhead_cost": float(r.overhead_cost),
-            "yield_amount": float(r.yield_amount),
-            "total_cost": total_cost,
-            "ingredient_count": len(ingredients),
-            "ingredients": ingredients,
-        })
+        result.append(
+            {
+                "id": r.id,
+                "name": r.name,
+                "overhead_cost": float(r.overhead_cost),
+                "yield_amount": float(r.yield_amount),
+                "total_cost": total_cost,
+                "ingredient_count": len(ingredients),
+                "ingredients": ingredients,
+            }
+        )
     return {"total": len(result), "recipes": result}
 
 
@@ -1104,7 +1205,9 @@ async def create_recipe(
     require_domain(role, "costing")
     existing = session.query(Recipe).filter(Recipe.name == payload.name).first()
     if existing:
-        raise HTTPException(status_code=409, detail=f"Recipe '{payload.name}' already exists")
+        raise HTTPException(
+            status_code=409, detail=f"Recipe '{payload.name}' already exists"
+        )
     recipe = Recipe(
         name=payload.name,
         overhead_cost=payload.overhead_cost,
@@ -1169,6 +1272,7 @@ async def get_recipe(
 # ---------------------------------------------------------------------------
 # Media Library  (§13 OptimisedPPv1)
 # ---------------------------------------------------------------------------
+
 
 @app.get("/media/assets", response_model=dict)
 async def list_media_assets(
@@ -1242,17 +1346,19 @@ async def get_media_asset(
 # Request models  (Phase 3)
 # ---------------------------------------------------------------------------
 
+
 class IndentRequest(BaseModel):
-    threshold_quantity: float = 10.0   # raise indent for items below this quantity
+    threshold_quantity: float = 10.0  # raise indent for items below this quantity
     raised_by: str = "system"
 
 
 class DirectIndentRequest(BaseModel):
     """Direct named-item indent request matching the GAIS orchestration API signature."""
+
     item_name: str
     quantity_required: float
     unit_of_measure: str = "kg"
-    required_by_date: str   # ISO date YYYY-MM-DD
+    required_by_date: str  # ISO date YYYY-MM-DD
     notes: str | None = None
     raised_by: str = "BakeManage AI"
 
@@ -1277,6 +1383,7 @@ class LeadTimeRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Supply chain endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.post("/supply-chain/indent", response_model=dict)
 async def generate_indent(
@@ -1311,15 +1418,17 @@ async def generate_indent(
             raised_by=payload.raised_by,
         )
         session.add(indent)
-        indents.append({
-            "ingredient_name": item.name,
-            "current_qty": float(item.quantity_on_hand),
-            "threshold_qty": payload.threshold_quantity,
-            "quantity_required": qty_needed,
-            "unit_of_measure": item.unit_of_measure,
-            "preferred_vendor": lead.vendor_name if lead else None,
-            "lead_days": lead.lead_days if lead else None,
-        })
+        indents.append(
+            {
+                "ingredient_name": item.name,
+                "current_qty": float(item.quantity_on_hand),
+                "threshold_qty": payload.threshold_quantity,
+                "quantity_required": qty_needed,
+                "unit_of_measure": item.unit_of_measure,
+                "preferred_vendor": lead.vendor_name if lead else None,
+                "lead_days": lead.lead_days if lead else None,
+            }
+        )
     session.commit()
     return {
         "indents_raised": len(indents),
@@ -1336,18 +1445,26 @@ async def transfer_stock(
 ) -> dict:
     """Transfer stock quantity between locations (Phase 3 v3.1)."""
     require_domain(role, "inventory")
-    item = session.query(InventoryItem).filter(InventoryItem.id == payload.inventory_item_id).first()
+    item = (
+        session.query(InventoryItem)
+        .filter(InventoryItem.id == payload.inventory_item_id)
+        .first()
+    )
     if not item:
         raise HTTPException(status_code=404, detail="Inventory item not found")
     if payload.quantity <= 0:
-        raise HTTPException(status_code=422, detail="Transfer quantity must be positive")
+        raise HTTPException(
+            status_code=422, detail="Transfer quantity must be positive"
+        )
     if item.quantity_on_hand < payload.quantity:
         raise HTTPException(
             status_code=422,
             detail=f"Insufficient stock: {item.quantity_on_hand} {item.unit_of_measure} available",
         )
     if payload.from_location.strip() == payload.to_location.strip():
-        raise HTTPException(status_code=422, detail="from_location and to_location must differ")
+        raise HTTPException(
+            status_code=422, detail="from_location and to_location must differ"
+        )
 
     # Deduct from source (inventory is treated as single-location; transfer is logged)
     item.quantity_on_hand -= payload.quantity
@@ -1380,7 +1497,9 @@ async def list_stock_transfers(
 ) -> dict:
     """Fix 5 — list all stock transfer records."""
     require_domain(role, "inventory")
-    transfers = session.query(StockTransfer).order_by(StockTransfer.transferred_at.desc()).all()
+    transfers = (
+        session.query(StockTransfer).order_by(StockTransfer.transferred_at.desc()).all()
+    )
     return {
         "total": len(transfers),
         "transfers": [
@@ -1413,10 +1532,13 @@ async def create_direct_indent(
     """
     require_domain(role, "inventory")
     from datetime import date as _date
+
     try:
         required_by = _date.fromisoformat(payload.required_by_date)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail="required_by_date must be YYYY-MM-DD") from exc
+        raise HTTPException(
+            status_code=422, detail="required_by_date must be YYYY-MM-DD"
+        ) from exc
     if payload.quantity_required <= 0:
         raise HTTPException(status_code=422, detail="quantity_required must be > 0")
 
@@ -1458,14 +1580,20 @@ async def list_lead_times(
 ) -> dict:
     """List all supplier lead-time records (Phase 3 v3.1)."""
     require_domain(role, "inventory")
-    records = session.query(SupplierLeadTime).order_by(SupplierLeadTime.vendor_name.asc()).all()
+    records = (
+        session.query(SupplierLeadTime)
+        .order_by(SupplierLeadTime.vendor_name.asc())
+        .all()
+    )
     items = [
         {
             "id": r.id,
             "vendor_name": r.vendor_name,
             "ingredient_name": r.ingredient_name,
             "lead_days": r.lead_days,
-            "last_price_per_unit": float(r.last_price_per_unit) if r.last_price_per_unit else None,
+            "last_price_per_unit": float(r.last_price_per_unit)
+            if r.last_price_per_unit
+            else None,
             "notes": r.notes,
             "updated_at": r.updated_at.isoformat(),
         }
@@ -1493,7 +1621,9 @@ async def upsert_lead_time(
     if existing:
         existing.lead_days = payload.lead_days
         existing.last_price_per_unit = (
-            Decimal(str(payload.last_price_per_unit)) if payload.last_price_per_unit else None
+            Decimal(str(payload.last_price_per_unit))
+            if payload.last_price_per_unit
+            else None
         )
         existing.notes = payload.notes
         existing.updated_at = datetime.utcnow()
@@ -1504,7 +1634,9 @@ async def upsert_lead_time(
             ingredient_name=payload.ingredient_name,
             lead_days=payload.lead_days,
             last_price_per_unit=(
-                Decimal(str(payload.last_price_per_unit)) if payload.last_price_per_unit else None
+                Decimal(str(payload.last_price_per_unit))
+                if payload.last_price_per_unit
+                else None
             ),
             notes=payload.notes,
         )
@@ -1523,6 +1655,7 @@ async def upsert_lead_time(
 # Phase 3 — v3.2: Advanced Data Monetization (Insights)
 # ===========================================================================
 
+
 @app.get("/insights/menu-engineering", response_model=dict)
 async def menu_engineering(
     session: Session = Depends(get_session),
@@ -1530,7 +1663,8 @@ async def menu_engineering(
 ) -> dict:
     """Dynamic menu engineering — margin × sales velocity scoring (Phase 3 v3.2)."""
     require_domain(role, "costing")
-    from datetime import date as _date, timedelta
+    from datetime import timedelta
+
     # Sales velocity: units sold in last 30 days by product name
     cutoff = datetime.utcnow() - timedelta(days=30)
     sales = session.query(SaleRecord).filter(SaleRecord.sold_at >= cutoff).all()
@@ -1544,7 +1678,9 @@ async def menu_engineering(
     recipes = session.query(Recipe).all()
     recipe_cost_map: dict[str, float] = {}
     for r in recipes:
-        total_cogs = sum(float(ing.cost) for ing in r.components) + float(r.overhead_cost)
+        total_cogs = sum(float(ing.cost) for ing in r.components) + float(
+            r.overhead_cost
+        )
         recipe_cost_map[r.name.lower()] = round(total_cogs, 2)
 
     # Build engineering matrix
@@ -1568,17 +1704,19 @@ async def menu_engineering(
             quadrant = "puzzle"
         else:
             quadrant = "dog"
-        results.append({
-            "product_name": product_name,
-            "units_sold_30d": velocity,
-            "revenue_30d": round(revenue, 2),
-            "avg_selling_price": avg_price,
-            "cogs": cogs,
-            "margin_pct": margin_pct,
-            "quadrant": quadrant,
-        })
+        results.append(
+            {
+                "product_name": product_name,
+                "units_sold_30d": velocity,
+                "revenue_30d": round(revenue, 2),
+                "avg_selling_price": avg_price,
+                "cogs": cogs,
+                "margin_pct": margin_pct,
+                "quadrant": quadrant,
+            }
+        )
 
-    results.sort(key=lambda x: (x["revenue_30d"]), reverse=True)
+    results.sort(key=lambda x: x["revenue_30d"], reverse=True)
     return {
         "period_days": 30,
         "total_products": len(results),
@@ -1597,28 +1735,36 @@ async def vendor_optimization(
     # Group by ingredient
     by_ingredient: dict[str, list] = defaultdict(list)
     for r in records:
-        by_ingredient[r.ingredient_name].append({
-            "vendor_name": r.vendor_name,
-            "lead_days": r.lead_days,
-            "last_price_per_unit": float(r.last_price_per_unit) if r.last_price_per_unit else None,
-        })
+        by_ingredient[r.ingredient_name].append(
+            {
+                "vendor_name": r.vendor_name,
+                "lead_days": r.lead_days,
+                "last_price_per_unit": float(r.last_price_per_unit)
+                if r.last_price_per_unit
+                else None,
+            }
+        )
 
     recommendations = []
     for ingredient, vendors in by_ingredient.items():
         # Rank by price first (if available), then lead_days
         vendors_priced = [v for v in vendors if v["last_price_per_unit"] is not None]
         vendors_unpriced = [v for v in vendors if v["last_price_per_unit"] is None]
-        ranked = sorted(vendors_priced, key=lambda v: (v["last_price_per_unit"], v["lead_days"]))
+        ranked = sorted(
+            vendors_priced, key=lambda v: (v["last_price_per_unit"], v["lead_days"])
+        )
         ranked += sorted(vendors_unpriced, key=lambda v: v["lead_days"])
         best = ranked[0] if ranked else None
-        recommendations.append({
-            "ingredient_name": ingredient,
-            "recommended_vendor": best["vendor_name"] if best else None,
-            "best_price": best["last_price_per_unit"] if best else None,
-            "best_lead_days": best["lead_days"] if best else None,
-            "alternatives_count": len(ranked) - 1,
-            "all_vendors": ranked,
-        })
+        recommendations.append(
+            {
+                "ingredient_name": ingredient,
+                "recommended_vendor": best["vendor_name"] if best else None,
+                "best_price": best["last_price_per_unit"] if best else None,
+                "best_lead_days": best["lead_days"] if best else None,
+                "alternatives_count": len(ranked) - 1,
+                "all_vendors": ranked,
+            }
+        )
 
     recommendations.sort(key=lambda x: x["ingredient_name"])
     return {
@@ -1636,11 +1782,15 @@ async def demand_forecast(
     """Linear regression demand forecast per product for next N days (Phase 3 v3.2)."""
     require_domain(role, "costing")
     from datetime import date as _date, timedelta
-    import math
 
     # Fetch last 60 days of sales
     cutoff = datetime.utcnow() - timedelta(days=60)
-    sales = session.query(SaleRecord).filter(SaleRecord.sold_at >= cutoff).order_by(SaleRecord.sold_at).all()
+    sales = (
+        session.query(SaleRecord)
+        .filter(SaleRecord.sold_at >= cutoff)
+        .order_by(SaleRecord.sold_at)
+        .all()
+    )
 
     # Aggregate daily quantities per product
     daily_qty: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
@@ -1655,15 +1805,20 @@ async def demand_forecast(
         if len(days) < 2:
             # Not enough data — use simple average
             avg = sum(day_map.values()) / len(day_map)
-            forecasts.append({
-                "product_name": product_name,
-                "method": "average",
-                "data_points": len(days),
-                "forecast": [
-                    {"date": (today + timedelta(days=i + 1)).isoformat(), "predicted_qty": round(avg, 2)}
-                    for i in range(days_ahead)
-                ],
-            })
+            forecasts.append(
+                {
+                    "product_name": product_name,
+                    "method": "average",
+                    "data_points": len(days),
+                    "forecast": [
+                        {
+                            "date": (today + timedelta(days=i + 1)).isoformat(),
+                            "predicted_qty": round(avg, 2),
+                        }
+                        for i in range(days_ahead)
+                    ],
+                }
+            )
             continue
 
         # Simple linear regression: x = day index, y = qty
@@ -1681,17 +1836,21 @@ async def demand_forecast(
         for i in range(days_ahead):
             x = next_x_start + i
             predicted = max(0.0, round(intercept + slope * x, 2))
-            forecast_items.append({
-                "date": (today + timedelta(days=i + 1)).isoformat(),
-                "predicted_qty": predicted,
-            })
-        forecasts.append({
-            "product_name": product_name,
-            "method": "linear_regression",
-            "data_points": n,
-            "slope": round(slope, 4),
-            "forecast": forecast_items,
-        })
+            forecast_items.append(
+                {
+                    "date": (today + timedelta(days=i + 1)).isoformat(),
+                    "predicted_qty": predicted,
+                }
+            )
+        forecasts.append(
+            {
+                "product_name": product_name,
+                "method": "linear_regression",
+                "data_points": n,
+                "slope": round(slope, 4),
+                "forecast": forecast_items,
+            }
+        )
 
     forecasts.sort(key=lambda x: x["product_name"])
     return {
@@ -1705,6 +1864,7 @@ async def demand_forecast(
 # Phase 3 — v3.3: Niche CRM Features
 # ===========================================================================
 
+
 class WhatsAppNotifyRequest(BaseModel):
     customer_name: str
     phone: str
@@ -1715,7 +1875,7 @@ class WhatsAppNotifyRequest(BaseModel):
 class LoyaltyUpsertRequest(BaseModel):
     customer_name: str
     phone: str | None = None
-    birthday: str | None = None   # ISO date YYYY-MM-DD
+    birthday: str | None = None  # ISO date YYYY-MM-DD
     purchase_amount_inr: float = 0.0
 
 
@@ -1740,7 +1900,8 @@ async def whatsapp_notify(
         "message_id": simulated_message_id,
         "recipient": payload.customer_name,
         "phone": payload.phone,
-        "message_preview": payload.message[:80] + ("…" if len(payload.message) > 80 else ""),
+        "message_preview": payload.message[:80]
+        + ("…" if len(payload.message) > 80 else ""),
         "order_id": payload.order_id,
         "channel": "whatsapp_business_api",
         "note": "sandbox simulation — no actual message sent",
@@ -1761,12 +1922,15 @@ async def upsert_loyalty(
         .first()
     )
     from datetime import date as _date
+
     bday: _date | None = None
     if payload.birthday:
         try:
             bday = _date.fromisoformat(payload.birthday)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail="birthday must be YYYY-MM-DD") from exc
+            raise HTTPException(
+                status_code=422, detail="birthday must be YYYY-MM-DD"
+            ) from exc
 
     points_earned = int(payload.purchase_amount_inr // 10)  # 1 point per ₹10
     if existing:
@@ -1776,11 +1940,23 @@ async def upsert_loyalty(
         existing.total_spend_inr += Decimal(str(payload.purchase_amount_inr))
         existing.loyalty_points += points_earned
         total_spend = float(existing.total_spend_inr)
-        existing.tier = "gold" if total_spend >= 5000 else "silver" if total_spend >= 1000 else "bronze"
+        existing.tier = (
+            "gold"
+            if total_spend >= 5000
+            else "silver"
+            if total_spend >= 1000
+            else "bronze"
+        )
         record = existing
     else:
         total_spend = payload.purchase_amount_inr
-        tier = "gold" if total_spend >= 5000 else "silver" if total_spend >= 1000 else "bronze"
+        tier = (
+            "gold"
+            if total_spend >= 5000
+            else "silver"
+            if total_spend >= 1000
+            else "bronze"
+        )
         record = LoyaltyRecord(
             customer_name=payload.customer_name.strip(),
             phone=payload.phone,
@@ -1811,7 +1987,12 @@ async def crm_loyalty(
     """Loyalty analysis — tier breakdown, top customers, birthday triggers (Phase 3 v3.3)."""
     require_domain(role, "costing")
     from datetime import date as _date, timedelta
-    records = session.query(LoyaltyRecord).order_by(LoyaltyRecord.total_spend_inr.desc()).all()
+
+    records = (
+        session.query(LoyaltyRecord)
+        .order_by(LoyaltyRecord.total_spend_inr.desc())
+        .all()
+    )
     today = _date.today()
     upcoming_window = today + timedelta(days=30)
 
@@ -1824,20 +2005,24 @@ async def crm_loyalty(
         if r.birthday:
             bday_this_year = r.birthday.replace(year=today.year)
             if today <= bday_this_year <= upcoming_window:
-                birthday_triggers.append({
-                    "customer_name": r.customer_name,
-                    "phone": r.phone,
-                    "birthday": r.birthday.isoformat(),
-                    "days_until": (bday_this_year - today).days,
-                })
-        items.append({
-            "id": r.id,
-            "customer_name": r.customer_name,
-            "tier": r.tier,
-            "loyalty_points": r.loyalty_points,
-            "total_spend_inr": float(r.total_spend_inr),
-            "total_purchases": r.total_purchases,
-        })
+                birthday_triggers.append(
+                    {
+                        "customer_name": r.customer_name,
+                        "phone": r.phone,
+                        "birthday": r.birthday.isoformat(),
+                        "days_until": (bday_this_year - today).days,
+                    }
+                )
+        items.append(
+            {
+                "id": r.id,
+                "customer_name": r.customer_name,
+                "tier": r.tier,
+                "loyalty_points": r.loyalty_points,
+                "total_spend_inr": float(r.total_spend_inr),
+                "total_purchases": r.total_purchases,
+            }
+        )
 
     return {
         "total_customers": len(records),
@@ -1851,6 +2036,7 @@ async def crm_loyalty(
 # ===========================================================================
 # Feature 10 — Recipe Batch Scaling  (blueprint Feature #10)
 # ===========================================================================
+
 
 @app.get("/recipes/{recipe_id}/scale", response_model=dict)
 async def scale_recipe(
@@ -1878,21 +2064,33 @@ async def scale_recipe(
     for ing in r.components:
         scaled_qty = round(ing.required_quantity * scale_factor, 4)
         scaled_cost = (ing.cost * Decimal(str(scale_factor))).quantize(Decimal("0.01"))
-        effective_cost = (scaled_cost / Decimal(str(ing.yield_amount))).quantize(Decimal("0.01")) if ing.yield_amount > 0 else scaled_cost
+        effective_cost = (
+            (scaled_cost / Decimal(str(ing.yield_amount))).quantize(Decimal("0.01"))
+            if ing.yield_amount > 0
+            else scaled_cost
+        )
         total_ingredient_cost += effective_cost
-        scaled_ingredients.append({
-            "ingredient_name": ing.ingredient_name,
-            "base_quantity": ing.required_quantity,
-            "scaled_quantity": scaled_qty,
-            "unit_cost": float(ing.cost),
-            "scaled_cost": float(scaled_cost),
-            "effective_cost": float(effective_cost),
-            "yield_amount": ing.yield_amount,
-        })
+        scaled_ingredients.append(
+            {
+                "ingredient_name": ing.ingredient_name,
+                "base_quantity": ing.required_quantity,
+                "scaled_quantity": scaled_qty,
+                "unit_cost": float(ing.cost),
+                "scaled_cost": float(scaled_cost),
+                "effective_cost": float(effective_cost),
+                "yield_amount": ing.yield_amount,
+            }
+        )
 
-    scaled_overhead = (Decimal(str(r.overhead_cost)) * Decimal(str(scale_factor))).quantize(Decimal("0.01"))
+    scaled_overhead = (
+        Decimal(str(r.overhead_cost)) * Decimal(str(scale_factor))
+    ).quantize(Decimal("0.01"))
     total_cost = (total_ingredient_cost + scaled_overhead).quantize(Decimal("0.01"))
-    cost_per_serving = (total_cost / Decimal(str(servings))).quantize(Decimal("0.01")) if servings > 0 else total_cost
+    cost_per_serving = (
+        (total_cost / Decimal(str(servings))).quantize(Decimal("0.01"))
+        if servings > 0
+        else total_cost
+    )
 
     return {
         "recipe_id": r.id,
@@ -1913,20 +2111,21 @@ async def scale_recipe(
 
 # Indian bakery GST slabs per CBIC classification
 _GST_SLABS: dict[str, float] = {
-    "unbranded_bread": 0.0,       # 0%  — fresh unbranded bread / rusk
-    "unpackaged_namkeen": 0.0,    # 0%  — loose, unpackaged savouries
-    "branded_biscuits": 5.0,      # 5%  — branded biscuits / cookies < ₹100/kg
-    "pastries_cakes": 18.0,       # 18% — cakes, pastries, prepared bakery goods
-    "branded_namkeen": 12.0,      # 12% — branded packaged namkeen / snacks
-    "chocolate": 18.0,            # 18% — chocolate-coated goods
-    "custom": None,               # caller supplies rate
+    "unbranded_bread": 0.0,  # 0%  — fresh unbranded bread / rusk
+    "unpackaged_namkeen": 0.0,  # 0%  — loose, unpackaged savouries
+    "branded_biscuits": 5.0,  # 5%  — branded biscuits / cookies < ₹100/kg
+    "pastries_cakes": 18.0,  # 18% — cakes, pastries, prepared bakery goods
+    "branded_namkeen": 12.0,  # 12% — branded packaged namkeen / snacks
+    "chocolate": 18.0,  # 18% — chocolate-coated goods
+    "custom": None,  # caller supplies rate
 }
+
 
 class GSTComputeRequest(BaseModel):
     item_name: str
-    category: str = "pastries_cakes"    # one of _GST_SLABS keys
-    base_price: float                    # pre-tax selling price (₹)
-    custom_rate_pct: float | None = None # if category=custom, supply rate here
+    category: str = "pastries_cakes"  # one of _GST_SLABS keys
+    base_price: float  # pre-tax selling price (₹)
+    custom_rate_pct: float | None = None  # if category=custom, supply rate here
     quantity: float = 1.0
 
 
@@ -1953,7 +2152,9 @@ async def gst_compute(
         )
     if payload.category == "custom":
         if payload.custom_rate_pct is None or payload.custom_rate_pct < 0:
-            raise HTTPException(status_code=422, detail="custom_rate_pct required when category=custom")
+            raise HTTPException(
+                status_code=422, detail="custom_rate_pct required when category=custom"
+            )
         slab_rate = payload.custom_rate_pct
 
     total_base = round(payload.base_price * payload.quantity, 2)
@@ -1983,7 +2184,11 @@ async def gst_slabs(role: str = Depends(authorize_request)) -> dict:
     require_domain(role, "costing")
     return {
         "slabs": [
-            {"category": k, "rate_pct": v if v is not None else "variable", "description": _slab_desc(k)}
+            {
+                "category": k,
+                "rate_pct": v if v is not None else "variable",
+                "description": _slab_desc(k),
+            }
             for k, v in _GST_SLABS.items()
         ]
     }
@@ -2005,11 +2210,14 @@ def _slab_desc(cat: str) -> str:
 # Feature 12 — Visual Waste Tracking  (blueprint Feature #12)
 # ===========================================================================
 
+
 class WasteLogRequest(BaseModel):
     item_name: str
     quantity_wasted: float
     unit_of_measure: str = "kg"
-    waste_cause: str = "overproduction"   # overproduction | spoilage | breakage | trim | other
+    waste_cause: str = (
+        "overproduction"  # overproduction | spoilage | breakage | trim | other
+    )
     cost_per_unit: float | None = None
     notes: str | None = None
     logged_by: str = "staff"
@@ -2027,7 +2235,9 @@ async def log_waste(
         raise HTTPException(status_code=422, detail="quantity_wasted must be > 0")
     valid_causes = {"overproduction", "spoilage", "breakage", "trim", "other"}
     if payload.waste_cause not in valid_causes:
-        raise HTTPException(status_code=422, detail=f"waste_cause must be one of {valid_causes}")
+        raise HTTPException(
+            status_code=422, detail=f"waste_cause must be one of {valid_causes}"
+        )
 
     waste_cost = round(payload.quantity_wasted * (payload.cost_per_unit or 0.0), 2)
     record = WasteRecord(
@@ -2035,7 +2245,9 @@ async def log_waste(
         quantity_wasted=payload.quantity_wasted,
         unit_of_measure=payload.unit_of_measure,
         waste_cause=payload.waste_cause,
-        cost_per_unit=Decimal(str(payload.cost_per_unit)) if payload.cost_per_unit else None,
+        cost_per_unit=Decimal(str(payload.cost_per_unit))
+        if payload.cost_per_unit
+        else None,
         estimated_cost=Decimal(str(waste_cost)),
         notes=payload.notes,
         logged_by=payload.logged_by,
@@ -2048,7 +2260,9 @@ async def log_waste(
         "quantity_wasted": record.quantity_wasted,
         "unit_of_measure": record.unit_of_measure,
         "waste_cause": record.waste_cause,
-        "estimated_cost": float(record.estimated_cost) if record.estimated_cost else 0.0,
+        "estimated_cost": float(record.estimated_cost)
+        if record.estimated_cost
+        else 0.0,
         "logged_at": record.logged_at.isoformat(),
     }
 
@@ -2062,6 +2276,7 @@ async def waste_report(
     """Waste analysis: by cause, by item, total cost (Feature 12)."""
     require_domain(role, "inventory")
     from datetime import timedelta
+
     cutoff = datetime.utcnow() - timedelta(days=days)
     records = session.query(WasteRecord).filter(WasteRecord.logged_at >= cutoff).all()
 
@@ -2073,18 +2288,28 @@ async def waste_report(
         total_cost += cost
         # Group by cause
         if r.waste_cause not in by_cause:
-            by_cause[r.waste_cause] = {"count": 0, "total_quantity": 0.0, "total_cost": 0.0}
+            by_cause[r.waste_cause] = {
+                "count": 0,
+                "total_quantity": 0.0,
+                "total_cost": 0.0,
+            }
         by_cause[r.waste_cause]["count"] += 1
         by_cause[r.waste_cause]["total_quantity"] += r.quantity_wasted
         by_cause[r.waste_cause]["total_cost"] += cost
         # Group by item
         if r.item_name not in by_item:
-            by_item[r.item_name] = {"count": 0, "total_quantity": 0.0, "total_cost": 0.0}
+            by_item[r.item_name] = {
+                "count": 0,
+                "total_quantity": 0.0,
+                "total_cost": 0.0,
+            }
         by_item[r.item_name]["count"] += 1
         by_item[r.item_name]["total_quantity"] += r.quantity_wasted
         by_item[r.item_name]["total_cost"] += cost
 
-    items_sorted = sorted(by_item.items(), key=lambda x: x[1]["total_cost"], reverse=True)
+    items_sorted = sorted(
+        by_item.items(), key=lambda x: x[1]["total_cost"], reverse=True
+    )
     recent = [
         {
             "id": r.id,
@@ -2102,9 +2327,18 @@ async def waste_report(
         "period_days": days,
         "total_events": len(records),
         "total_waste_cost_inr": round(total_cost, 2),
-        "by_cause": {k: {**v, "total_cost": round(v["total_cost"], 2)} for k, v in by_cause.items()},
+        "by_cause": {
+            k: {**v, "total_cost": round(v["total_cost"], 2)}
+            for k, v in by_cause.items()
+        },
         "top_wasted_items": [
-            {"item_name": k, **{kk: round(vv, 2) if isinstance(vv, float) else vv for kk, vv in v.items()}}
+            {
+                "item_name": k,
+                **{
+                    kk: round(vv, 2) if isinstance(vv, float) else vv
+                    for kk, vv in v.items()
+                },
+            }
             for k, v in items_sorted[:10]
         ],
         "recent_events": recent,
@@ -2115,10 +2349,15 @@ async def waste_report(
 # AI Insights  (Gemini 3 Flash — google-genai SDK)
 # ---------------------------------------------------------------------------
 
+
 class AIInsightRequest(BaseModel):
     query: str
-    complexity: str | None = None          # "operational" | "insight" | "analytical" | None (auto)
-    include_modules: list[str] | None = None   # ["stock", "sales", "waste", "proofing"] or None=all
+    complexity: str | None = (
+        None  # "operational" | "insight" | "analytical" | None (auto)
+    )
+    include_modules: list[str] | None = (
+        None  # ["stock", "sales", "waste", "proofing"] or None=all
+    )
 
 
 @app.post("/ai/insights", response_model=dict)
@@ -2158,25 +2397,41 @@ async def ai_insights(
             .all()
         )
         context["expiring_stock"] = [
-            {"item": i.name, "qty": float(i.quantity_on_hand), "expires": str(i.expiration_date)}
+            {
+                "item": i.name,
+                "qty": float(i.quantity_on_hand),
+                "expires": str(i.expiration_date),
+            }
             for i in expiring
         ]
         context["total_stock_skus"] = session.query(InventoryItem).count()
 
     if "sales" in modules:
         from datetime import date as _date
+
         today_start = datetime.combine(_date.today(), datetime.min.time())
-        sales_today = session.query(SaleRecord).filter(SaleRecord.sold_at >= today_start).all()
+        sales_today = (
+            session.query(SaleRecord).filter(SaleRecord.sold_at >= today_start).all()
+        )
         context["sales_today"] = {
             "transaction_count": len(sales_today),
             "revenue_inr": round(sum(float(s.total_amount) for s in sales_today), 2),
         }
 
     if "waste" in modules:
-        recent_waste = session.query(WasteRecord).order_by(WasteRecord.logged_at.desc()).limit(5).all()
+        recent_waste = (
+            session.query(WasteRecord)
+            .order_by(WasteRecord.logged_at.desc())
+            .limit(5)
+            .all()
+        )
         context["recent_waste"] = [
-            {"item": w.item_name, "qty": w.quantity_wasted, "cause": w.waste_cause,
-             "cost_inr": float(w.estimated_cost) if w.estimated_cost else 0}
+            {
+                "item": w.item_name,
+                "qty": w.quantity_wasted,
+                "cause": w.waste_cause,
+                "cost_inr": float(w.estimated_cost) if w.estimated_cost else 0,
+            }
             for w in recent_waste
         ]
 
@@ -2188,7 +2443,11 @@ async def ai_insights(
             .all()
         )
         context["proofing_readings"] = [
-            {"temp_c": p.temperature_c, "humidity": p.humidity_percent, "status": p.status}
+            {
+                "temp_c": p.temperature_c,
+                "humidity": p.humidity_percent,
+                "status": p.status,
+            }
             for p in last_proofing
         ]
 
@@ -2229,6 +2488,7 @@ async def ai_insights(
 # Feature 4 — Bi-Directional Batch Traceability  (v3)
 # ===========================================================================
 
+
 class BatchIngredientPayload(BaseModel):
     ingredient_name: str
     quantity_used: float
@@ -2243,10 +2503,10 @@ class BatchCreateRequest(BaseModel):
     recipe_id: int | None = None
     quantity_produced: float
     unit_of_measure: str = "units"
-    allergen_flags: str | None = None   # comma-separated: "gluten,dairy,nuts"
+    allergen_flags: str | None = None  # comma-separated: "gluten,dairy,nuts"
     notes: str | None = None
     produced_by: str = "kitchen"
-    best_before: str | None = None     # ISO date YYYY-MM-DD
+    best_before: str | None = None  # ISO date YYYY-MM-DD
     ingredients: list[BatchIngredientPayload]
 
 
@@ -2259,16 +2519,26 @@ async def create_batch(
     """Feature 4: Create production batch with ingredients for full traceability."""
     require_domain(role, "inventory")
     from datetime import date as _date
+
     best_before: _date | None = None
     if payload.best_before:
         try:
             best_before = _date.fromisoformat(payload.best_before)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail="best_before must be YYYY-MM-DD") from exc
+            raise HTTPException(
+                status_code=422, detail="best_before must be YYYY-MM-DD"
+            ) from exc
 
-    existing = session.query(BatchLot).filter(BatchLot.batch_number == payload.batch_number).first()
+    existing = (
+        session.query(BatchLot)
+        .filter(BatchLot.batch_number == payload.batch_number)
+        .first()
+    )
     if existing:
-        raise HTTPException(status_code=409, detail=f"Batch number '{payload.batch_number}' already exists")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Batch number '{payload.batch_number}' already exists",
+        )
 
     batch = BatchLot(
         batch_number=payload.batch_number,
@@ -2350,10 +2620,17 @@ async def trace_batch(
     batch = session.query(BatchLot).filter(BatchLot.id == batch_id).first()
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
-    ingredients = session.query(BatchIngredient).filter(BatchIngredient.batch_id == batch_id).all()
-    allergens = [a.strip() for a in (batch.allergen_flags or "").split(",") if a.strip()]
+    ingredients = (
+        session.query(BatchIngredient)
+        .filter(BatchIngredient.batch_id == batch_id)
+        .all()
+    )
+    allergens = [
+        a.strip() for a in (batch.allergen_flags or "").split(",") if a.strip()
+    ]
     recall_risk = batch.status != "recalled" and any(
-        i.inventory_item and i.inventory_item.expiration_date
+        i.inventory_item
+        and i.inventory_item.expiration_date
         and i.inventory_item.expiration_date < __import__("datetime").date.today()
         for i in ingredients
     )
@@ -2405,23 +2682,28 @@ async def update_batch_status(
         raise HTTPException(status_code=404, detail="Batch not found")
     batch.status = status
     session.commit()
-    return {"batch_id": batch.id, "batch_number": batch.batch_number, "new_status": status}
+    return {
+        "batch_id": batch.id,
+        "batch_number": batch.batch_number,
+        "new_status": status,
+    }
 
 
 # ===========================================================================
 # Feature 5 Enhancement — GSTR-1 / GSTR-3B Reconciliation  (v3)
 # ===========================================================================
 
+
 class GSTREntryRequest(BaseModel):
     invoice_number: str
-    invoice_date: str          # YYYY-MM-DD
-    period_month: int          # 1-12
+    invoice_date: str  # YYYY-MM-DD
+    period_month: int  # 1-12
     period_year: int
     customer_name: str | None = None
-    gstin: str | None = None   # 15-char GSTIN
+    gstin: str | None = None  # 15-char GSTIN
     taxable_value: float
-    gst_rate_pct: float        # 0, 5, 12, 18
-    supply_type: str = "B2C"   # B2B | B2C | export
+    gst_rate_pct: float  # 0, 5, 12, 18
+    supply_type: str = "B2C"  # B2B | B2C | export
 
 
 @app.post("/gst/gstr1/entry", response_model=dict)
@@ -2433,15 +2715,20 @@ async def create_gstr1_entry(
     """Feature 5: Record a GSTR-1 invoice entry with auto-computed GST split."""
     require_domain(role, "inventory")
     from datetime import date as _date
+
     try:
         inv_date = _date.fromisoformat(payload.invoice_date)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail="invoice_date must be YYYY-MM-DD") from exc
+        raise HTTPException(
+            status_code=422, detail="invoice_date must be YYYY-MM-DD"
+        ) from exc
     if payload.period_month < 1 or payload.period_month > 12:
         raise HTTPException(status_code=422, detail="period_month must be 1-12")
     valid_rates = {0, 5, 12, 18}
     if payload.gst_rate_pct not in valid_rates:
-        raise HTTPException(status_code=422, detail=f"gst_rate_pct must be one of {valid_rates}")
+        raise HTTPException(
+            status_code=422, detail=f"gst_rate_pct must be one of {valid_rates}"
+        )
 
     taxable = Decimal(str(payload.taxable_value))
     gst_total = round(taxable * Decimal(str(payload.gst_rate_pct)) / 100, 2)
@@ -2593,7 +2880,6 @@ async def gst_reconcile(
     """Feature 5: Reconcile GSTR-1 filed entries vs SaleRecords for the period — flag gaps."""
     require_domain(role, "inventory")
     import calendar
-    from datetime import date as _date
 
     _, last_day = calendar.monthrange(year, month)
     period_start = datetime(year, month, 1)
@@ -2605,9 +2891,11 @@ async def gst_reconcile(
         .filter(SaleRecord.sold_at >= period_start, SaleRecord.sold_at <= period_end)
         .all()
     )
-    gstr_entries = session.query(GSTREntry).filter(
-        GSTREntry.period_month == month, GSTREntry.period_year == year
-    ).all()
+    gstr_entries = (
+        session.query(GSTREntry)
+        .filter(GSTREntry.period_month == month, GSTREntry.period_year == year)
+        .all()
+    )
     gstr_taxable = sum(float(e.taxable_value) for e in gstr_entries)
     gap = round(sale_revenue - gstr_taxable, 2)
     reconciled = abs(gap) < 0.01
@@ -2617,7 +2905,9 @@ async def gst_reconcile(
         "gstr1_taxable_value_inr": round(gstr_taxable, 2),
         "gap_inr": gap,
         "reconciled": reconciled,
-        "action": "No action required." if reconciled else (
+        "action": "No action required."
+        if reconciled
+        else (
             f"₹{abs(gap):.2f} {'unrecorded in GSTR-1 — add missing entries' if gap > 0 else 'excess in GSTR-1 — review invoices'}."
         ),
         "gstr1_entry_count": len(gstr_entries),
@@ -2628,10 +2918,11 @@ async def gst_reconcile(
 # Feature 9 — Offline-First Sync Queue  (v3)
 # ===========================================================================
 
+
 class SyncOperationRequest(BaseModel):
     client_id: str
-    operation: str          # create | update | delete
-    resource: str           # stock | sale | waste | proofing
+    operation: str  # create | update | delete
+    resource: str  # stock | sale | waste | proofing
     payload: dict
 
 
@@ -2643,13 +2934,18 @@ async def push_sync_queue(
 ) -> dict:
     """Feature 9: Accept offline operations into the sync queue (from offline-first clients)."""
     import json
+
     require_domain(role, "inventory")
     valid_ops = {"create", "update", "delete"}
     valid_resources = {"stock", "sale", "waste", "proofing"}
     if payload.operation not in valid_ops:
-        raise HTTPException(status_code=422, detail=f"operation must be one of {valid_ops}")
+        raise HTTPException(
+            status_code=422, detail=f"operation must be one of {valid_ops}"
+        )
     if payload.resource not in valid_resources:
-        raise HTTPException(status_code=422, detail=f"resource must be one of {valid_resources}")
+        raise HTTPException(
+            status_code=422, detail=f"resource must be one of {valid_resources}"
+        )
 
     entry = SyncQueueEntry(
         client_id=payload.client_id,
@@ -2700,6 +2996,7 @@ async def flush_sync_queue(
 ) -> dict:
     """Feature 9: Process pending sync queue — replay offline operations into the live platform."""
     import json
+
     require_domain(role, "inventory")
     pending = (
         session.query(SyncQueueEntry)
@@ -2726,7 +3023,8 @@ async def flush_sync_queue(
                     product_name=data.get("product_name", "unknown"),
                     quantity_sold=data.get("quantity_sold", 1),
                     unit_price=Decimal(str(data.get("unit_price", 0))),
-                    total_amount=Decimal(str(data.get("quantity_sold", 1))) * Decimal(str(data.get("unit_price", 0))),
+                    total_amount=Decimal(str(data.get("quantity_sold", 1)))
+                    * Decimal(str(data.get("unit_price", 0))),
                 )
                 session.add(sale)
             elif entry.resource == "waste" and entry.operation == "create":
@@ -2752,15 +3050,16 @@ async def flush_sync_queue(
 # Feature 14 — Employee Performance Analytics  (v3)
 # ===========================================================================
 
+
 class EmployeeCreateRequest(BaseModel):
     name: str
-    role: str = "kitchen"   # kitchen | biller | supervisor | delivery
+    role: str = "kitchen"  # kitchen | biller | supervisor | delivery
     phone: str | None = None
-    joining_date: str | None = None   # YYYY-MM-DD
+    joining_date: str | None = None  # YYYY-MM-DD
 
 
 class ShiftLogRequest(BaseModel):
-    shift_date: str          # YYYY-MM-DD
+    shift_date: str  # YYYY-MM-DD
     shift_type: str = "morning"  # morning | afternoon | evening | night
     hours_worked: float = 8.0
     items_produced: int = 0
@@ -2782,16 +3081,23 @@ async def create_employee(
     """Feature 14: Register a staff member for performance tracking."""
     require_domain(role, "health")
     from datetime import date as _date
+
     joining: _date | None = None
     if payload.joining_date:
         try:
             joining = _date.fromisoformat(payload.joining_date)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail="joining_date must be YYYY-MM-DD") from exc
+            raise HTTPException(
+                status_code=422, detail="joining_date must be YYYY-MM-DD"
+            ) from exc
     valid_roles = {"kitchen", "biller", "supervisor", "delivery"}
     if payload.role not in valid_roles:
-        raise HTTPException(status_code=422, detail=f"role must be one of {valid_roles}")
-    emp = Employee(name=payload.name, role=payload.role, phone=payload.phone, joining_date=joining)
+        raise HTTPException(
+            status_code=422, detail=f"role must be one of {valid_roles}"
+        )
+    emp = Employee(
+        name=payload.name, role=payload.role, phone=payload.phone, joining_date=joining
+    )
     session.add(emp)
     session.commit()
     return {"id": emp.id, "name": emp.name, "role": emp.role, "active": emp.active}
@@ -2835,16 +3141,21 @@ async def log_employee_shift(
     """Feature 14: Log a shift performance record for an employee."""
     require_domain(role, "health")
     from datetime import date as _date
+
     emp = session.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
     try:
         shift_date = _date.fromisoformat(payload.shift_date)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail="shift_date must be YYYY-MM-DD") from exc
+        raise HTTPException(
+            status_code=422, detail="shift_date must be YYYY-MM-DD"
+        ) from exc
     valid_shifts = {"morning", "afternoon", "evening", "night"}
     if payload.shift_type not in valid_shifts:
-        raise HTTPException(status_code=422, detail=f"shift_type must be one of {valid_shifts}")
+        raise HTTPException(
+            status_code=422, detail=f"shift_type must be one of {valid_shifts}"
+        )
     log = ShiftLog(
         employee_id=employee_id,
         shift_date=shift_date,
@@ -2880,6 +3191,7 @@ async def employee_performance(
     """Feature 14: Performance summary for an employee over the last N days."""
     require_domain(role, "health")
     from datetime import date as _date, timedelta
+
     emp = session.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -2890,15 +3202,21 @@ async def employee_performance(
         .all()
     )
     total_shifts = len(logs)
-    total_hours = sum(l.hours_worked for l in logs)
-    total_produced = sum(l.items_produced for l in logs)
-    total_sold = sum(l.items_sold for l in logs)
-    total_waste_events = sum(l.waste_events for l in logs)
-    total_waste_cost = sum(float(l.waste_cost_inr) for l in logs)
-    total_quality_pass = sum(l.quality_pass_count for l in logs)
-    total_quality_total = total_quality_pass + sum(l.quality_fail_count for l in logs)
-    total_revenue = sum(float(l.revenue_generated_inr) for l in logs)
-    quality_rate = round(total_quality_pass / total_quality_total * 100, 1) if total_quality_total > 0 else None
+    total_hours = sum(log.hours_worked for log in logs)
+    total_produced = sum(log.items_produced for log in logs)
+    total_sold = sum(log.items_sold for log in logs)
+    total_waste_events = sum(log.waste_events for log in logs)
+    total_waste_cost = sum(float(log.waste_cost_inr) for log in logs)
+    total_quality_pass = sum(log.quality_pass_count for log in logs)
+    total_quality_total = total_quality_pass + sum(
+        log.quality_fail_count for log in logs
+    )
+    total_revenue = sum(float(log.revenue_generated_inr) for log in logs)
+    quality_rate = (
+        round(total_quality_pass / total_quality_total * 100, 1)
+        if total_quality_total > 0
+        else None
+    )
     efficiency_score = round(
         (total_sold / max(total_produced, 1)) * 50
         + (total_quality_pass / max(total_quality_total, 1)) * 30
@@ -2929,53 +3247,63 @@ async def employee_leaderboard(
     """Feature 14: Team leaderboard ranked by efficiency score."""
     require_domain(role, "health")
     from datetime import date as _date, timedelta
+
     since = _date.today() - timedelta(days=days)
     employees = session.query(Employee).filter(Employee.active == True).all()  # noqa: E712
     rankings = []
     for emp in employees:
-        logs = session.query(ShiftLog).filter(
-            ShiftLog.employee_id == emp.id, ShiftLog.shift_date >= since
-        ).all()
+        logs = (
+            session.query(ShiftLog)
+            .filter(ShiftLog.employee_id == emp.id, ShiftLog.shift_date >= since)
+            .all()
+        )
         if not logs:
             continue
-        total_produced = sum(l.items_produced for l in logs)
-        total_sold = sum(l.items_sold for l in logs)
-        total_waste = sum(l.waste_events for l in logs)
-        total_qp = sum(l.quality_pass_count for l in logs)
-        total_qt = total_qp + sum(l.quality_fail_count for l in logs)
+        total_produced = sum(log.items_produced for log in logs)
+        total_sold = sum(log.items_sold for log in logs)
+        total_waste = sum(log.waste_events for log in logs)
+        total_qp = sum(log.quality_pass_count for log in logs)
+        total_qt = total_qp + sum(log.quality_fail_count for log in logs)
         score = round(
             (total_sold / max(total_produced, 1)) * 50
             + (total_qp / max(total_qt, 1)) * 30
             + max(0, 20 - total_waste),
             1,
         )
-        rankings.append({
-            "employee_id": emp.id,
-            "name": emp.name,
-            "role": emp.role,
-            "shifts": len(logs),
-            "items_produced": total_produced,
-            "efficiency_score": min(score, 100.0),
-            "quality_pass_rate_pct": round(total_qp / max(total_qt, 1) * 100, 1),
-        })
+        rankings.append(
+            {
+                "employee_id": emp.id,
+                "name": emp.name,
+                "role": emp.role,
+                "shifts": len(logs),
+                "items_produced": total_produced,
+                "efficiency_score": min(score, 100.0),
+                "quality_pass_rate_pct": round(total_qp / max(total_qt, 1) * 100, 1),
+            }
+        )
     rankings.sort(key=lambda x: x["efficiency_score"], reverse=True)
     for i, r in enumerate(rankings, 1):
         r["rank"] = i
-    return {"period_days": days, "total_employees": len(rankings), "leaderboard": rankings}
+    return {
+        "period_days": days,
+        "total_employees": len(rankings),
+        "leaderboard": rankings,
+    }
 
 
 # ===========================================================================
 # Feature 15 — QR-Based Table Ordering  (v3)
 # ===========================================================================
 
+
 class TableCreateRequest(BaseModel):
     table_number: str
     seats: int = 4
-    location: str = "main"   # main | terrace | private
+    location: str = "main"  # main | terrace | private
 
 
 class TableOrderRequest(BaseModel):
-    order_items: list[dict]   # [{name, qty, price_inr}]
+    order_items: list[dict]  # [{name, qty, price_inr}]
     special_instructions: str | None = None
     guest_name: str | None = None
 
@@ -2989,9 +3317,16 @@ async def create_table(
     """Feature 15: Register a dining table with QR token."""
     require_domain(role, "health")
     import secrets
-    existing = session.query(DiningTable).filter(DiningTable.table_number == payload.table_number).first()
+
+    existing = (
+        session.query(DiningTable)
+        .filter(DiningTable.table_number == payload.table_number)
+        .first()
+    )
     if existing:
-        raise HTTPException(status_code=409, detail=f"Table '{payload.table_number}' already exists")
+        raise HTTPException(
+            status_code=409, detail=f"Table '{payload.table_number}' already exists"
+        )
     qr_token = secrets.token_urlsafe(16)
     table = DiningTable(
         table_number=payload.table_number,
@@ -3018,7 +3353,12 @@ async def list_tables(
 ) -> dict:
     """Feature 15: List all dining tables with QR tokens."""
     require_domain(role, "health")
-    tables = session.query(DiningTable).filter(DiningTable.active == True).order_by(DiningTable.table_number).all()  # noqa: E712
+    tables = (
+        session.query(DiningTable)
+        .filter(DiningTable.active == True)
+        .order_by(DiningTable.table_number)
+        .all()
+    )  # noqa: E712
     return {
         "count": len(tables),
         "tables": [
@@ -3041,7 +3381,11 @@ async def table_menu(
     session: Session = Depends(get_session),
 ) -> dict:
     """Feature 15: Public menu endpoint scanned via QR code — no auth required."""
-    table = session.query(DiningTable).filter(DiningTable.qr_token == qr_token, DiningTable.active == True).first()  # noqa: E712
+    table = (
+        session.query(DiningTable)
+        .filter(DiningTable.qr_token == qr_token, DiningTable.active == True)
+        .first()
+    )  # noqa: E712
     if not table:
         raise HTTPException(status_code=404, detail="Table not found or inactive")
     # Build menu from recent sale data as proxy
@@ -3052,7 +3396,9 @@ async def table_menu(
         .limit(30)
         .all()
     )
-    menu_items = [{"name": s.product_name, "price_inr": float(s.unit_price)} for s in recent_sales]
+    menu_items = [
+        {"name": s.product_name, "price_inr": float(s.unit_price)} for s in recent_sales
+    ]
     return {
         "table_number": table.table_number,
         "location": table.location,
@@ -3071,7 +3417,12 @@ async def place_table_order(
 ) -> dict:
     """Feature 15: Place a dine-in order via QR scan — public endpoint, routed to kitchen."""
     import json
-    table = session.query(DiningTable).filter(DiningTable.qr_token == qr_token, DiningTable.active == True).first()  # noqa: E712
+
+    table = (
+        session.query(DiningTable)
+        .filter(DiningTable.qr_token == qr_token, DiningTable.active == True)
+        .first()
+    )  # noqa: E712
     if not table:
         raise HTTPException(status_code=404, detail="Table not found or inactive")
     if not payload.order_items:
@@ -3109,6 +3460,7 @@ async def get_table_orders(
     """Feature 15: Kitchen view — all orders for a table, optionally filtered by status."""
     require_domain(role, "health")
     import json
+
     table = session.query(DiningTable).filter(DiningTable.id == table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -3148,9 +3500,11 @@ async def update_order_status(
     valid = {"pending", "preparing", "ready", "served", "cancelled"}
     if status not in valid:
         raise HTTPException(status_code=422, detail=f"status must be one of {valid}")
-    order = session.query(TableOrder).filter(
-        TableOrder.id == order_id, TableOrder.table_id == table_id
-    ).first()
+    order = (
+        session.query(TableOrder)
+        .filter(TableOrder.id == order_id, TableOrder.table_id == table_id)
+        .first()
+    )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     order.status = status
@@ -3173,6 +3527,7 @@ async def kitchen_display(
     """Feature 15: Kitchen Display System — all pending/preparing orders across all tables."""
     require_domain(role, "health")
     import json
+
     active_orders = (
         session.query(TableOrder, DiningTable)
         .join(DiningTable, TableOrder.table_id == DiningTable.id)
@@ -3190,7 +3545,9 @@ async def kitchen_display(
                 "items": json.loads(o.order_items),
                 "special_instructions": o.special_instructions,
                 "placed_at": o.placed_at.isoformat(),
-                "waiting_minutes": round((datetime.utcnow() - o.placed_at).total_seconds() / 60, 1),
+                "waiting_minutes": round(
+                    (datetime.utcnow() - o.placed_at).total_seconds() / 60, 1
+                ),
             }
             for o, t in active_orders
         ],

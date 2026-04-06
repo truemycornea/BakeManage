@@ -1,4 +1,5 @@
 """One-time script to write the comprehensive README.md"""
+
 import pathlib
 
 README = pathlib.Path(__file__).parent.parent / "README.md"

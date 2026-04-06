@@ -4,6 +4,7 @@ Integration-level tests that exercise the live FastAPI app via TestClient.
 No external services required — SQLite in-memory overrides the DB URL,
 Redis is bypassed by the cache's in-memory fallback.
 """
+
 from __future__ import annotations
 
 import io
@@ -31,8 +32,8 @@ from app.main import app  # noqa: E402  (import after env setup)
 # Auth headers for the sandbox bootstrap PIN
 _PIN = os.environ["BOOTSTRAP_PIN"]
 OWNER = {"X-Client-Role": "owner", "X-Client-PIN": _PIN}
-OPS   = {"X-Client-Role": "operations", "X-Client-PIN": _PIN}
-AUD   = {"X-Client-Role": "auditor", "X-Client-PIN": _PIN}
+OPS = {"X-Client-Role": "operations", "X-Client-PIN": _PIN}
+AUD = {"X-Client-Role": "auditor", "X-Client-PIN": _PIN}
 
 
 def _make_png(width: int = 64, height: int = 64, color: tuple | None = None) -> bytes:
@@ -66,6 +67,7 @@ def client():
 
 # ── /health ─────────────────────────────────────────────────────────────────
 
+
 def test_health_returns_ok(client):
     r = client.get("/health")
     assert r.status_code == 200
@@ -73,6 +75,7 @@ def test_health_returns_ok(client):
 
 
 # ── Auth enforcement ─────────────────────────────────────────────────────────
+
 
 def test_missing_auth_headers_rejected(client):
     r = client.post("/cost/compute", json={"components": [], "overhead": 0})
@@ -92,12 +95,16 @@ def test_unknown_role_rejected(client):
     r = client.post(
         "/cost/compute",
         json={"components": [], "overhead": 0},
-        headers={"X-Client-Role": "ghost", "X-Client-PIN": os.environ.get("BOOTSTRAP_PIN", "123456")},
+        headers={
+            "X-Client-Role": "ghost",
+            "X-Client-PIN": os.environ.get("BOOTSTRAP_PIN", "123456"),
+        },
     )
     assert r.status_code == 403
 
 
 # ── /cost/compute ────────────────────────────────────────────────────────────
+
 
 def test_cost_compute_basic(client):
     payload = {
@@ -129,13 +136,17 @@ def test_cost_margin_warning_fires(client):
 
 
 def test_cost_no_selling_price(client):
-    payload = {"components": [{"name": "eggs", "cost": 6.0, "yield_percent": 1.0}], "overhead": 2.0}
+    payload = {
+        "components": [{"name": "eggs", "cost": 6.0, "yield_percent": 1.0}],
+        "overhead": 2.0,
+    }
     r = client.post("/cost/compute", json=payload, headers=OWNER)
     assert r.status_code == 200
     assert r.json().get("margin_percent") is None
 
 
 # ── /ingest/image ────────────────────────────────────────────────────────────
+
 
 def test_ingest_image_requires_image_content_type(client):
     r = client.post(
@@ -161,6 +172,7 @@ def test_ingest_image_returns_invoice(client):
 
 # ── /proofing/telemetry ──────────────────────────────────────────────────────
 
+
 def test_proofing_telemetry_accepted(client):
     payload = {
         "temperature_c": 28.5,
@@ -177,6 +189,7 @@ def test_proofing_telemetry_accepted(client):
 
 
 # ── /quality/validate ────────────────────────────────────────────────────────
+
 
 def test_quality_validate_returns_scores(client):
     png_bytes = _make_png(64, 64)  # unique colour each run → unique fingerprint
@@ -204,6 +217,7 @@ def test_quality_rejects_non_image(client):
 
 # ── /credentials ─────────────────────────────────────────────────────────────
 
+
 def test_store_credential(client):
     r = client.post(
         "/credentials",
@@ -217,6 +231,7 @@ def test_store_credential(client):
 
 
 # ── RBAC domain enforcement ──────────────────────────────────────────────────
+
 
 def test_auditor_cannot_access_ingestion(client):
     r = client.post(
@@ -233,6 +248,7 @@ def test_auditor_can_access_health(client):
 
 
 # ── §2 Dashboard KPI endpoint ──────────────────────────────────────────────
+
 
 def test_dashboard_summary_returns_kpis(client):
     r = client.get("/dashboard/summary", headers=OWNER)
@@ -259,6 +275,7 @@ def test_dashboard_summary_auditor_role(client):
 # ---------------------------------------------------------------------------
 # §4 — System Monitor  /system/status
 # ---------------------------------------------------------------------------
+
 
 def test_system_status_owner_returns_metrics(client):
     r = client.get("/system/status", headers=OWNER)
@@ -290,6 +307,7 @@ def test_system_status_auditor_role(client):
 # §6 — Stock Management
 # ---------------------------------------------------------------------------
 
+
 def test_stock_add_and_list(client):
     payload = {
         "name": "Test Atta",
@@ -313,7 +331,11 @@ def test_stock_add_and_list(client):
 
 
 def test_stock_add_invalid_date(client):
-    payload = {"name": "Bad Date Item", "quantity_on_hand": 1.0, "expiration_date": "not-a-date"}
+    payload = {
+        "name": "Bad Date Item",
+        "quantity_on_hand": 1.0,
+        "expiration_date": "not-a-date",
+    }
     r = client.post("/stock/add", json=payload, headers=OWNER)
     assert r.status_code == 422
 
@@ -335,12 +357,17 @@ def test_stock_list_ops_role(client):
 # §10 Sales tests
 # ---------------------------------------------------------------------------
 
+
 def test_sales_record_and_list(client):
-    r = client.post("/sales/record", json={
-        "product_name": "Croissant",
-        "quantity_sold": 5,
-        "unit_price": 45.0,
-    }, headers=OWNER)
+    r = client.post(
+        "/sales/record",
+        json={
+            "product_name": "Croissant",
+            "quantity_sold": 5,
+            "unit_price": 45.0,
+        },
+        headers=OWNER,
+    )
     assert r.status_code == 200
     d = r.json()
     assert d["product_name"] == "Croissant"
@@ -368,19 +395,27 @@ def test_sales_daily_summary(client):
 
 def test_sales_record_invalid(client):
     # empty product name
-    r = client.post("/sales/record", json={
-        "product_name": "",
-        "quantity_sold": 1,
-        "unit_price": 10.0,
-    }, headers=OWNER)
+    r = client.post(
+        "/sales/record",
+        json={
+            "product_name": "",
+            "quantity_sold": 1,
+            "unit_price": 10.0,
+        },
+        headers=OWNER,
+    )
     assert r.status_code == 422
 
     # zero quantity
-    r = client.post("/sales/record", json={
-        "product_name": "Bread",
-        "quantity_sold": 0,
-        "unit_price": 10.0,
-    }, headers=OWNER)
+    r = client.post(
+        "/sales/record",
+        json={
+            "product_name": "Bread",
+            "quantity_sold": 0,
+            "unit_price": 10.0,
+        },
+        headers=OWNER,
+    )
     assert r.status_code == 422
 
 

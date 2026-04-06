@@ -1,0 +1,21 @@
+# Ruff configuration for BakeManage
+# https://docs.astral.sh/ruff/configuration/
+
+target-version = "py311"
+
+# Archived production snapshots and external files are not linted
+extend-exclude = ["production", "releases", "External"]
+
+[lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "E712",   # == True/False comparisons — idiomatic in SQLAlchemy ORM filters
+]
+
+[lint.per-file-ignores]
+# Seeding/fixture scripts allow inline imports and compact formatting
+"scripts/*.py" = ["E401", "E402", "E701", "E702", "F401"]
+"tests/fixtures/*.py" = ["E401", "E402", "E701", "E702", "F401", "F541"]
+"tests/test_gemini_validation.py" = ["F401"]
+"tests/test_v3_features.py" = ["F401"]

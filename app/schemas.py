@@ -87,6 +87,8 @@ class BrowningResult(BaseModel):
     score: float
     status: str
     notes: Optional[str] = None
+
+
 class ProofingTelemetryPayload(BaseModel):
     temperature_c: float
     humidity_percent: float

@@ -7,6 +7,7 @@ Both the application startup (app/main.py) and the manual bootstrap script
 definitions, roles, and create-if-missing logic cannot drift between the two
 call sites.
 """
+
 from __future__ import annotations
 
 import logging
@@ -66,9 +67,9 @@ def seed_users(
       without raising (optional users should not break startup).
     """
     # ── Primary admin ──────────────────────────────────────────────────────
-    primary_missing = not session.query(User).filter(
-        User.username == default_admin_username
-    ).first()
+    primary_missing = (
+        not session.query(User).filter(User.username == default_admin_username).first()
+    )
 
     if primary_missing:
         if not default_admin_pin:
@@ -88,6 +89,8 @@ def seed_users(
                 continue
             created = ensure_user(session, u_data["username"], u_data["role"], pin)
             if created:
-                logger.info("Seeded local user %s (%s)", u_data["username"], u_data["role"])
+                logger.info(
+                    "Seeded local user %s (%s)", u_data["username"], u_data["role"]
+                )
 
     session.commit()
