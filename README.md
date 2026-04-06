@@ -709,7 +709,7 @@ Full details in [`docs/SOVEREIGN_SCRUM.md`](docs/SOVEREIGN_SCRUM.md). See also [
 git clone https://github.com/truemycornea/BakeManage.git
 cd BakeManage
 cp .env.example .env
-# Edit .env — set DB_PASSWORD, SECRET_KEY; GEMINI_API_KEY is optional (premium OCR only)
+# Edit .env — set DATABASE_URL (with the DB password embedded) and JWT_SECRET; GEMINI_API_KEY is optional (premium OCR only)
 
 # 2. Start all services
 docker compose up -d
