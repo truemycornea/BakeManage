@@ -19,6 +19,7 @@ Usage (AGAM on Atlas or LXC 199):
 
 Vault path convention: kv/antigravity/bakemanage/<key>
 """
+
 from __future__ import annotations
 
 import os
@@ -55,17 +56,25 @@ _CONFIG_KEYS: list[str] = [
 ]
 
 
-def _fetch_from_vault(app_name: str, vault_addr: str, vault_token: str) -> dict[str, str]:
+def _fetch_from_vault(
+    app_name: str, vault_addr: str, vault_token: str
+) -> dict[str, str]:
     """Attempt to read secrets from HashiCorp Vault KV v2."""
     try:
         import hvac  # type: ignore[import]
     except ImportError:
-        print("[inject_secrets] hvac not installed — falling back to environment variables.", file=sys.stderr)
+        print(
+            "[inject_secrets] hvac not installed — falling back to environment variables.",
+            file=sys.stderr,
+        )
         return {}
 
     client = hvac.Client(url=vault_addr, token=vault_token)
     if not client.is_authenticated():
-        print("[inject_secrets] Vault authentication failed — falling back to environment variables.", file=sys.stderr)
+        print(
+            "[inject_secrets] Vault authentication failed — falling back to environment variables.",
+            file=sys.stderr,
+        )
         return {}
 
     resolved: dict[str, str] = {}
@@ -78,7 +87,10 @@ def _fetch_from_vault(app_name: str, vault_addr: str, vault_token: str) -> dict[
                 resolved[env_var] = value
         except Exception as exc:  # noqa: BLE001
             # Log only the exception type — do not log path, value, or secret identifiers to avoid leaking secret metadata
-            print(f"[inject_secrets] Warning: could not read one or more Vault keys (error type: {type(exc).__name__})", file=sys.stderr)
+            print(
+                f"[inject_secrets] Warning: could not read one or more Vault keys (error type: {type(exc).__name__})",
+                file=sys.stderr,
+            )
     return resolved
 
 
@@ -152,15 +164,23 @@ def main() -> None:
     output_path = Path(os.environ.get("ENV_OUTPUT_PATH", ".env"))
 
     if vault_addr and vault_token:
-        print(f"[inject_secrets] Fetching secrets from Vault at {vault_addr} for app '{app_name}'...")
+        print(
+            f"[inject_secrets] Fetching secrets from Vault at {vault_addr} for app '{app_name}'..."
+        )
         secrets = _fetch_from_vault(app_name, vault_addr, vault_token)
         if secrets:
-            print(f"[inject_secrets] Resolved {len(secrets)}/{len(_SECRET_KEYS)} secrets from Vault.")
+            print(
+                f"[inject_secrets] Resolved {len(secrets)}/{len(_SECRET_KEYS)} secrets from Vault."
+            )
         else:
-            print("[inject_secrets] Vault fetch returned no secrets — falling back to environment.")
+            print(
+                "[inject_secrets] Vault fetch returned no secrets — falling back to environment."
+            )
             secrets = _fetch_from_env()
     else:
-        print("[inject_secrets] VAULT_ADDR/VAULT_TOKEN not set — using environment variables (dev mode).")
+        print(
+            "[inject_secrets] VAULT_ADDR/VAULT_TOKEN not set — using environment variables (dev mode)."
+        )
         secrets = _fetch_from_env()
 
     fernet = _get_fernet()

@@ -4,6 +4,7 @@
 Implements the GST Act rounding rule: round half-up to 2 decimal places per
 tax component as prescribed by the CBIC.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

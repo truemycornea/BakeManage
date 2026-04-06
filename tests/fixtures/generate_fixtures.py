@@ -11,6 +11,7 @@ Generates:
 
 Run: python tests/fixtures/generate_fixtures.py
 """
+
 from __future__ import annotations
 
 import io
@@ -35,34 +36,149 @@ def make_excel_vendor_invoice() -> None:
     # Metadata columns (read by parse_excel_invoice)
     # Header row expected by BakeManage parser
     headers = [
-        "vendor_name", "invoice_number", "date",
-        "item_name", "quantity", "unit_price",
-        "unit_of_measure", "tax_rate", "category",
-        "vertical", "expiration_date",
+        "vendor_name",
+        "invoice_number",
+        "date",
+        "item_name",
+        "quantity",
+        "unit_price",
+        "unit_of_measure",
+        "tax_rate",
+        "category",
+        "vertical",
+        "expiration_date",
     ]
     ws.append(headers)
 
     today = date.today()
-    exp_flour   = (today + timedelta(days=180)).isoformat()
-    exp_ghee    = (today + timedelta(days=90)).isoformat()
-    exp_sugar   = (today + timedelta(days=365)).isoformat()
-    exp_butter  = (today + timedelta(days=60)).isoformat()
-    exp_sooji   = (today + timedelta(days=120)).isoformat()
-    exp_milk    = (today + timedelta(days=7)).isoformat()
+    exp_flour = (today + timedelta(days=180)).isoformat()
+    exp_ghee = (today + timedelta(days=90)).isoformat()
+    exp_sugar = (today + timedelta(days=365)).isoformat()
+    exp_butter = (today + timedelta(days=60)).isoformat()
+    exp_sooji = (today + timedelta(days=120)).isoformat()
+    exp_milk = (today + timedelta(days=7)).isoformat()
     exp_elaichi = (today + timedelta(days=365)).isoformat()
-    exp_atta    = (today + timedelta(days=150)).isoformat()
+    exp_atta = (today + timedelta(days=150)).isoformat()
 
     rows = [
         # vendor_name, invoice_number, date, item_name, qty, unit_price, uom, tax_rate, category, vertical, exp_date
-        ["Amul Dairy Ltd", "AMU-2026-0401", today.isoformat(), "Amul Butter (500g)", 40.0, 260.0, "pcs", 12.0, "dairy_fat", "bakery", exp_butter],
-        ["Amul Dairy Ltd", "AMU-2026-0401", today.isoformat(), "Amul Fresh Milk (1L)", 60.0, 68.0, "litres", 0.0, "dairy_milk", "bakery", exp_milk],
-        ["ITC Foods Ltd", "ITC-2026-0402", today.isoformat(), "Aashirvaad Atta (10kg)", 20.0, 395.0, "bag", 0.0, "flour", "bakery", exp_atta],
-        ["ITC Foods Ltd", "ITC-2026-0402", today.isoformat(), "Aashirvaad Maida (5kg)", 30.0, 185.0, "bag", 5.0, "flour", "bakery", exp_flour],
-        ["Patanjali Ayurved", "PAT-2026-0401", today.isoformat(), "Patanjali Desi Ghee (1kg)", 25.0, 620.0, "kg", 12.0, "dairy_fat", "bakery", exp_ghee],
-        ["Tate & Lyle India Pvt", "TLY-2026-0401", today.isoformat(), "Refined Sugar (50kg)", 10.0, 2350.0, "bag", 5.0, "sugar", "bakery", exp_sugar],
-        ["Tate & Lyle India Pvt", "TLY-2026-0401", today.isoformat(), "Sooji (Fine Semolina) 25kg", 15.0, 850.0, "bag", 0.0, "flour", "bakery", exp_sooji],
-        ["Everest Spices Ltd", "EVR-2026-0401", today.isoformat(), "Elaichi Powder (100g)", 20.0, 115.0, "pcs", 5.0, "spice", "bakery", exp_elaichi],
-        ["Everest Spices Ltd", "EVR-2026-0401", today.isoformat(), "Kaju (Cashew) Grade A 1kg", 10.0, 980.0, "kg", 5.0, "dry_fruit", "bakery", exp_elaichi],
+        [
+            "Amul Dairy Ltd",
+            "AMU-2026-0401",
+            today.isoformat(),
+            "Amul Butter (500g)",
+            40.0,
+            260.0,
+            "pcs",
+            12.0,
+            "dairy_fat",
+            "bakery",
+            exp_butter,
+        ],
+        [
+            "Amul Dairy Ltd",
+            "AMU-2026-0401",
+            today.isoformat(),
+            "Amul Fresh Milk (1L)",
+            60.0,
+            68.0,
+            "litres",
+            0.0,
+            "dairy_milk",
+            "bakery",
+            exp_milk,
+        ],
+        [
+            "ITC Foods Ltd",
+            "ITC-2026-0402",
+            today.isoformat(),
+            "Aashirvaad Atta (10kg)",
+            20.0,
+            395.0,
+            "bag",
+            0.0,
+            "flour",
+            "bakery",
+            exp_atta,
+        ],
+        [
+            "ITC Foods Ltd",
+            "ITC-2026-0402",
+            today.isoformat(),
+            "Aashirvaad Maida (5kg)",
+            30.0,
+            185.0,
+            "bag",
+            5.0,
+            "flour",
+            "bakery",
+            exp_flour,
+        ],
+        [
+            "Patanjali Ayurved",
+            "PAT-2026-0401",
+            today.isoformat(),
+            "Patanjali Desi Ghee (1kg)",
+            25.0,
+            620.0,
+            "kg",
+            12.0,
+            "dairy_fat",
+            "bakery",
+            exp_ghee,
+        ],
+        [
+            "Tate & Lyle India Pvt",
+            "TLY-2026-0401",
+            today.isoformat(),
+            "Refined Sugar (50kg)",
+            10.0,
+            2350.0,
+            "bag",
+            5.0,
+            "sugar",
+            "bakery",
+            exp_sugar,
+        ],
+        [
+            "Tate & Lyle India Pvt",
+            "TLY-2026-0401",
+            today.isoformat(),
+            "Sooji (Fine Semolina) 25kg",
+            15.0,
+            850.0,
+            "bag",
+            0.0,
+            "flour",
+            "bakery",
+            exp_sooji,
+        ],
+        [
+            "Everest Spices Ltd",
+            "EVR-2026-0401",
+            today.isoformat(),
+            "Elaichi Powder (100g)",
+            20.0,
+            115.0,
+            "pcs",
+            5.0,
+            "spice",
+            "bakery",
+            exp_elaichi,
+        ],
+        [
+            "Everest Spices Ltd",
+            "EVR-2026-0401",
+            today.isoformat(),
+            "Kaju (Cashew) Grade A 1kg",
+            10.0,
+            980.0,
+            "kg",
+            5.0,
+            "dry_fruit",
+            "bakery",
+            exp_elaichi,
+        ],
     ]
 
     # Style header
@@ -97,36 +213,79 @@ def make_invoice_image() -> None:
 
     # Try to load a system font, fall back to default
     try:
-        font_large  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 26)
-        font_medium = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
-        font_small  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+        font_large = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 26
+        )
+        font_medium = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18
+        )
+        font_small = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14
+        )
     except (IOError, OSError):
         font_large = font_medium = font_small = ImageFont.load_default()
 
     # Company header block
     draw.rectangle([(0, 0), (W, 90)], fill=(31, 78, 121))
     draw.text((30, 12), "AMUL COOPERATIVE DAIRY LIMITED", fill="white", font=font_large)
-    draw.text((30, 48), "GSTIN: 24AAAAC0946D1ZJ  |  Anand, Gujarat - 388001", fill=(200, 220, 255), font=font_small)
-    draw.text((30, 66), "CIN: U15200GJ1946PLC000614  |  Tel: +91-2692-258506", fill=(200, 220, 255), font=font_small)
+    draw.text(
+        (30, 48),
+        "GSTIN: 24AAAAC0946D1ZJ  |  Anand, Gujarat - 388001",
+        fill=(200, 220, 255),
+        font=font_small,
+    )
+    draw.text(
+        (30, 66),
+        "CIN: U15200GJ1946PLC000614  |  Tel: +91-2692-258506",
+        fill=(200, 220, 255),
+        font=font_small,
+    )
 
     # Invoice details
     draw.text((30, 110), f"TAX INVOICE", fill=(31, 78, 121), font=font_large)
-    draw.text((30, 148), f"Invoice No: AMU-2026-{today.strftime('%m%d')}", fill=(50, 50, 50), font=font_medium)
-    draw.text((30, 172), f"Invoice Date: {today.isoformat()}", fill=(50, 50, 50), font=font_medium)
-    draw.text((30, 196), f"Place of Supply: Maharashtra (27)", fill=(50, 50, 50), font=font_medium)
+    draw.text(
+        (30, 148),
+        f"Invoice No: AMU-2026-{today.strftime('%m%d')}",
+        fill=(50, 50, 50),
+        font=font_medium,
+    )
+    draw.text(
+        (30, 172),
+        f"Invoice Date: {today.isoformat()}",
+        fill=(50, 50, 50),
+        font=font_medium,
+    )
+    draw.text(
+        (30, 196),
+        f"Place of Supply: Maharashtra (27)",
+        fill=(50, 50, 50),
+        font=font_medium,
+    )
 
     # Bill-To block
     draw.rectangle([(30, 230), (430, 310)], outline=(180, 180, 180), width=1)
     draw.text((40, 238), "Bill To:", fill=(31, 78, 121), font=font_medium)
-    draw.text((40, 260), "BakeManage Bakery Pvt Ltd", fill=(50, 50, 50), font=font_small)
+    draw.text(
+        (40, 260), "BakeManage Bakery Pvt Ltd", fill=(50, 50, 50), font=font_small
+    )
     draw.text((40, 278), "GSTIN: 27AABCB1234F1Z5", fill=(50, 50, 50), font=font_small)
-    draw.text((40, 296), "Pune, Maharashtra - 411001", fill=(50, 50, 50), font=font_small)
+    draw.text(
+        (40, 296), "Pune, Maharashtra - 411001", fill=(50, 50, 50), font=font_small
+    )
 
     # Table header
     y = 340
     draw.rectangle([(30, y), (W - 30, y + 30)], fill=(230, 237, 245))
     cols = [30, 280, 380, 470, 570, 680, 780]
-    headers = ["Item Description", "HSN", "Qty", "Rate (₹)", "CGST%", "SGST%", "Amount (₹)"]
+    headers = [
+        "Item Description",
+        "HSN",
+        "Qty",
+        "Rate (₹)",
+        "CGST%",
+        "SGST%",
+        "Amount (₹)",
+    ]
     for i, h in enumerate(headers):
         draw.text((cols[i] + 5, y + 6), h, fill=(31, 78, 121), font=font_small)
     y += 30
@@ -148,19 +307,52 @@ def make_invoice_image() -> None:
     # Total block
     y += 15
     draw.rectangle([(500, y), (W - 30, y + 80)], fill=(230, 237, 245))
-    draw.text((510, y + 8),  "Sub Total:   ₹21,910.10", fill=(50, 50, 50), font=font_medium)
-    draw.text((510, y + 30), "CGST (avg):  ₹  936.60", fill=(50, 50, 50), font=font_small)
-    draw.text((510, y + 50), "SGST (avg):  ₹  936.60", fill=(50, 50, 50), font=font_small)
-    draw.text((510, y + 68), "Grand Total: ₹23,783.30", fill=(31, 78, 121), font=font_large)
+    draw.text(
+        (510, y + 8), "Sub Total:   ₹21,910.10", fill=(50, 50, 50), font=font_medium
+    )
+    draw.text(
+        (510, y + 30), "CGST (avg):  ₹  936.60", fill=(50, 50, 50), font=font_small
+    )
+    draw.text(
+        (510, y + 50), "SGST (avg):  ₹  936.60", fill=(50, 50, 50), font=font_small
+    )
+    draw.text(
+        (510, y + 68), "Grand Total: ₹23,783.30", fill=(31, 78, 121), font=font_large
+    )
 
     # Footer
     y += 110
     draw.text((30, y), "Terms & Conditions:", fill=(31, 78, 121), font=font_medium)
-    draw.text((30, y + 22), "1. Payment due within 30 days of invoice date.", fill=(100, 100, 100), font=font_small)
-    draw.text((30, y + 40), "2. Goods once sold will not be taken back.", fill=(100, 100, 100), font=font_small)
-    draw.text((30, y + 58), "3. Subject to Gujarat jurisdiction.", fill=(100, 100, 100), font=font_small)
-    draw.text((30, y + 80), "E. & O.E.  |  This is a computer-generated invoice.", fill=(150, 150, 150), font=font_small)
-    draw.text((30, H - 30), "AMUL COOPERATIVE DAIRY LIMITED  |  www.amul.com", fill=(180, 180, 180), font=font_small)
+    draw.text(
+        (30, y + 22),
+        "1. Payment due within 30 days of invoice date.",
+        fill=(100, 100, 100),
+        font=font_small,
+    )
+    draw.text(
+        (30, y + 40),
+        "2. Goods once sold will not be taken back.",
+        fill=(100, 100, 100),
+        font=font_small,
+    )
+    draw.text(
+        (30, y + 58),
+        "3. Subject to Gujarat jurisdiction.",
+        fill=(100, 100, 100),
+        font=font_small,
+    )
+    draw.text(
+        (30, y + 80),
+        "E. & O.E.  |  This is a computer-generated invoice.",
+        fill=(150, 150, 150),
+        font=font_small,
+    )
+    draw.text(
+        (30, H - 30),
+        "AMUL COOPERATIVE DAIRY LIMITED  |  www.amul.com",
+        fill=(180, 180, 180),
+        font=font_small,
+    )
 
     img.save(OUT / "indian_vendor_invoice.png", format="PNG")
     print(f"  ✓ {OUT / 'indian_vendor_invoice.png'}")
@@ -186,7 +378,15 @@ def make_sales_receipt_excel() -> None:
     ws["A2"] = f"Date: {today.isoformat()}"
     ws["A2"].font = Font(italic=True)
 
-    headers = ["Product Name", "Category", "Qty Sold", "Unit Price (₹)", "GST%", "GST Amt (₹)", "Total (₹)"]
+    headers = [
+        "Product Name",
+        "Category",
+        "Qty Sold",
+        "Unit Price (₹)",
+        "GST%",
+        "GST Amt (₹)",
+        "Total (₹)",
+    ]
     ws.append([""] * 7)  # row 3 spacer
     ws.append(headers)
     for col in range(1, 8):
@@ -196,30 +396,108 @@ def make_sales_receipt_excel() -> None:
         c.alignment = Alignment(horizontal="center")
 
     items = [
-        ("Kaju Barfi (250g box)",     "pastries_cakes",    18, 280.0, 18, 18*280*0.18, 18*280+18*280*0.18),
-        ("Gulab Jamun (10 pcs box)",  "pastries_cakes",    24, 120.0, 18, 24*120*0.18, 24*120+24*120*0.18),
-        ("Sooji Halwa (500g)",         "pastries_cakes",    15, 85.0,  18, 15*85*0.18,  15*85+15*85*0.18),
-        ("Jeera Biscuits (200g)",     "branded_biscuits",  40, 35.0,   5, 40*35*0.05,  40*35+40*35*0.05),
-        ("Plain Rusk (400g)",         "unbranded_bread",   32, 55.0,   0, 0.0,          32*55),
-        ("Elaichi Rusk (350g)",       "unbranded_bread",   28, 60.0,   0, 0.0,          28*60),
-        ("Besan Ladoo (250g)",        "pastries_cakes",    20, 200.0, 18, 20*200*0.18, 20*200+20*200*0.18),
-        ("Namkeen Mathri (200g)",     "branded_namkeen",   35, 45.0,  12, 35*45*0.12,  35*45+35*45*0.12),
-        ("Pineapple Cake Slice",      "pastries_cakes",    50, 65.0,  18, 50*65*0.18,  50*65+50*65*0.18),
-        ("Butter Croissant",          "pastries_cakes",    45, 55.0,  18, 45*55*0.18,  45*55+45*55*0.18),
+        (
+            "Kaju Barfi (250g box)",
+            "pastries_cakes",
+            18,
+            280.0,
+            18,
+            18 * 280 * 0.18,
+            18 * 280 + 18 * 280 * 0.18,
+        ),
+        (
+            "Gulab Jamun (10 pcs box)",
+            "pastries_cakes",
+            24,
+            120.0,
+            18,
+            24 * 120 * 0.18,
+            24 * 120 + 24 * 120 * 0.18,
+        ),
+        (
+            "Sooji Halwa (500g)",
+            "pastries_cakes",
+            15,
+            85.0,
+            18,
+            15 * 85 * 0.18,
+            15 * 85 + 15 * 85 * 0.18,
+        ),
+        (
+            "Jeera Biscuits (200g)",
+            "branded_biscuits",
+            40,
+            35.0,
+            5,
+            40 * 35 * 0.05,
+            40 * 35 + 40 * 35 * 0.05,
+        ),
+        ("Plain Rusk (400g)", "unbranded_bread", 32, 55.0, 0, 0.0, 32 * 55),
+        ("Elaichi Rusk (350g)", "unbranded_bread", 28, 60.0, 0, 0.0, 28 * 60),
+        (
+            "Besan Ladoo (250g)",
+            "pastries_cakes",
+            20,
+            200.0,
+            18,
+            20 * 200 * 0.18,
+            20 * 200 + 20 * 200 * 0.18,
+        ),
+        (
+            "Namkeen Mathri (200g)",
+            "branded_namkeen",
+            35,
+            45.0,
+            12,
+            35 * 45 * 0.12,
+            35 * 45 + 35 * 45 * 0.12,
+        ),
+        (
+            "Pineapple Cake Slice",
+            "pastries_cakes",
+            50,
+            65.0,
+            18,
+            50 * 65 * 0.18,
+            50 * 65 + 50 * 65 * 0.18,
+        ),
+        (
+            "Butter Croissant",
+            "pastries_cakes",
+            45,
+            55.0,
+            18,
+            45 * 55 * 0.18,
+            45 * 55 + 45 * 55 * 0.18,
+        ),
     ]
 
     for row in items:
-        ws.append([
-            row[0], row[1], row[2],
-            round(row[3], 2), f"{row[4]}%",
-            round(row[5], 2), round(row[6], 2)
-        ])
+        ws.append(
+            [
+                row[0],
+                row[1],
+                row[2],
+                round(row[3], 2),
+                f"{row[4]}%",
+                round(row[5], 2),
+                round(row[6], 2),
+            ]
+        )
 
     # Totals
     ws.append([""] * 7)
-    ws.append(["", "", "", "TOTAL", "",
-               round(sum(r[5] for r in items), 2),
-               round(sum(r[6] for r in items), 2)])
+    ws.append(
+        [
+            "",
+            "",
+            "",
+            "TOTAL",
+            "",
+            round(sum(r[5] for r in items), 2),
+            round(sum(r[6] for r in items), 2),
+        ]
+    )
     last = ws.max_row
     ws.cell(last, 4).font = Font(bold=True)
     ws.cell(last, 6).font = Font(bold=True)
@@ -258,6 +536,7 @@ def make_qr_image() -> None:
 
     # Random data modules (seed-based for reproducibility)
     import random
+
     rng = random.Random(42)
     for r in range(21):
         for c in range(21):
@@ -266,16 +545,25 @@ def make_qr_image() -> None:
             if rng.random() > 0.55:
                 x0 = qr_x + c * module
                 y0 = qr_y + r * module
-                draw.rectangle([(x0, y0), (x0 + module - 1, y0 + module - 1)], fill=(0, 0, 0))
+                draw.rectangle(
+                    [(x0, y0), (x0 + module - 1, y0 + module - 1)], fill=(0, 0, 0)
+                )
 
     # Table label below QR
     try:
         from PIL import ImageFont
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16)
+
+        font = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16
+        )
     except (IOError, OSError):
         font = None
-    draw.text((qr_x + 30, qr_y + 21 * module + 5), "TABLE: T-03 | BakeManage",
-              fill=(255, 255, 255), font=font)
+    draw.text(
+        (qr_x + 30, qr_y + 21 * module + 5),
+        "TABLE: T-03 | BakeManage",
+        fill=(255, 255, 255),
+        font=font,
+    )
 
     img.save(OUT / "indian_qr_scan.png", format="PNG")
     print(f"  ✓ {OUT / 'indian_qr_scan.png'}")
@@ -289,9 +577,12 @@ def _draw_finder(draw, ox, oy, m):
 
 
 def _in_finder(r, c):
-    if r < 8 and c < 8:    return True
-    if r < 8 and c >= 13:  return True
-    if r >= 13 and c < 8:  return True
+    if r < 8 and c < 8:
+        return True
+    if r < 8 and c >= 13:
+        return True
+    if r >= 13 and c < 8:
+        return True
     return False
 
 
@@ -304,10 +595,18 @@ def make_recipe_image() -> None:
     draw = ImageDraw.Draw(img)
 
     try:
-        font_title  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
-        font_head   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
-        font_body   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
-        font_small  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+        font_title = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32
+        )
+        font_head = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20
+        )
+        font_body = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16
+        )
+        font_small = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14
+        )
     except (IOError, OSError):
         font_title = font_head = font_body = font_small = ImageFont.load_default()
 
@@ -316,9 +615,15 @@ def make_recipe_image() -> None:
     draw.text((30, 18), "BAKEMANAGE RECIPE CARD", fill="white", font=font_title)
 
     # Recipe name
-    draw.text((30, 100), "Kaju Barfi (Cashew Fudge)", fill=(139, 69, 19), font=font_title)
-    draw.text((30, 145), "Category: Indian Mithai  |  Yield: 30 pieces  |  Time: 45 min",
-              fill=(100, 100, 100), font=font_small)
+    draw.text(
+        (30, 100), "Kaju Barfi (Cashew Fudge)", fill=(139, 69, 19), font=font_title
+    )
+    draw.text(
+        (30, 145),
+        "Category: Indian Mithai  |  Yield: 30 pieces  |  Time: 45 min",
+        fill=(100, 100, 100),
+        font=font_small,
+    )
 
     # Divider
     draw.rectangle([(30, 175), (W - 30, 177)], fill=(255, 153, 51))
@@ -326,18 +631,22 @@ def make_recipe_image() -> None:
     # Ingredients
     draw.text((30, 192), "INGREDIENTS:", fill=(31, 78, 121), font=font_head)
     ingredients = [
-        ("Kaju (Cashew)",         "250 g",   "₹245.00", "dry_fruit"),
-        ("Sugar",                 "150 g",   "₹  7.50", "sugar"),
-        ("Milk",                  "100 ml",  "₹  6.80", "dairy"),
-        ("Ghee (Desi)",           " 10 g",   "₹  6.20", "dairy_fat"),
-        ("Elaichi Powder",        "  2 g",   "₹  2.30", "spice"),
-        ("Kesar (Saffron)",       "  2 strands", "₹  8.50", "spice"),
-        ("Silver Varq (optional)","  1 sheet",   "₹  5.00", "garnish"),
+        ("Kaju (Cashew)", "250 g", "₹245.00", "dry_fruit"),
+        ("Sugar", "150 g", "₹  7.50", "sugar"),
+        ("Milk", "100 ml", "₹  6.80", "dairy"),
+        ("Ghee (Desi)", " 10 g", "₹  6.20", "dairy_fat"),
+        ("Elaichi Powder", "  2 g", "₹  2.30", "spice"),
+        ("Kesar (Saffron)", "  2 strands", "₹  8.50", "spice"),
+        ("Silver Varq (optional)", "  1 sheet", "₹  5.00", "garnish"),
     ]
     y = 228
     for name, qty, cost, cat in ingredients:
-        draw.text((50, y), f"• {name:<28}  {qty:<12}  {cost}  [{cat}]",
-                  fill=(50, 50, 50), font=font_body)
+        draw.text(
+            (50, y),
+            f"• {name:<28}  {qty:<12}  {cost}  [{cat}]",
+            fill=(50, 50, 50),
+            font=font_body,
+        )
         y += 28
 
     draw.rectangle([(30, y + 10), (W - 30, y + 12)], fill=(200, 200, 200))
@@ -363,15 +672,27 @@ def make_recipe_image() -> None:
     # GST note
     y += 15
     draw.rectangle([(30, y), (W - 30, y + 50)], fill=(230, 245, 230))
-    draw.text((40, y + 8),  "GST Note: Kaju Barfi falls under HSN 1704 — GST @ 18% (CGST 9% + SGST 9%)",
-              fill=(0, 100, 0), font=font_small)
-    draw.text((40, y + 26), "FSSAI Category: Dairy-Based Confection  |  Shelf-life: 5 days at 25°C",
-              fill=(0, 100, 0), font=font_small)
+    draw.text(
+        (40, y + 8),
+        "GST Note: Kaju Barfi falls under HSN 1704 — GST @ 18% (CGST 9% + SGST 9%)",
+        fill=(0, 100, 0),
+        font=font_small,
+    )
+    draw.text(
+        (40, y + 26),
+        "FSSAI Category: Dairy-Based Confection  |  Shelf-life: 5 days at 25°C",
+        fill=(0, 100, 0),
+        font=font_small,
+    )
 
     # Footer
     draw.rectangle([(0, H - 40), (W, H)], fill=(255, 153, 51))
-    draw.text((30, H - 28), "BakeManage © 2026  |  Recipe v1.0  |  Not for commercial redistribution",
-              fill="white", font=font_small)
+    draw.text(
+        (30, H - 28),
+        "BakeManage © 2026  |  Recipe v1.0  |  Not for commercial redistribution",
+        fill="white",
+        font=font_small,
+    )
 
     img.save(OUT / "indian_recipe_barfi.png", format="PNG")
     print(f"  ✓ {OUT / 'indian_recipe_barfi.png'}")
@@ -390,10 +711,17 @@ def make_b2b_invoice_excel() -> None:
 
     # Same columns as indian_vendor_invoice.xlsx for parse_excel_invoice compatibility
     headers = [
-        "vendor_name", "invoice_number", "date",
-        "item_name", "quantity", "unit_price",
-        "unit_of_measure", "tax_rate", "category",
-        "vertical", "expiration_date",
+        "vendor_name",
+        "invoice_number",
+        "date",
+        "item_name",
+        "quantity",
+        "unit_price",
+        "unit_of_measure",
+        "tax_rate",
+        "category",
+        "vertical",
+        "expiration_date",
     ]
     ws.append(headers)
     for col in range(1, len(headers) + 1):
@@ -406,17 +734,71 @@ def make_b2b_invoice_excel() -> None:
 
     # B2B purchase — supplies for large catering order
     rows = [
-        ["Hindustan Unilever Ltd", f"HUL-{today.strftime('%Y%m%d')}-001", today.isoformat(),
-         "Dalda Vanaspati Ghee 15kg", 5.0, 1850.0, "tin", 12.0, "dairy_fat", "bakery", exp_sugar],
-        ["Hindustan Unilever Ltd", f"HUL-{today.strftime('%Y%m%d')}-001", today.isoformat(),
-         "Kissan Mixed Fruit Jam 1kg", 12.0, 180.0, "jar", 12.0, "flavouring", "bakery", (today + timedelta(days=365)).isoformat()],
-        ["RSGSM (Rajasthan)", f"RSG-{today.strftime('%Y%m%d')}-004", today.isoformat(),
-         "Chakki Fresh Atta 25kg", 8.0, 760.0, "bag", 0.0, "flour", "bakery", exp_flour],
-        ["RSGSM (Rajasthan)", f"RSG-{today.strftime('%Y%m%d')}-004", today.isoformat(),
-         "Besan (Chickpea Flour) 10kg", 6.0, 640.0, "bag", 5.0, "flour", "bakery", exp_flour],
-        ["Parle Products Pvt Ltd", f"PAR-{today.strftime('%Y%m%d')}-009", today.isoformat(),
-         "Parle-G Biscuits (Bulk 10kg)", 10.0, 950.0, "carton", 5.0, "branded_biscuits", "bakery",
-         (today + timedelta(days=90)).isoformat()],
+        [
+            "Hindustan Unilever Ltd",
+            f"HUL-{today.strftime('%Y%m%d')}-001",
+            today.isoformat(),
+            "Dalda Vanaspati Ghee 15kg",
+            5.0,
+            1850.0,
+            "tin",
+            12.0,
+            "dairy_fat",
+            "bakery",
+            exp_sugar,
+        ],
+        [
+            "Hindustan Unilever Ltd",
+            f"HUL-{today.strftime('%Y%m%d')}-001",
+            today.isoformat(),
+            "Kissan Mixed Fruit Jam 1kg",
+            12.0,
+            180.0,
+            "jar",
+            12.0,
+            "flavouring",
+            "bakery",
+            (today + timedelta(days=365)).isoformat(),
+        ],
+        [
+            "RSGSM (Rajasthan)",
+            f"RSG-{today.strftime('%Y%m%d')}-004",
+            today.isoformat(),
+            "Chakki Fresh Atta 25kg",
+            8.0,
+            760.0,
+            "bag",
+            0.0,
+            "flour",
+            "bakery",
+            exp_flour,
+        ],
+        [
+            "RSGSM (Rajasthan)",
+            f"RSG-{today.strftime('%Y%m%d')}-004",
+            today.isoformat(),
+            "Besan (Chickpea Flour) 10kg",
+            6.0,
+            640.0,
+            "bag",
+            5.0,
+            "flour",
+            "bakery",
+            exp_flour,
+        ],
+        [
+            "Parle Products Pvt Ltd",
+            f"PAR-{today.strftime('%Y%m%d')}-009",
+            today.isoformat(),
+            "Parle-G Biscuits (Bulk 10kg)",
+            10.0,
+            950.0,
+            "carton",
+            5.0,
+            "branded_biscuits",
+            "bakery",
+            (today + timedelta(days=90)).isoformat(),
+        ],
     ]
 
     for r in rows:

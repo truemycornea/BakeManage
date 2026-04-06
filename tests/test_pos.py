@@ -7,6 +7,7 @@ partial payment validation.
 
 Minimum 15 test cases as required by the SCRUM epic spec.
 """
+
 from __future__ import annotations
 
 import os
@@ -184,10 +185,14 @@ def test_idempotency_same_key_returns_same_receipt(client):
     key = _ikey()
     payload = _sale_payload()
 
-    r1 = client.post("/pos/sale", json=payload, headers={**OWNER, "Idempotency-Key": key})
+    r1 = client.post(
+        "/pos/sale", json=payload, headers={**OWNER, "Idempotency-Key": key}
+    )
     assert r1.status_code == 201
 
-    r2 = client.post("/pos/sale", json=payload, headers={**OWNER, "Idempotency-Key": key})
+    r2 = client.post(
+        "/pos/sale", json=payload, headers={**OWNER, "Idempotency-Key": key}
+    )
     assert r2.status_code in (200, 201)
 
     assert r1.json()["sale_id"] == r2.json()["sale_id"]
@@ -278,6 +283,7 @@ def test_daily_summary_aggregation(client):
         )
 
     from datetime import date
+
     today = date.today().isoformat()
     r = client.get(f"/pos/daily_summary?bakery_id=1&date={today}", headers=OWNER)
     assert r.status_code == 200
@@ -348,7 +354,10 @@ def test_partial_payment_insufficient_returns_422(client):
         headers={**OWNER, "Idempotency-Key": _ikey()},
     )
     assert r.status_code == 422
-    assert "less than total" in r.json()["detail"].lower() or "payment" in r.json()["detail"].lower()
+    assert (
+        "less than total" in r.json()["detail"].lower()
+        or "payment" in r.json()["detail"].lower()
+    )
 
 
 # ===========================================================================
@@ -408,8 +417,18 @@ def test_multiline_sale_aggregation(client):
     payload = {
         "bakery_id": 1,
         "lines": [
-            {"product_name": "Bread", "quantity": 2, "unit_price": 50.0, "hsn_code": "1905"},
-            {"product_name": "Cake", "quantity": 1, "unit_price": 200.0, "hsn_code": "1905"},
+            {
+                "product_name": "Bread",
+                "quantity": 2,
+                "unit_price": 50.0,
+                "hsn_code": "1905",
+            },
+            {
+                "product_name": "Cake",
+                "quantity": 1,
+                "unit_price": 200.0,
+                "hsn_code": "1905",
+            },
         ],
         "payment_method": "UPI",
         "supplier_state": "KL",

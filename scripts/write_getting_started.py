@@ -1,4 +1,5 @@
 """Write the first-user getting started guide"""
+
 import pathlib
 
 DOCS = pathlib.Path(__file__).parent.parent / "docs"

@@ -12,6 +12,7 @@ Credential configuration (env-driven to stay in sync with the running server):
   DEFAULT_ADMIN_USERNAME — admin username for /auth/login (default: "admin")
   TEST_CLIENT_ROLE     — role used in X-Client-Role header (default: "owner")
 """
+
 from __future__ import annotations
 
 import io
@@ -53,7 +54,6 @@ def _jwt_headers() -> dict:
     return {"Authorization": f"Bearer {_jwt_token}"}
 
 
-
 _stock_item_id: int = 0
 _recipe_id: int = 0
 _asset_id: int = 0
@@ -62,6 +62,7 @@ _asset_id: int = 0
 # ══════════════════════════════════════════════════════════════════════════════
 #  GUARDRAIL — credential alignment
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestCredentialAlignment:
     """Guardrail: assert test credentials match the server's runtime config.
@@ -102,7 +103,11 @@ class TestCredentialAlignment:
                 f"Ensure TEST_CLIENT_ROLE matches a role permitted by the server. "
                 f"Server detail: {detail or '<no detail>'}."
             )
-            if r.status_code == 403 and ("role not authorized" in detail.lower() or "not authorized" in detail.lower())
+            if r.status_code == 403
+            and (
+                "role not authorized" in detail.lower()
+                or "not authorized" in detail.lower()
+            )
             else (
                 f"Expected GET {BASE}/health/metrics to return 200 for credential alignment guardrail, "
                 f"but got {r.status_code}. Response body: {r.text}"
@@ -113,6 +118,7 @@ class TestCredentialAlignment:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 2 — HEALTH & OBSERVABILITY
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPhase2Health:
     """Phase 2: health gate, extended health, Prometheus metrics, system status."""
@@ -136,7 +142,9 @@ class TestPhase2Health:
         r = httpx.get(f"{BASE}/health/metrics", headers=HEADERS, timeout=10)
         assert r.status_code == 200
         # Accept both text/plain and application/json
-        assert r.headers.get("content-type", "").startswith(("text/plain", "application/json"))
+        assert r.headers.get("content-type", "").startswith(
+            ("text/plain", "application/json")
+        )
 
     def test_system_status(self) -> None:
         """GET /system/status — returns queue / db / ai usage metrics (PIN auth required)."""
@@ -149,6 +157,7 @@ class TestPhase2Health:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 1 — AUTH
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPhase1Auth:
     """Phase 1: JWT auth via /auth/login and /users/me."""
@@ -165,7 +174,11 @@ class TestPhase1Auth:
 
     def test_login_wrong_pin_is_401(self) -> None:
         """POST /auth/login — wrong PIN must return 401."""
-        r = httpx.post(f"{BASE}/auth/login", json={"username": "admin", "pin": "wrong-pin-xyz"}, timeout=10)
+        r = httpx.post(
+            f"{BASE}/auth/login",
+            json={"username": "admin", "pin": "wrong-pin-xyz"},
+            timeout=10,
+        )
         assert r.status_code == 401
 
     def test_me_with_jwt(self) -> None:
@@ -174,7 +187,11 @@ class TestPhase1Auth:
         if not _jwt_token:
             resp = httpx.post(f"{BASE}/auth/login", json=AUTH_CREDS, timeout=10)
             _jwt_token = resp.json()["access_token"]
-        r = httpx.get(f"{BASE}/users/me", headers={"Authorization": f"Bearer {_jwt_token}"}, timeout=10)
+        r = httpx.get(
+            f"{BASE}/users/me",
+            headers={"Authorization": f"Bearer {_jwt_token}"},
+            timeout=10,
+        )
         assert r.status_code == 200
         body = r.json()
         assert body.get("username") == _ADMIN_USERNAME
@@ -184,6 +201,7 @@ class TestPhase1Auth:
 #  PHASE 1 — INGESTION
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPhase1Ingestion:
     """Phase 1: receipt/document ingestion via VLM/OCR."""
 
@@ -191,6 +209,7 @@ class TestPhase1Ingestion:
         """POST /ingest/image — upload a 1×1 PNG, expect 200 with invoice data."""
         # Minimal valid PNG (8×8 white pixels, base64-decoded)
         import base64
+
         tiny_png = base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         )
@@ -233,6 +252,7 @@ class TestPhase1Ingestion:
 #  PHASE 1 — COST CALCULATOR
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPhase1Costing:
     """Phase 1: recipe cost computation."""
 
@@ -247,7 +267,9 @@ class TestPhase1Costing:
             "overhead": 5.0,
             "selling_price": 120.0,
         }
-        r = httpx.post(f"{BASE}/cost/compute", json=payload, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/cost/compute", json=payload, headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
         body = r.json()
         assert "total_cost" in body
@@ -261,15 +283,20 @@ class TestPhase1Costing:
             "overhead": 0.0,
             "selling_price": None,
         }
-        r = httpx.post(f"{BASE}/cost/compute", json=payload, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/cost/compute", json=payload, headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
         body = r.json()
-        assert body.get("margin_percent") is None or body.get("margin_percent") == "None"
+        assert (
+            body.get("margin_percent") is None or body.get("margin_percent") == "None"
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 1 — INVENTORY / STOCK
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPhase1Inventory:
     """Phase 1: stock add, list, hot, expiring, cache."""
@@ -321,6 +348,7 @@ class TestPhase1Inventory:
 #  PHASE 1 — PROOFING TELEMETRY
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPhase1Proofing:
     """Phase 1 & backward-compat: proofing telemetry submission."""
 
@@ -334,7 +362,9 @@ class TestPhase1Proofing:
             "status": "stable",
             "anomaly_score": 0.05,
         }
-        r = httpx.post(f"{BASE}/proofing/telemetry", json=payload, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/proofing/telemetry", json=payload, headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
 
     def test_proofing_telemetry_anomaly_triggers_flag(self) -> None:
@@ -347,7 +377,9 @@ class TestPhase1Proofing:
             "status": "anomaly",
             "anomaly_score": 0.82,
         }
-        r = httpx.post(f"{BASE}/proofing/telemetry", json=payload, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/proofing/telemetry", json=payload, headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
 
     def test_telemetry_proofing_legacy(self) -> None:
@@ -360,7 +392,12 @@ class TestPhase1Proofing:
             "status": "stable",
             "anomaly_score": 0.1,
         }
-        r = httpx.post(f"{BASE}/telemetry/proofing", json=payload, headers=_jwt_headers(), timeout=10)
+        r = httpx.post(
+            f"{BASE}/telemetry/proofing",
+            json=payload,
+            headers=_jwt_headers(),
+            timeout=10,
+        )
         assert r.status_code == 200
 
 
@@ -368,12 +405,14 @@ class TestPhase1Proofing:
 #  PHASE 1 — QUALITY CONTROL
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPhase1Quality:
     """Phase 1: photo browning analysis and chef interview validation."""
 
     def test_quality_browning_analysis(self) -> None:
         """POST /quality/browning — JWT Bearer required; returns browning score 0–100."""
         import base64
+
         tiny_png = base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         )
@@ -390,6 +429,7 @@ class TestPhase1Quality:
     def test_quality_validate_file_upload(self) -> None:
         """POST /quality/validate — PIN auth, file upload, returns browning assessment."""
         import os
+
         # Use random bytes as PNG prefix so each test run gets a unique image fingerprint
         # (avoids UniqueViolation on image_fingerprint column)
         unique_png = b"\x89PNG\r\n\x1a\n" + os.urandom(32)
@@ -408,6 +448,7 @@ class TestPhase1Quality:
 #  PHASE 1 — DASHBOARD
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPhase1Dashboard:
     """Phase 1: dashboard summary with aggregated KPIs."""
 
@@ -418,12 +459,21 @@ class TestPhase1Dashboard:
         body = r.json()
         assert isinstance(body, dict)
         # At least one sensible field expected
-        assert any(k in body for k in ("stock_items", "proofing_readings", "quality_inspections", "total_items"))
+        assert any(
+            k in body
+            for k in (
+                "stock_items",
+                "proofing_readings",
+                "quality_inspections",
+                "total_items",
+            )
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 1 — RECIPES
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPhase1Recipes:
     """Phase 1: recipe library listing and detail."""
@@ -454,20 +504,28 @@ class TestPhase1Recipes:
             "overhead": 5.0,
             "components": [{"name": "Flour", "cost": 40.0, "yield_amount": 0.95}],
         }
-        r = httpx.post(f"{BASE}/recipes/{_recipe_id}/cogs/queue", json=body, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/recipes/{_recipe_id}/cogs/queue",
+            json=body,
+            headers=HEADERS,
+            timeout=10,
+        )
         assert r.status_code == 200
 
     def test_recipe_inventory_queue(self) -> None:
         """POST /recipes/{id}/inventory/queue — queues FEFO inventory task."""
         if not _recipe_id:
             pytest.skip("No recipes in DB; seed data needed")
-        r = httpx.post(f"{BASE}/recipes/{_recipe_id}/inventory/queue", headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/recipes/{_recipe_id}/inventory/queue", headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 1 — SALES
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPhase1Sales:
     """Phase 1: record a sale and retrieve daily summary."""
@@ -480,7 +538,9 @@ class TestPhase1Sales:
             "unit_price": 85.0,
             "channel": "in-store",
         }
-        r = httpx.post(f"{BASE}/sales/record", json=payload, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/sales/record", json=payload, headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
         body = r.json()
         assert "id" in body or "sale_id" in body or "status" in body
@@ -496,6 +556,7 @@ class TestPhase1Sales:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 1 — MEDIA ASSETS
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPhase1MediaAssets:
     """Phase 1: media asset catalogue."""
@@ -523,6 +584,7 @@ class TestPhase1MediaAssets:
 #  PHASE 1 — CREDENTIALS
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPhase1Credentials:
     """Phase 1: service credential registration."""
 
@@ -537,13 +599,16 @@ class TestPhase1Credentials:
 #  PHASE 3 — SUPPLY CHAIN
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPhase3SupplyChain:
     """Phase 3: automated indents, stock transfer, supplier lead times."""
 
     def test_supply_chain_indent_auto(self) -> None:
         """POST /supply-chain/indent — auto-generates POs for low-stock items."""
         payload = {"threshold_kg": 1000.0, "vendor_name": "Auto-Vendor"}
-        r = httpx.post(f"{BASE}/supply-chain/indent", json=payload, headers=HEADERS, timeout=15)
+        r = httpx.post(
+            f"{BASE}/supply-chain/indent", json=payload, headers=HEADERS, timeout=15
+        )
         assert r.status_code == 200
         body = r.json()
         assert "indents" in body or "created" in body or isinstance(body, dict)
@@ -556,7 +621,9 @@ class TestPhase3SupplyChain:
             "lead_days": 3,
             "last_price_per_unit": 42.50,
         }
-        r = httpx.post(f"{BASE}/supply-chain/lead-times", json=payload, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/supply-chain/lead-times", json=payload, headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
         body = r.json()
         assert "id" in body or "vendor_name" in body
@@ -575,7 +642,13 @@ class TestPhase3SupplyChain:
             # Create a stock item first
             resp = httpx.post(
                 f"{BASE}/stock/add",
-                json={"ingredient_name": "TransferFlour", "quantity_kg": 50.0, "location": "Cold Store", "vendor_name": "V1", "unit_cost": 40.0},
+                json={
+                    "ingredient_name": "TransferFlour",
+                    "quantity_kg": 50.0,
+                    "location": "Cold Store",
+                    "vendor_name": "V1",
+                    "unit_cost": 40.0,
+                },
                 headers=HEADERS,
                 timeout=10,
             )
@@ -586,7 +659,9 @@ class TestPhase3SupplyChain:
             "to_location": "Main Kitchen",
             "quantity": 5.0,
         }
-        r = httpx.post(f"{BASE}/stock/transfer", json=payload, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/stock/transfer", json=payload, headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
         body = r.json()
         assert "id" in body or "status" in body or "transfer_id" in body
@@ -595,6 +670,7 @@ class TestPhase3SupplyChain:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 3 — INSIGHTS / INTELLIGENCE
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPhase3Insights:
     """Phase 3: menu engineering, vendor optimization, demand forecast."""
@@ -611,7 +687,9 @@ class TestPhase3Insights:
 
     def test_vendor_optimization(self) -> None:
         """GET /insights/vendor-optimization — best vendor per ingredient."""
-        r = httpx.get(f"{BASE}/insights/vendor-optimization", headers=HEADERS, timeout=15)
+        r = httpx.get(
+            f"{BASE}/insights/vendor-optimization", headers=HEADERS, timeout=15
+        )
         assert r.status_code == 200
         body = r.json()
         assert isinstance(body, dict)
@@ -625,7 +703,11 @@ class TestPhase3Insights:
 
     def test_demand_forecast_custom_days(self) -> None:
         """GET /insights/demand-forecast?days_ahead=14 — 14-day forecast."""
-        r = httpx.get(f"{BASE}/insights/demand-forecast?days_ahead=14", headers=HEADERS, timeout=15)
+        r = httpx.get(
+            f"{BASE}/insights/demand-forecast?days_ahead=14",
+            headers=HEADERS,
+            timeout=15,
+        )
         assert r.status_code == 200
         body = r.json()
         assert isinstance(body, dict)
@@ -634,6 +716,7 @@ class TestPhase3Insights:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 3 — CRM
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPhase3CRM:
     """Phase 3: WhatsApp notification dispatch + loyalty programme."""
@@ -646,7 +729,9 @@ class TestPhase3CRM:
             "message": "Your order is ready for pickup!",
             "template": "order_ready",
         }
-        r = httpx.post(f"{BASE}/crm/whatsapp-notify", json=payload, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/crm/whatsapp-notify", json=payload, headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
         body = r.json()
         assert "dispatched" in body or "status" in body or "message_id" in body
@@ -660,7 +745,9 @@ class TestPhase3CRM:
             "total_purchases": 8,
             "total_spend_inr": 1240.0,
         }
-        r = httpx.post(f"{BASE}/crm/loyalty/upsert", json=payload, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/crm/loyalty/upsert", json=payload, headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
         body = r.json()
         assert "id" in body or "customer_name" in body or "tier" in body
@@ -674,7 +761,9 @@ class TestPhase3CRM:
             "total_purchases": 25,
             "total_spend_inr": 5800.0,
         }
-        r = httpx.post(f"{BASE}/crm/loyalty/upsert", json=payload, headers=HEADERS, timeout=10)
+        r = httpx.post(
+            f"{BASE}/crm/loyalty/upsert", json=payload, headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
 
     def test_crm_loyalty_list(self) -> None:
@@ -688,6 +777,7 @@ class TestPhase3CRM:
 # ══════════════════════════════════════════════════════════════════════════════
 #  SECURITY — AUTH BOUNDARY CHECKS
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSecurityBoundaries:
     """Verify authentication guards reject unauthenticated / wrong-role requests."""
@@ -713,6 +803,7 @@ class TestSecurityBoundaries:
 # New Feature Tests: Recipe Batch Scaling, GST Calculator, Waste Tracking
 # ===========================================================================
 
+
 class TestRecipeBatchScaling:
     """Feature 10 — AI-Driven Recipe Batch Scaling."""
 
@@ -720,7 +811,9 @@ class TestRecipeBatchScaling:
         global _recipe_id
         if not _recipe_id:
             pytest.skip("No recipes in DB; seed data needed")
-        r = httpx.get(f"{BASE}/recipes/{_recipe_id}/scale?servings=5", headers=HEADERS, timeout=10)
+        r = httpx.get(
+            f"{BASE}/recipes/{_recipe_id}/scale?servings=5", headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
         d = r.json()
         assert "total_cost" in d
@@ -733,7 +826,9 @@ class TestRecipeBatchScaling:
         global _recipe_id
         if not _recipe_id:
             pytest.skip("No recipes in DB; seed data needed")
-        r = httpx.get(f"{BASE}/recipes/{_recipe_id}/scale?servings=1", headers=HEADERS, timeout=10)
+        r = httpx.get(
+            f"{BASE}/recipes/{_recipe_id}/scale?servings=1", headers=HEADERS, timeout=10
+        )
         assert r.status_code == 200
         d = r.json()
         assert d["scale_factor"] > 0
@@ -742,11 +837,15 @@ class TestRecipeBatchScaling:
         global _recipe_id
         if not _recipe_id:
             pytest.skip("No recipes in DB; seed data needed")
-        r = httpx.get(f"{BASE}/recipes/{_recipe_id}/scale?servings=0", headers=HEADERS, timeout=10)
+        r = httpx.get(
+            f"{BASE}/recipes/{_recipe_id}/scale?servings=0", headers=HEADERS, timeout=10
+        )
         assert r.status_code == 422
 
     def test_scale_nonexistent_recipe_returns_404(self) -> None:
-        r = httpx.get(f"{BASE}/recipes/999999/scale?servings=10", headers=HEADERS, timeout=10)
+        r = httpx.get(
+            f"{BASE}/recipes/999999/scale?servings=10", headers=HEADERS, timeout=10
+        )
         assert r.status_code == 404
 
 
@@ -761,7 +860,12 @@ class TestGSTCalculator:
         assert any(s["category"] == "pastries_cakes" for s in d["slabs"])
 
     def test_gst_compute_pastries_18pct(self) -> None:
-        payload = {"item_name": "Butter Croissant", "category": "pastries_cakes", "base_price": 100.0, "quantity": 1.0}
+        payload = {
+            "item_name": "Butter Croissant",
+            "category": "pastries_cakes",
+            "base_price": 100.0,
+            "quantity": 1.0,
+        }
         r = httpx.post(f"{BASE}/gst/compute", json=payload, headers=HEADERS, timeout=10)
         assert r.status_code == 200
         d = r.json()
@@ -770,7 +874,12 @@ class TestGSTCalculator:
         assert d["total_with_gst"] == 118.0
 
     def test_gst_compute_zero_slab(self) -> None:
-        payload = {"item_name": "Plain Rusk", "category": "unbranded_bread", "base_price": 50.0, "quantity": 2.0}
+        payload = {
+            "item_name": "Plain Rusk",
+            "category": "unbranded_bread",
+            "base_price": 50.0,
+            "quantity": 2.0,
+        }
         r = httpx.post(f"{BASE}/gst/compute", json=payload, headers=HEADERS, timeout=10)
         assert r.status_code == 200
         d = r.json()
@@ -779,7 +888,13 @@ class TestGSTCalculator:
         assert d["total_with_gst"] == 100.0
 
     def test_gst_compute_custom_rate(self) -> None:
-        payload = {"item_name": "Branded Cookies", "category": "custom", "base_price": 200.0, "quantity": 1.0, "custom_rate_pct": 12.0}
+        payload = {
+            "item_name": "Branded Cookies",
+            "category": "custom",
+            "base_price": 200.0,
+            "quantity": 1.0,
+            "custom_rate_pct": 12.0,
+        }
         r = httpx.post(f"{BASE}/gst/compute", json=payload, headers=HEADERS, timeout=10)
         assert r.status_code == 200
         d = r.json()
@@ -787,7 +902,11 @@ class TestGSTCalculator:
         assert d["total_gst"] == 24.0
 
     def test_gst_compute_invalid_category(self) -> None:
-        payload = {"item_name": "Test", "category": "invalid_category", "base_price": 100.0}
+        payload = {
+            "item_name": "Test",
+            "category": "invalid_category",
+            "base_price": 100.0,
+        }
         r = httpx.post(f"{BASE}/gst/compute", json=payload, headers=HEADERS, timeout=10)
         assert r.status_code == 422
 
@@ -817,12 +936,21 @@ class TestWasteTracking:
         assert d["estimated_cost"] > 0
 
     def test_log_waste_overproduction(self) -> None:
-        payload = {"item_name": "Croissant", "quantity_wasted": 10.0, "unit_of_measure": "pcs", "waste_cause": "overproduction"}
+        payload = {
+            "item_name": "Croissant",
+            "quantity_wasted": 10.0,
+            "unit_of_measure": "pcs",
+            "waste_cause": "overproduction",
+        }
         r = httpx.post(f"{BASE}/waste/log", json=payload, headers=HEADERS, timeout=10)
         assert r.status_code == 200
 
     def test_log_waste_invalid_cause_rejected(self) -> None:
-        payload = {"item_name": "Flour", "quantity_wasted": 1.0, "waste_cause": "bad_cause"}
+        payload = {
+            "item_name": "Flour",
+            "quantity_wasted": 1.0,
+            "waste_cause": "bad_cause",
+        }
         r = httpx.post(f"{BASE}/waste/log", json=payload, headers=HEADERS, timeout=10)
         assert r.status_code == 422
 

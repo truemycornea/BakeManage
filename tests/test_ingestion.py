@@ -2,9 +2,14 @@ from app.ingestion import parse_structural_layout, simulate_vlm_ocr
 from app.schemas import InvoicePayload
 
 _INDIAN_VENDORS = {
-    "Amul Dairy Ltd", "ITC Foods Ltd", "Patanjali Ayurved Ltd",
-    "Hindustan Unilever Ltd", "Everest Spices Ltd", "Tata Consumer Products",
-    "RSGSM Atta Mills", "MTR Foods Pvt Ltd",
+    "Amul Dairy Ltd",
+    "ITC Foods Ltd",
+    "Patanjali Ayurved Ltd",
+    "Hindustan Unilever Ltd",
+    "Everest Spices Ltd",
+    "Tata Consumer Products",
+    "RSGSM Atta Mills",
+    "MTR Foods Pvt Ltd",
 }
 
 
@@ -56,7 +61,9 @@ def test_ingestion_service_local_ocr_extracts_gstin() -> None:
     svc = InvoiceIngestionService(ocr_premium=False)
     result = svc.ingest(_INVOICE_TEXT, "image/png", "tenant-001")
 
-    assert result.gstin == "27AABCA1234A1ZB", f"Expected GSTIN not found; got {result.gstin}"
+    assert result.gstin == "27AABCA1234A1ZB", (
+        f"Expected GSTIN not found; got {result.gstin}"
+    )
     assert result.source == "local"
 
 

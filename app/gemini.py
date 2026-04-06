@@ -31,20 +31,49 @@ logger = logging.getLogger(__name__)
 # Complexity levels
 # ---------------------------------------------------------------------------
 
+
 class QueryComplexity(str, Enum):
-    OPERATIONAL = "operational"   # Status, expiring stock, daily check — budget=0, 500 tok
-    INSIGHT     = "insight"       # Multi-module summary, menu eng, vendor — budget=0, 700 tok
-    ANALYTICAL  = "analytical"    # Demand forecast, what-if, deep strategy — auto think, 1800 tok
+    OPERATIONAL = (
+        "operational"  # Status, expiring stock, daily check — budget=0, 500 tok
+    )
+    INSIGHT = "insight"  # Multi-module summary, menu eng, vendor — budget=0, 700 tok
+    ANALYTICAL = (
+        "analytical"  # Demand forecast, what-if, deep strategy — auto think, 1800 tok
+    )
 
 
 _ANALYTICAL_SIGNALS = {
-    "forecast", "predict", "projection", "trend", "what if", "simulate",
-    "optimise", "optimize", "strategy", "recommend", "plan", "next week",
-    "next month", "compare", "analyse", "analyze", "deep dive",
+    "forecast",
+    "predict",
+    "projection",
+    "trend",
+    "what if",
+    "simulate",
+    "optimise",
+    "optimize",
+    "strategy",
+    "recommend",
+    "plan",
+    "next week",
+    "next month",
+    "compare",
+    "analyse",
+    "analyze",
+    "deep dive",
 }
 _INSIGHT_SIGNALS = {
-    "insight", "summary", "overview", "menu", "vendor", "engineering",
-    "performance", "report", "breakdown", "highlight", "top", "best",
+    "insight",
+    "summary",
+    "overview",
+    "menu",
+    "vendor",
+    "engineering",
+    "performance",
+    "report",
+    "breakdown",
+    "highlight",
+    "top",
+    "best",
 }
 
 
@@ -64,15 +93,15 @@ def detect_complexity(prompt: str) -> QueryComplexity:
 _CONFIGS: dict[QueryComplexity, dict[str, Any]] = {
     QueryComplexity.OPERATIONAL: {
         "max_output_tokens": 500,
-        "thinking_budget": 0,      # OFF — fast and accurate for status queries
+        "thinking_budget": 0,  # OFF — fast and accurate for status queries
     },
     QueryComplexity.INSIGHT: {
         "max_output_tokens": 700,
-        "thinking_budget": 0,      # OFF — structured multi-module output, no benefit from thinking
+        "thinking_budget": 0,  # OFF — structured multi-module output, no benefit from thinking
     },
     QueryComplexity.ANALYTICAL: {
         "max_output_tokens": 1800,
-        "thinking_budget": None,   # AUTO — model decides; high output tokens prevent starvation
+        "thinking_budget": None,  # AUTO — model decides; high output tokens prevent starvation
     },
 }
 
@@ -106,6 +135,7 @@ def _get_client():
         )
     try:
         from google import genai  # noqa: PLC0415
+
         _client = genai.Client(api_key=settings.gemini_api_key)
         logger.info("Gemini client initialised — model: %s", _model())
         return _client
@@ -119,6 +149,7 @@ def _get_client():
 # ---------------------------------------------------------------------------
 # Public interface
 # ---------------------------------------------------------------------------
+
 
 def ask(
     prompt: str,
@@ -150,6 +181,7 @@ def ask(
     full_prompt = f"{_SYSTEM_PROMPT}\n\n"
     if context_data:
         import json
+
         full_prompt += f"Live platform data:\n```json\n{json.dumps(context_data, default=str, indent=2)}\n```\n\n"
     full_prompt += prompt
 

@@ -4,6 +4,7 @@
 Supports local OCR (Docling → Tesseract fallback) and Gemini Vision premium path.
 Includes Indian invoice field extraction and deduplication.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class InvoiceLineItem:
@@ -49,21 +51,23 @@ class InvoiceResult:
 # Regex patterns for Indian invoice mandatory fields
 # ---------------------------------------------------------------------------
 
-GSTIN_RE = re.compile(
-    r"\b(\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}Z[A-Z\d]{1})\b"
-)
+GSTIN_RE = re.compile(r"\b(\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}Z[A-Z\d]{1})\b")
 INVOICE_NO_RE = re.compile(
     r"(?:invoice\s*(?:no|number|#)[:\s]+)([A-Z0-9/-]{3,30})",
     re.IGNORECASE,
 )
-DATE_RE = re.compile(
-    r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})\b"
-)
+DATE_RE = re.compile(r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})\b")
 HSN_RE = re.compile(r"\b(\d{4,8})\b")
 AMOUNT_RE = re.compile(r"(?:₹|INR|Rs\.?)\s*([\d,]+(?:\.\d{1,2})?)")
-CGST_RE = re.compile(r"CGST\s*(?:@\s*[\d.]+%\s*)?:?\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
-SGST_RE = re.compile(r"SGST\s*(?:@\s*[\d.]+%\s*)?:?\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
-IGST_RE = re.compile(r"IGST\s*(?:@\s*[\d.]+%\s*)?:?\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
+CGST_RE = re.compile(
+    r"CGST\s*(?:@\s*[\d.]+%\s*)?:?\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE
+)
+SGST_RE = re.compile(
+    r"SGST\s*(?:@\s*[\d.]+%\s*)?:?\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE
+)
+IGST_RE = re.compile(
+    r"IGST\s*(?:@\s*[\d.]+%\s*)?:?\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE
+)
 
 
 def _parse_amount(text: str) -> Decimal:
@@ -102,7 +106,9 @@ def _extract_fields(text: str) -> dict:
     }
 
 
-def _dedup_hash(vendor_gstin: Optional[str], invoice_no: str, invoice_date: Optional[str]) -> str:
+def _dedup_hash(
+    vendor_gstin: Optional[str], invoice_no: str, invoice_date: Optional[str]
+) -> str:
     """Compute deduplication hash: vendor_gstin + invoice_no + invoice_date."""
     key = f"{vendor_gstin or 'unknown'}|{invoice_no}|{invoice_date or 'no-date'}"
     return hashlib.sha256(key.encode()).hexdigest()
@@ -112,13 +118,16 @@ def _dedup_hash(vendor_gstin: Optional[str], invoice_no: str, invoice_date: Opti
 # InvoiceIngestionService
 # ---------------------------------------------------------------------------
 
+
 class InvoiceIngestionService:
     """OCR-based invoice ingestion with local and premium Gemini Vision paths."""
 
     def __init__(self, ocr_premium: bool = False, gemini_api_key: str = ""):
         self.ocr_premium = ocr_premium
         self.gemini_api_key = gemini_api_key
-        self._seen_hashes: set[str] = set()  # in-memory dedup (DB-backed per tenant in production)
+        self._seen_hashes: set[str] = (
+            set()
+        )  # in-memory dedup (DB-backed per tenant in production)
 
     def ingest(
         self,
@@ -203,6 +212,7 @@ class InvoiceIngestionService:
         # Try Docling first
         try:
             from docling.parsers.image_parser import ImageParser  # type: ignore[import]
+
             parser = ImageParser()
             doc = parser.parse(file)
             text = doc.get_text() if hasattr(doc, "get_text") else str(doc)
@@ -217,6 +227,7 @@ class InvoiceIngestionService:
             import pytesseract  # type: ignore[import]
             from PIL import Image
             from io import BytesIO
+
             img = Image.open(BytesIO(file))
             text = pytesseract.image_to_string(img, lang="eng")
             return text, 0.70
@@ -231,7 +242,9 @@ class InvoiceIngestionService:
         except Exception:
             return "", 0.0
 
-    def _gemini_extract(self, file: bytes, mime_type: str, tenant_id: str) -> InvoiceResult:
+    def _gemini_extract(
+        self, file: bytes, mime_type: str, tenant_id: str
+    ) -> InvoiceResult:
         """Extract invoice data via Gemini Vision (premium path)."""
         import base64
         from google import genai  # type: ignore[import]
@@ -250,10 +263,13 @@ class InvoiceIngestionService:
         response = client.models.generate_content(
             model="gemini-1.5-flash",
             contents=[
-                {"role": "user", "parts": [
-                    {"text": prompt},
-                    {"inline_data": {"mime_type": mime_type, "data": encoded}},
-                ]}
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": prompt},
+                        {"inline_data": {"mime_type": mime_type, "data": encoded}},
+                    ],
+                }
             ],
         )
         raw = response.text or ""

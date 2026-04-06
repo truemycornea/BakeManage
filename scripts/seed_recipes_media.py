@@ -13,6 +13,7 @@ Run via:
     docker cp scripts/seed_recipes_media.py bakemanage-api-1:/tmp/
     docker exec bakemanage-api-1 python /tmp/seed_recipes_media.py
 """
+
 from __future__ import annotations
 
 import base64
@@ -25,7 +26,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 # ── DB connection ────────────────────────────────────────────────────────────
-url = os.environ.get("DATABASE_URL", "postgresql://bakemanage:bakemanage@db:5432/bakemanage")
+url = os.environ.get(
+    "DATABASE_URL", "postgresql://bakemanage:bakemanage@db:5432/bakemanage"
+)
 engine = create_engine(url)
 
 # ── Import models ─────────────────────────────────────────────────────────────
@@ -37,6 +40,7 @@ Base.metadata.create_all(bind=engine)
 # ── PIL import ───────────────────────────────────────────────────────────────
 try:
     from PIL import Image, ImageDraw, ImageFont
+
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
@@ -45,16 +49,16 @@ except ImportError:
 
 # ── Colour palette (warm bakery tones) ───────────────────────────────────────
 COLOURS = {
-    "card_bg":    (254, 247, 237),   # warm cream
-    "header_bg":  (120,  53,  15),   # deep brown
-    "accent":     (217, 119,   6),   # amber
-    "text_dark":  ( 28,  25,  23),   # near-black
-    "text_mid":   ( 87,  83,  78),   # warm grey
-    "text_light": (168, 162, 158),   # lighter grey
-    "divider":    (231, 213, 199),   # light tan
-    "tag_bg":     (255, 237, 213),   # peach
-    "tag_text":   (154,  52,  18),   # rust
-    "white":      (255, 255, 255),
+    "card_bg": (254, 247, 237),  # warm cream
+    "header_bg": (120, 53, 15),  # deep brown
+    "accent": (217, 119, 6),  # amber
+    "text_dark": (28, 25, 23),  # near-black
+    "text_mid": (87, 83, 78),  # warm grey
+    "text_light": (168, 162, 158),  # lighter grey
+    "divider": (231, 213, 199),  # light tan
+    "tag_bg": (255, 237, 213),  # peach
+    "tag_text": (154, 52, 18),  # rust
+    "white": (255, 255, 255),
 }
 
 
@@ -111,7 +115,9 @@ def generate_recipe_card(recipe: dict) -> str:
     ty = 82
     for tag in tags[:4]:
         tw = len(tag) * 7 + 12
-        draw.rounded_rectangle([(tx, ty), (tx + tw, ty + 18)], radius=9, fill=COLOURS["accent"])
+        draw.rounded_rectangle(
+            [(tx, ty), (tx + tw, ty + 18)], radius=9, fill=COLOURS["accent"]
+        )
         draw.text((tx + 6, ty + 2), tag, font=_font_reg(10), fill=COLOURS["white"])
         tx += tw + 8
 
@@ -128,8 +134,12 @@ def generate_recipe_card(recipe: dict) -> str:
     kw = W // len(kpis)
     for i, (lbl, val) in enumerate(kpis):
         x = i * kw + kw // 2
-        draw.text((x, y + 8), lbl, font=_font_reg(10), fill=COLOURS["text_mid"], anchor="mm")
-        draw.text((x, y + 28), val, font=_font(13), fill=COLOURS["tag_text"], anchor="mm")
+        draw.text(
+            (x, y + 8), lbl, font=_font_reg(10), fill=COLOURS["text_mid"], anchor="mm"
+        )
+        draw.text(
+            (x, y + 28), val, font=_font(13), fill=COLOURS["tag_text"], anchor="mm"
+        )
 
     # ── Section: Description ─────────────────────────────────────────────────
     y = 188
@@ -169,13 +179,35 @@ def generate_recipe_card(recipe: dict) -> str:
     for i, ing in enumerate(recipe["ingredients"]):
         row_bg = COLOURS["card_bg"] if i % 2 == 0 else COLOURS["divider"]
         draw.rectangle([(16, y - 2), (W - 16, y + row_h - 4)], fill=row_bg)
-        draw.text((20, y), ing["ingredient_name"][:28], font=_font_reg(11), fill=COLOURS["text_dark"])
-        draw.text((310, y), f"{ing['required_quantity']:.2f}", font=_font_reg(11), fill=COLOURS["text_mid"])
-        draw.text((400, y), f"{ing['cost']:.2f}", font=_font_reg(11), fill=COLOURS["text_mid"])
-        draw.text((500, y), f"{ing['yield_amount'] * 100:.0f}%", font=_font_reg(11), fill=COLOURS["text_mid"])
+        draw.text(
+            (20, y),
+            ing["ingredient_name"][:28],
+            font=_font_reg(11),
+            fill=COLOURS["text_dark"],
+        )
+        draw.text(
+            (310, y),
+            f"{ing['required_quantity']:.2f}",
+            font=_font_reg(11),
+            fill=COLOURS["text_mid"],
+        )
+        draw.text(
+            (400, y), f"{ing['cost']:.2f}", font=_font_reg(11), fill=COLOURS["text_mid"]
+        )
+        draw.text(
+            (500, y),
+            f"{ing['yield_amount'] * 100:.0f}%",
+            font=_font_reg(11),
+            fill=COLOURS["text_mid"],
+        )
         y += row_h
         if y > 690:
-            draw.text((20, y), f"  ... +{len(recipe['ingredients']) - i - 1} more", font=_font_reg(10), fill=COLOURS["text_light"])
+            draw.text(
+                (20, y),
+                f"  ... +{len(recipe['ingredients']) - i - 1} more",
+                font=_font_reg(10),
+                fill=COLOURS["text_light"],
+            )
             y += 16
             break
 
@@ -196,8 +228,18 @@ def generate_recipe_card(recipe: dict) -> str:
 
     # ── Footer ────────────────────────────────────────────────────────────────
     draw.rectangle([(0, H - 40), (W, H)], fill=COLOURS["header_bg"])
-    draw.text((20, H - 26), "BakeManage ERP  •  Bakery Operations Platform  •  2026", font=_font_reg(10), fill=COLOURS["accent"])
-    draw.text((W - 140, H - 26), f"v1.5 | {datetime.now().strftime('%d %b %Y')}", font=_font_reg(10), fill=COLOURS["text_light"])
+    draw.text(
+        (20, H - 26),
+        "BakeManage ERP  •  Bakery Operations Platform  •  2026",
+        font=_font_reg(10),
+        fill=COLOURS["accent"],
+    )
+    draw.text(
+        (W - 140, H - 26),
+        f"v1.5 | {datetime.now().strftime('%d %b %Y')}",
+        font=_font_reg(10),
+        fill=COLOURS["text_light"],
+    )
 
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=88)
@@ -212,10 +254,10 @@ def generate_video_thumbnail(title: str, category: str, duration: str) -> str:
 
     W, H = 400, 225
     cat_colours = {
-        "recipe":   (120, 53, 15),
+        "recipe": (120, 53, 15),
         "training": (15, 80, 120),
-        "quality":  (15, 120, 60),
-        "vendor":   (80, 15, 120),
+        "quality": (15, 120, 60),
+        "vendor": (80, 15, 120),
     }
     bg = cat_colours.get(category, (80, 80, 80))
     img = Image.new("RGB", (W, H), bg)
@@ -235,13 +277,23 @@ def generate_video_thumbnail(title: str, category: str, duration: str) -> str:
     words = title.split()
     line1 = " ".join(words[:4])
     line2 = " ".join(words[4:]) if len(words) > 4 else ""
-    draw.text((W // 2, H - 48), line1, font=_font(14), fill=COLOURS["white"], anchor="mm")
+    draw.text(
+        (W // 2, H - 48), line1, font=_font(14), fill=COLOURS["white"], anchor="mm"
+    )
     if line2:
-        draw.text((W // 2, H - 28), line2, font=_font_reg(12), fill=COLOURS["accent"], anchor="mm")
+        draw.text(
+            (W // 2, H - 28),
+            line2,
+            font=_font_reg(12),
+            fill=COLOURS["accent"],
+            anchor="mm",
+        )
 
     # Duration badge
     draw.rounded_rectangle([(W - 60, H - 22), (W - 4, H - 4)], radius=4, fill=(0, 0, 0))
-    draw.text((W - 32, H - 13), duration, font=_font(10), fill=COLOURS["white"], anchor="mm")
+    draw.text(
+        (W - 32, H - 13), duration, font=_font(10), fill=COLOURS["white"], anchor="mm"
+    )
 
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=85)
@@ -268,8 +320,8 @@ RECIPES = [
             {"name": "Bread Flour (High Gluten)", "qty": 0.400, "yield": 0.95},
             {"name": "Chakki Atta (Whole Wheat)", "qty": 0.100, "yield": 0.95},
             {"name": "Salt (Tata Iodised)", "qty": 0.010, "yield": 1.0},
-            {"name": "Fresh Yeast (Instant)",   "qty": 0.005, "yield": 1.0},
-            {"name": "Bread Packaging Bags (Small)", "qty": 2,    "yield": 1.0},
+            {"name": "Fresh Yeast (Instant)", "qty": 0.005, "yield": 1.0},
+            {"name": "Bread Packaging Bags (Small)", "qty": 2, "yield": 1.0},
         ],
     },
     {
@@ -286,13 +338,13 @@ RECIPES = [
             "Egg wash twice. Bake 190°C fan for 18–20 min until deep golden",
         ],
         "ingredients": [
-            {"name": "Maida (Refined Flour)",      "qty": 0.500, "yield": 0.92},
-            {"name": "Amul Butter (Unsalted)",     "qty": 0.310, "yield": 1.0},
-            {"name": "Refined Sugar",              "qty": 0.060, "yield": 1.0},
-            {"name": "Salt (Tata Iodised)",        "qty": 0.010, "yield": 1.0},
-            {"name": "Fresh Yeast (Instant)",      "qty": 0.015, "yield": 1.0},
-            {"name": "Full Cream Milk (Amul)",     "qty": 0.280, "yield": 1.0},
-            {"name": "Pastry Boxes (Assorted)",    "qty": 2,     "yield": 1.0},
+            {"name": "Maida (Refined Flour)", "qty": 0.500, "yield": 0.92},
+            {"name": "Amul Butter (Unsalted)", "qty": 0.310, "yield": 1.0},
+            {"name": "Refined Sugar", "qty": 0.060, "yield": 1.0},
+            {"name": "Salt (Tata Iodised)", "qty": 0.010, "yield": 1.0},
+            {"name": "Fresh Yeast (Instant)", "qty": 0.015, "yield": 1.0},
+            {"name": "Full Cream Milk (Amul)", "qty": 0.280, "yield": 1.0},
+            {"name": "Pastry Boxes (Assorted)", "qty": 2, "yield": 1.0},
         ],
     },
     {
@@ -309,17 +361,17 @@ RECIPES = [
             "Melt Dark Chocolate Chips with Fresh Cream for ganache. Frost and decorate with Almond Flakes",
         ],
         "ingredients": [
-            {"name": "Maida (Refined Flour)",      "qty": 0.200, "yield": 0.95},
-            {"name": "Cocoa Powder (Morde)",       "qty": 0.050, "yield": 1.0},
-            {"name": "Dark Chocolate Chips",       "qty": 0.150, "yield": 1.0},
-            {"name": "Refined Sugar",              "qty": 0.180, "yield": 1.0},
-            {"name": "Baking Soda",                "qty": 0.005, "yield": 1.0},
-            {"name": "Baking Powder (Weikfield)",  "qty": 0.008, "yield": 1.0},
-            {"name": "Fresh Cream (Amul)",         "qty": 0.200, "yield": 1.0},
-            {"name": "Vanilla Extract",            "qty": 0.010, "yield": 1.0},
-            {"name": "Almond Flakes",              "qty": 0.030, "yield": 1.0},
-            {"name": "Sunflower Oil",              "qty": 0.080, "yield": 1.0},
-            {"name": "Cake Boxes (6-inch)",        "qty": 1,     "yield": 1.0},
+            {"name": "Maida (Refined Flour)", "qty": 0.200, "yield": 0.95},
+            {"name": "Cocoa Powder (Morde)", "qty": 0.050, "yield": 1.0},
+            {"name": "Dark Chocolate Chips", "qty": 0.150, "yield": 1.0},
+            {"name": "Refined Sugar", "qty": 0.180, "yield": 1.0},
+            {"name": "Baking Soda", "qty": 0.005, "yield": 1.0},
+            {"name": "Baking Powder (Weikfield)", "qty": 0.008, "yield": 1.0},
+            {"name": "Fresh Cream (Amul)", "qty": 0.200, "yield": 1.0},
+            {"name": "Vanilla Extract", "qty": 0.010, "yield": 1.0},
+            {"name": "Almond Flakes", "qty": 0.030, "yield": 1.0},
+            {"name": "Sunflower Oil", "qty": 0.080, "yield": 1.0},
+            {"name": "Cake Boxes (6-inch)", "qty": 1, "yield": 1.0},
         ],
     },
     {
@@ -338,13 +390,13 @@ RECIPES = [
         "ingredients": [
             {"name": "Chakki Atta (Whole Wheat)", "qty": 0.360, "yield": 0.95},
             {"name": "Bread Flour (High Gluten)", "qty": 0.140, "yield": 0.95},
-            {"name": "Semolina (Sooji)",          "qty": 0.050, "yield": 1.0},
-            {"name": "Sesame Seeds",              "qty": 0.020, "yield": 1.0},
-            {"name": "Poppy Seeds",               "qty": 0.015, "yield": 1.0},
-            {"name": "Salt (Tata Iodised)",       "qty": 0.010, "yield": 1.0},
-            {"name": "Dry Active Yeast",          "qty": 0.008, "yield": 1.0},
-            {"name": "Sunflower Oil",             "qty": 0.020, "yield": 1.0},
-            {"name": "Bread Packaging Bags (Small)", "qty": 2,  "yield": 1.0},
+            {"name": "Semolina (Sooji)", "qty": 0.050, "yield": 1.0},
+            {"name": "Sesame Seeds", "qty": 0.020, "yield": 1.0},
+            {"name": "Poppy Seeds", "qty": 0.015, "yield": 1.0},
+            {"name": "Salt (Tata Iodised)", "qty": 0.010, "yield": 1.0},
+            {"name": "Dry Active Yeast", "qty": 0.008, "yield": 1.0},
+            {"name": "Sunflower Oil", "qty": 0.020, "yield": 1.0},
+            {"name": "Bread Packaging Bags (Small)", "qty": 2, "yield": 1.0},
         ],
     },
     {
@@ -361,13 +413,13 @@ RECIPES = [
             "Bake 160°C for 18 min until lightly golden. Cool completely before packaging",
         ],
         "ingredients": [
-            {"name": "Maida (Refined Flour)",     "qty": 0.200, "yield": 0.95},
-            {"name": "Semolina (Sooji)",          "qty": 0.050, "yield": 1.0},
-            {"name": "Vegetable Shortening",      "qty": 0.120, "yield": 1.0},
-            {"name": "Powdered Icing Sugar",      "qty": 0.080, "yield": 1.0},
-            {"name": "Cardamom Powder",           "qty": 0.003, "yield": 1.0},
-            {"name": "Vanilla Extract",           "qty": 0.005, "yield": 1.0},
-            {"name": "Almond Flakes",             "qty": 0.020, "yield": 1.0},
+            {"name": "Maida (Refined Flour)", "qty": 0.200, "yield": 0.95},
+            {"name": "Semolina (Sooji)", "qty": 0.050, "yield": 1.0},
+            {"name": "Vegetable Shortening", "qty": 0.120, "yield": 1.0},
+            {"name": "Powdered Icing Sugar", "qty": 0.080, "yield": 1.0},
+            {"name": "Cardamom Powder", "qty": 0.003, "yield": 1.0},
+            {"name": "Vanilla Extract", "qty": 0.005, "yield": 1.0},
+            {"name": "Almond Flakes", "qty": 0.020, "yield": 1.0},
         ],
     },
     {
@@ -384,15 +436,15 @@ RECIPES = [
             "Roll tight, slice 3cm discs, proof 2 hrs. Bake 185°C, 16 min. Glaze warm",
         ],
         "ingredients": [
-            {"name": "Maida (Refined Flour)",     "qty": 0.450, "yield": 0.92},
-            {"name": "Amul Butter (Unsalted)",    "qty": 0.250, "yield": 1.0},
-            {"name": "Refined Sugar",             "qty": 0.070, "yield": 1.0},
-            {"name": "Full Cream Milk (Amul)",    "qty": 0.150, "yield": 1.0},
-            {"name": "Fresh Yeast (Instant)",     "qty": 0.012, "yield": 1.0},
-            {"name": "Raisins (Golden)",          "qty": 0.080, "yield": 1.0},
-            {"name": "Dark Chocolate Chips",      "qty": 0.060, "yield": 1.0},
-            {"name": "Vanilla Extract",           "qty": 0.008, "yield": 1.0},
-            {"name": "Pastry Boxes (Assorted)",   "qty": 2,     "yield": 1.0},
+            {"name": "Maida (Refined Flour)", "qty": 0.450, "yield": 0.92},
+            {"name": "Amul Butter (Unsalted)", "qty": 0.250, "yield": 1.0},
+            {"name": "Refined Sugar", "qty": 0.070, "yield": 1.0},
+            {"name": "Full Cream Milk (Amul)", "qty": 0.150, "yield": 1.0},
+            {"name": "Fresh Yeast (Instant)", "qty": 0.012, "yield": 1.0},
+            {"name": "Raisins (Golden)", "qty": 0.080, "yield": 1.0},
+            {"name": "Dark Chocolate Chips", "qty": 0.060, "yield": 1.0},
+            {"name": "Vanilla Extract", "qty": 0.008, "yield": 1.0},
+            {"name": "Pastry Boxes (Assorted)", "qty": 2, "yield": 1.0},
         ],
     },
     {
@@ -410,10 +462,10 @@ RECIPES = [
         ],
         "ingredients": [
             {"name": "Bread Flour (High Gluten)", "qty": 0.500, "yield": 0.95},
-            {"name": "Salt (Tata Iodised)",       "qty": 0.012, "yield": 1.0},
-            {"name": "Dry Active Yeast",          "qty": 0.006, "yield": 1.0},
-            {"name": "Sunflower Oil",             "qty": 0.060, "yield": 1.0},
-            {"name": "Sesame Seeds",              "qty": 0.015, "yield": 1.0},
+            {"name": "Salt (Tata Iodised)", "qty": 0.012, "yield": 1.0},
+            {"name": "Dry Active Yeast", "qty": 0.006, "yield": 1.0},
+            {"name": "Sunflower Oil", "qty": 0.060, "yield": 1.0},
+            {"name": "Sesame Seeds", "qty": 0.015, "yield": 1.0},
             {"name": "Bread Packaging Bags (Small)", "qty": 3, "yield": 1.0},
         ],
     },
@@ -431,11 +483,11 @@ RECIPES = [
             "Fill greased financier moulds 3/4 full. Bake 200°C for 12 min until risen and golden",
         ],
         "ingredients": [
-            {"name": "Amul Butter (Salted)",      "qty": 0.120, "yield": 1.0},
-            {"name": "Maida (Refined Flour)",     "qty": 0.080, "yield": 0.95},
-            {"name": "Powdered Icing Sugar",      "qty": 0.160, "yield": 1.0},
-            {"name": "Almond Flakes",             "qty": 0.100, "yield": 1.0},
-            {"name": "Vanilla Extract",           "qty": 0.005, "yield": 1.0},
+            {"name": "Amul Butter (Salted)", "qty": 0.120, "yield": 1.0},
+            {"name": "Maida (Refined Flour)", "qty": 0.080, "yield": 0.95},
+            {"name": "Powdered Icing Sugar", "qty": 0.160, "yield": 1.0},
+            {"name": "Almond Flakes", "qty": 0.100, "yield": 1.0},
+            {"name": "Vanilla Extract", "qty": 0.005, "yield": 1.0},
         ],
     },
     {
@@ -452,15 +504,15 @@ RECIPES = [
             "Pour hot sugar syrup with Cardamom Powder over. Cool 30 min before serving",
         ],
         "ingredients": [
-            {"name": "Semolina (Sooji)",          "qty": 0.300, "yield": 1.0},
-            {"name": "Refined Sugar",             "qty": 0.150, "yield": 1.0},
-            {"name": "Milk Powder",               "qty": 0.050, "yield": 1.0},
+            {"name": "Semolina (Sooji)", "qty": 0.300, "yield": 1.0},
+            {"name": "Refined Sugar", "qty": 0.150, "yield": 1.0},
+            {"name": "Milk Powder", "qty": 0.050, "yield": 1.0},
             {"name": "Baking Powder (Weikfield)", "qty": 0.008, "yield": 1.0},
-            {"name": "Sunflower Oil",             "qty": 0.060, "yield": 1.0},
-            {"name": "Full Cream Milk (Amul)",    "qty": 0.120, "yield": 1.0},
-            {"name": "Almond Flakes",             "qty": 0.040, "yield": 1.0},
-            {"name": "Cardamom Powder",           "qty": 0.003, "yield": 1.0},
-            {"name": "Pastry Boxes (Assorted)",   "qty": 1,     "yield": 1.0},
+            {"name": "Sunflower Oil", "qty": 0.060, "yield": 1.0},
+            {"name": "Full Cream Milk (Amul)", "qty": 0.120, "yield": 1.0},
+            {"name": "Almond Flakes", "qty": 0.040, "yield": 1.0},
+            {"name": "Cardamom Powder", "qty": 0.003, "yield": 1.0},
+            {"name": "Pastry Boxes (Assorted)", "qty": 1, "yield": 1.0},
         ],
     },
     {
@@ -478,11 +530,11 @@ RECIPES = [
         ],
         "ingredients": [
             {"name": "Chakki Atta (Whole Wheat)", "qty": 0.200, "yield": 0.95},
-            {"name": "Maida (Refined Flour)",     "qty": 0.100, "yield": 0.95},
-            {"name": "Sesame Seeds",              "qty": 0.040, "yield": 1.0},
-            {"name": "Salt (Tata Iodised)",       "qty": 0.008, "yield": 1.0},
-            {"name": "Baking Soda",               "qty": 0.003, "yield": 1.0},
-            {"name": "Sunflower Oil",             "qty": 0.030, "yield": 1.0},
+            {"name": "Maida (Refined Flour)", "qty": 0.100, "yield": 0.95},
+            {"name": "Sesame Seeds", "qty": 0.040, "yield": 1.0},
+            {"name": "Salt (Tata Iodised)", "qty": 0.008, "yield": 1.0},
+            {"name": "Baking Soda", "qty": 0.003, "yield": 1.0},
+            {"name": "Sunflower Oil", "qty": 0.030, "yield": 1.0},
         ],
     },
     {
@@ -499,14 +551,14 @@ RECIPES = [
             "Bake 165°C for 22 min. Centre should wobble slightly. Cool 1 hr before cutting",
         ],
         "ingredients": [
-            {"name": "Dark Chocolate Chips",      "qty": 0.200, "yield": 1.0},
-            {"name": "Amul Butter (Salted)",      "qty": 0.100, "yield": 1.0},
-            {"name": "Refined Sugar",             "qty": 0.140, "yield": 1.0},
-            {"name": "Brown Sugar",               "qty": 0.060, "yield": 1.0},
-            {"name": "Cocoa Powder (Morde)",      "qty": 0.030, "yield": 1.0},
-            {"name": "Maida (Refined Flour)",     "qty": 0.060, "yield": 0.95},
-            {"name": "Vanilla Extract",           "qty": 0.008, "yield": 1.0},
-            {"name": "Cake Boxes (6-inch)",       "qty": 1,     "yield": 1.0},
+            {"name": "Dark Chocolate Chips", "qty": 0.200, "yield": 1.0},
+            {"name": "Amul Butter (Salted)", "qty": 0.100, "yield": 1.0},
+            {"name": "Refined Sugar", "qty": 0.140, "yield": 1.0},
+            {"name": "Brown Sugar", "qty": 0.060, "yield": 1.0},
+            {"name": "Cocoa Powder (Morde)", "qty": 0.030, "yield": 1.0},
+            {"name": "Maida (Refined Flour)", "qty": 0.060, "yield": 0.95},
+            {"name": "Vanilla Extract", "qty": 0.008, "yield": 1.0},
+            {"name": "Cake Boxes (6-inch)", "qty": 1, "yield": 1.0},
         ],
     },
     {
@@ -524,14 +576,14 @@ RECIPES = [
         ],
         "ingredients": [
             {"name": "Bread Flour (High Gluten)", "qty": 0.450, "yield": 0.95},
-            {"name": "Milk Powder",               "qty": 0.030, "yield": 1.0},
-            {"name": "Refined Sugar",             "qty": 0.040, "yield": 1.0},
-            {"name": "Brown Sugar",               "qty": 0.060, "yield": 1.0},
-            {"name": "Amul Butter (Unsalted)",    "qty": 0.050, "yield": 1.0},
-            {"name": "Fresh Yeast (Instant)",     "qty": 0.010, "yield": 1.0},
-            {"name": "Raisins (Golden)",          "qty": 0.100, "yield": 1.0},
-            {"name": "Salt (Tata Iodised)",       "qty": 0.009, "yield": 1.0},
-            {"name": "Full Cream Milk (Amul)",    "qty": 0.250, "yield": 1.0},
+            {"name": "Milk Powder", "qty": 0.030, "yield": 1.0},
+            {"name": "Refined Sugar", "qty": 0.040, "yield": 1.0},
+            {"name": "Brown Sugar", "qty": 0.060, "yield": 1.0},
+            {"name": "Amul Butter (Unsalted)", "qty": 0.050, "yield": 1.0},
+            {"name": "Fresh Yeast (Instant)", "qty": 0.010, "yield": 1.0},
+            {"name": "Raisins (Golden)", "qty": 0.100, "yield": 1.0},
+            {"name": "Salt (Tata Iodised)", "qty": 0.009, "yield": 1.0},
+            {"name": "Full Cream Milk (Amul)", "qty": 0.250, "yield": 1.0},
             {"name": "Bread Packaging Bags (Small)", "qty": 2, "yield": 1.0},
         ],
     },
@@ -549,12 +601,12 @@ RECIPES = [
             "Brush with milk. Bake 190°C, 16 min. Brush immediately with Amul Butter while hot",
         ],
         "ingredients": [
-            {"name": "Maida (Refined Flour)",     "qty": 0.500, "yield": 0.95},
-            {"name": "Amul Butter (Salted)",      "qty": 0.040, "yield": 1.0},
-            {"name": "Refined Sugar",             "qty": 0.025, "yield": 1.0},
-            {"name": "Salt (Tata Iodised)",       "qty": 0.008, "yield": 1.0},
-            {"name": "Fresh Yeast (Instant)",     "qty": 0.015, "yield": 1.0},
-            {"name": "Full Cream Milk (Amul)",    "qty": 0.280, "yield": 1.0},
+            {"name": "Maida (Refined Flour)", "qty": 0.500, "yield": 0.95},
+            {"name": "Amul Butter (Salted)", "qty": 0.040, "yield": 1.0},
+            {"name": "Refined Sugar", "qty": 0.025, "yield": 1.0},
+            {"name": "Salt (Tata Iodised)", "qty": 0.008, "yield": 1.0},
+            {"name": "Fresh Yeast (Instant)", "qty": 0.015, "yield": 1.0},
+            {"name": "Full Cream Milk (Amul)", "qty": 0.280, "yield": 1.0},
         ],
     },
 ]
@@ -659,7 +711,9 @@ VIDEO_ASSETS = [
 def get_inventory_price_map(session: Session) -> dict[str, float]:
     """Build a {name: unit_price} map from inventory. Uses highest-quality price."""
     rows = session.execute(
-        text("SELECT name, MIN(unit_price) as unit_price FROM inventory_items GROUP BY name")
+        text(
+            "SELECT name, MIN(unit_price) as unit_price FROM inventory_items GROUP BY name"
+        )
     ).fetchall()
     return {r[0]: float(r[1]) for r in rows}
 
@@ -672,8 +726,7 @@ def seed_recipes(session: Session) -> dict[int, dict]:
     for r_def in RECIPES:
         # Skip if already exists
         existing = session.execute(
-            text("SELECT id FROM recipes WHERE name = :name"),
-            {"name": r_def["name"]}
+            text("SELECT id FROM recipes WHERE name = :name"), {"name": r_def["name"]}
         ).fetchone()
         if existing:
             print(f"  SKIP (exists): {r_def['name']}")
@@ -687,12 +740,14 @@ def seed_recipes(session: Session) -> dict[int, dict]:
             base_price = price_map.get(ing["name"], 50.0)  # fallback ₹50/unit
             cost = round(base_price * ing["qty"] / ing["yield"], 2)
             total_ingredient_cost += cost
-            ingredients_with_cost.append({
-                "ingredient_name": ing["name"],
-                "required_quantity": ing["qty"],
-                "cost": cost,
-                "yield_amount": ing["yield"],
-            })
+            ingredients_with_cost.append(
+                {
+                    "ingredient_name": ing["name"],
+                    "required_quantity": ing["qty"],
+                    "cost": cost,
+                    "yield_amount": ing["yield"],
+                }
+            )
 
         total_cost = round(total_ingredient_cost + r_def["overhead_cost"], 2)
 
@@ -719,7 +774,9 @@ def seed_recipes(session: Session) -> dict[int, dict]:
         r_def["_id"] = recipe.id
         r_def["total_cost"] = total_cost
         recipe_id_map[recipe.id] = r_def
-        print(f"  ✓ Recipe: {r_def['name']} (id={recipe.id}, cost=Rs.{total_cost:.0f}, yield={r_def['yield_amount']})")
+        print(
+            f"  ✓ Recipe: {r_def['name']} (id={recipe.id}, cost=Rs.{total_cost:.0f}, yield={r_def['yield_amount']})"
+        )
 
     return recipe_id_map
 
@@ -738,18 +795,25 @@ def seed_media(session: Session, recipe_id_map: dict[int, dict]) -> None:
         # Check if asset exists
         existing = session.execute(
             text("SELECT id FROM media_assets WHERE title = :t"),
-            {"t": f"Recipe Card: {r_def['name']}"}
+            {"t": f"Recipe Card: {r_def['name']}"},
         ).fetchone()
         if existing:
             print(f"  SKIP media (exists): Recipe Card: {r_def['name']}")
             continue
 
         r_def.setdefault("total_cost", 0)
-        r_def.setdefault("sell_price", r_def.get("sell_price", r_def["total_cost"] * 1.5))
-        r_def.setdefault("margin_pct", round(
-            (r_def["sell_price"] - r_def["total_cost"]) / r_def["sell_price"] * 100
-            if r_def["sell_price"] > 0 else 0, 1
-        ))
+        r_def.setdefault(
+            "sell_price", r_def.get("sell_price", r_def["total_cost"] * 1.5)
+        )
+        r_def.setdefault(
+            "margin_pct",
+            round(
+                (r_def["sell_price"] - r_def["total_cost"]) / r_def["sell_price"] * 100
+                if r_def["sell_price"] > 0
+                else 0,
+                1,
+            ),
+        )
 
         # Rebuild ingredients list for card rendering
         price_map = get_inventory_price_map(session)
@@ -758,16 +822,20 @@ def seed_media(session: Session, recipe_id_map: dict[int, dict]) -> None:
         for ing in r_def.get("ingredients", []):
             base_price = price_map.get(ing["name"], 50.0)
             cost = round(base_price * ing["qty"] / ing["yield"], 2)
-            r_def_render["ingredients"].append({
-                "ingredient_name": ing["name"],
-                "required_quantity": ing["qty"],
-                "cost": cost,
-                "yield_amount": ing["yield"],
-            })
+            r_def_render["ingredients"].append(
+                {
+                    "ingredient_name": ing["name"],
+                    "required_quantity": ing["qty"],
+                    "cost": cost,
+                    "yield_amount": ing["yield"],
+                }
+            )
 
         thumb = generate_recipe_card(r_def_render)
         tags_list = r_def.get("tags", [])
-        fsize = len(thumb) * 3 // 4 // 1024 if thumb else 0  # rough base64 → bytes estimate
+        fsize = (
+            len(thumb) * 3 // 4 // 1024 if thumb else 0
+        )  # rough base64 → bytes estimate
 
         asset = MediaAsset(
             title=f"Recipe Card: {r_def['name']}",
@@ -788,15 +856,16 @@ def seed_media(session: Session, recipe_id_map: dict[int, dict]) -> None:
     # ── Video assets ─────────────────────────────────────────────────────────
     for v in VIDEO_ASSETS:
         existing = session.execute(
-            text("SELECT id FROM media_assets WHERE title = :t"),
-            {"t": v["title"]}
+            text("SELECT id FROM media_assets WHERE title = :t"), {"t": v["title"]}
         ).fetchone()
         if existing:
             print(f"  SKIP video (exists): {v['title'][:40]}")
             continue
 
         rid = name_to_id.get(v["recipe_name"]) if v["recipe_name"] else None
-        thumb = generate_video_thumbnail(v["title"], v["category"], _fmt_duration(v["duration_seconds"]))
+        thumb = generate_video_thumbnail(
+            v["title"], v["category"], _fmt_duration(v["duration_seconds"])
+        )
 
         asset = MediaAsset(
             title=v["title"],

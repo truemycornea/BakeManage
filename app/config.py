@@ -20,13 +20,16 @@ class Settings(BaseModel):
             "postgresql+psycopg2://postgres:postgres@localhost:5432/bakemanage",
         )
     )
-    celery_broker_url: str = Field(default=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"))
+    celery_broker_url: str = Field(
+        default=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+    )
     celery_result_backend: str = Field(
         default=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
     )
     environment: str = Field(default=os.getenv("ENVIRONMENT", "development"))
     enforce_https: bool = Field(
-        default=os.getenv("ENFORCE_HTTPS", "true").strip().lower() not in ("false", "0", "no")
+        default=os.getenv("ENFORCE_HTTPS", "true").strip().lower()
+        not in ("false", "0", "no")
     )
     cache_ttl_seconds: int = Field(default=300)
     cache_namespace: str = Field(default="bakemanage")
@@ -53,15 +56,24 @@ class Settings(BaseModel):
     redis_url: str = Field(default=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     jwt_secret: str = Field(default=os.getenv("JWT_SECRET", "change-this-secret"))
     jwt_expiry_minutes: int = Field(default=int(os.getenv("JWT_EXPIRY_MINUTES", "60")))
-    default_admin_username: str = Field(default=os.getenv("DEFAULT_ADMIN_USERNAME") or "admin")
-    default_admin_pin: str | None = Field(default=os.getenv("DEFAULT_ADMIN_PIN") or None)
+    default_admin_username: str = Field(
+        default=os.getenv("DEFAULT_ADMIN_USERNAME") or "admin"
+    )
+    default_admin_pin: str | None = Field(
+        default=os.getenv("DEFAULT_ADMIN_PIN") or None
+    )
     seed_local_users: bool = Field(
-        default=os.getenv("SEED_LOCAL_USERS", "false").strip().lower() in ("true", "1", "yes")
+        default=os.getenv("SEED_LOCAL_USERS", "false").strip().lower()
+        in ("true", "1", "yes")
     )
     # fernet_key is derived from jwt_secret when not explicitly set; see model_validator below
     fernet_key: str = Field(default=os.getenv("FERNET_KEY", ""))
-    gemini_api_key: str = Field(default=os.getenv("GEMINI_API_KEY", os.getenv("GAIS_BM_APIK", "")))
-    gemini_model: str = Field(default=os.getenv("GEMINI_MODEL", "gemini-3-flash-preview"))
+    gemini_api_key: str = Field(
+        default=os.getenv("GEMINI_API_KEY", os.getenv("GAIS_BM_APIK", ""))
+    )
+    gemini_model: str = Field(
+        default=os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+    )
 
     @model_validator(mode="after")
     def _post_validate(self) -> "Settings":

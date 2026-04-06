@@ -7,9 +7,11 @@ Integration tests for all v3 BakeManage features:
   - Feature 14: Employee Performance Analytics (/employees, /employees/{id}/shift, leaderboard)
   - Feature 15: QR-Based Table Ordering (/tables, menu, order, kitchen display)
 """
+
 from __future__ import annotations
 
 import os
+import time as _time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,11 +33,10 @@ from app.main import app  # noqa: E402
 
 _PIN = os.environ["BOOTSTRAP_PIN"]
 OWNER = {"X-Client-Role": "owner", "X-Client-PIN": _PIN}
-OPS   = {"X-Client-Role": "operations", "X-Client-PIN": _PIN}
+OPS = {"X-Client-Role": "operations", "X-Client-PIN": _PIN}
 
 # ---------- unique run ID so tests never collide across runs ----------
-import time as _time
-_RUN = str(int(_time.time()))[-6:]   # last 6 digits of epoch, e.g. "123456"
+_RUN = str(int(_time.time()))[-6:]  # last 6 digits of epoch, e.g. "123456"
 
 
 @pytest.fixture(scope="module")
@@ -47,6 +48,7 @@ def client():
 # ===========================================================================
 # Feature 4 — Batch Traceability
 # ===========================================================================
+
 
 class TestBatchTraceability:
     """Tests for POST/GET /batches and traceability endpoints."""
@@ -86,7 +88,7 @@ class TestBatchTraceability:
 
     def test_duplicate_batch_number_is_409(self, client: TestClient) -> None:
         payload = {
-            "batch_number": f"BTH-TEST-{_RUN}",   # same as above — must conflict
+            "batch_number": f"BTH-TEST-{_RUN}",  # same as above — must conflict
             "product_name": "Different Product",
             "quantity_produced": 10.0,
             "ingredients": [],
@@ -112,7 +114,9 @@ class TestBatchTraceability:
         # Get the batch id first
         r = client.get("/batches", headers=OWNER)
         batch_id = next(
-            b["id"] for b in r.json()["batches"] if b["batch_number"] == f"BTH-TEST-{_RUN}"
+            b["id"]
+            for b in r.json()["batches"]
+            if b["batch_number"] == f"BTH-TEST-{_RUN}"
         )
         r = client.get(f"/batches/{batch_id}/trace", headers=OWNER)
         assert r.status_code == 200
@@ -131,7 +135,9 @@ class TestBatchTraceability:
     def test_update_batch_status_to_dispatched(self, client: TestClient) -> None:
         r = client.get("/batches", headers=OWNER)
         batch_id = next(
-            b["id"] for b in r.json()["batches"] if b["batch_number"] == f"BTH-TEST-{_RUN}"
+            b["id"]
+            for b in r.json()["batches"]
+            if b["batch_number"] == f"BTH-TEST-{_RUN}"
         )
         r = client.patch(f"/batches/{batch_id}/status?status=dispatched", headers=OWNER)
         assert r.status_code == 200
@@ -159,11 +165,13 @@ class TestBatchTraceability:
 # Feature 5 Enhancement — GSTR-1 / GSTR-3B
 # ===========================================================================
 
+
 class TestGSTR:
     """Tests for GST reconciliation endpoints."""
 
     def test_create_gstr1_entry_b2c(self, client: TestClient) -> None:
         from datetime import date
+
         yr = date.today().year
         mo = date.today().month
         payload = {
@@ -189,6 +197,7 @@ class TestGSTR:
 
     def test_create_gstr1_entry_export(self, client: TestClient) -> None:
         from datetime import date
+
         yr = date.today().year
         mo = date.today().month
         payload = {
@@ -206,10 +215,11 @@ class TestGSTR:
         data = r.json()
         assert data["cgst"] == 0.0
         assert data["sgst"] == 0.0
-        assert abs(data["igst"] - 250.0) < 0.01   # 5% as IGST
+        assert abs(data["igst"] - 250.0) < 0.01  # 5% as IGST
 
     def test_invalid_gst_rate_is_422(self, client: TestClient) -> None:
         from datetime import date
+
         yr = date.today().year
         mo = date.today().month
         payload = {
@@ -218,7 +228,7 @@ class TestGSTR:
             "period_month": mo,
             "period_year": yr,
             "taxable_value": 100.0,
-            "gst_rate_pct": 7,    # invalid slab
+            "gst_rate_pct": 7,  # invalid slab
             "supply_type": "B2C",
         }
         r = client.post("/gst/gstr1/entry", json=payload, headers=OWNER)
@@ -226,12 +236,14 @@ class TestGSTR:
 
     def test_gstr1_report_lists_entries(self, client: TestClient) -> None:
         from datetime import date
+
         yr = date.today().year
         mo = date.today().month
         r = client.get(f"/gst/gstr1?month={mo}&year={yr}", headers=OWNER)
         assert r.status_code == 200
         data = r.json()
         from datetime import date
+
         assert data["period"] == f"{date.today().year}-{date.today().month:02d}"
         assert data["total_invoices"] >= 2
         assert "summary_inr" in data
@@ -239,6 +251,7 @@ class TestGSTR:
 
     def test_gstr3b_returns_consolidated_summary(self, client: TestClient) -> None:
         from datetime import date
+
         yr = date.today().year
         mo = date.today().month
         r = client.get(f"/gst/gstr3b?month={mo}&year={yr}", headers=OWNER)
@@ -251,6 +264,7 @@ class TestGSTR:
 
     def test_gst_reconcile_returns_gap(self, client: TestClient) -> None:
         from datetime import date
+
         yr = date.today().year
         mo = date.today().month
         r = client.get(f"/gst/reconcile?month={mo}&year={yr}", headers=OWNER)
@@ -269,6 +283,7 @@ class TestGSTR:
 # ===========================================================================
 # Feature 9 — Offline Sync Queue
 # ===========================================================================
+
 
 class TestSyncQueue:
     """Tests for /sync/queue and /sync/flush."""
@@ -296,7 +311,12 @@ class TestSyncQueue:
             "client_id": "pos-002",
             "operation": "create",
             "resource": "stock",
-            "payload": {"name": "Offline Flour", "quantity_on_hand": 10.0, "unit_of_measure": "kg", "unit_price": 40.0},
+            "payload": {
+                "name": "Offline Flour",
+                "quantity_on_hand": 10.0,
+                "unit_of_measure": "kg",
+                "unit_price": 40.0,
+            },
         }
         r = client.post("/sync/queue", json=payload, headers=OWNER)
         assert r.status_code == 200
@@ -304,7 +324,7 @@ class TestSyncQueue:
     def test_invalid_operation_is_422(self, client: TestClient) -> None:
         payload = {
             "client_id": "tablet-001",
-            "operation": "sync",      # invalid
+            "operation": "sync",  # invalid
             "resource": "sale",
             "payload": {},
         }
@@ -315,7 +335,7 @@ class TestSyncQueue:
         payload = {
             "client_id": "tablet-001",
             "operation": "create",
-            "resource": "orders",     # invalid
+            "resource": "orders",  # invalid
             "payload": {},
         }
         r = client.post("/sync/queue", json=payload, headers=OWNER)
@@ -349,11 +369,17 @@ class TestSyncQueue:
 # Feature 14 — Employee Performance Analytics
 # ===========================================================================
 
+
 class TestEmployeePerformance:
     """Tests for /employees and shift logging."""
 
     def test_create_employee_kitchen(self, client: TestClient) -> None:
-        payload = {"name": "Arjun Kumar", "role": "kitchen", "phone": "9876543210", "joining_date": "2024-01-15"}
+        payload = {
+            "name": "Arjun Kumar",
+            "role": "kitchen",
+            "phone": "9876543210",
+            "joining_date": "2024-01-15",
+        }
         r = client.post("/employees", json=payload, headers=OWNER)
         assert r.status_code == 200, r.text
         data = r.json()
@@ -362,7 +388,11 @@ class TestEmployeePerformance:
         assert data["active"] is True
 
     def test_create_employee_supervisor(self, client: TestClient) -> None:
-        payload = {"name": "Priya Sharma", "role": "supervisor", "joining_date": "2023-06-01"}
+        payload = {
+            "name": "Priya Sharma",
+            "role": "supervisor",
+            "joining_date": "2023-06-01",
+        }
         r = client.post("/employees", json=payload, headers=OWNER)
         assert r.status_code == 200
 
@@ -381,10 +411,13 @@ class TestEmployeePerformance:
 
     def test_log_shift_for_employee(self, client: TestClient) -> None:
         from datetime import date
+
         today = date.today().isoformat()
         # Get employee id for Arjun
         r = client.get("/employees", headers=OWNER)
-        emp_id = next(e["id"] for e in r.json()["employees"] if e["name"] == "Arjun Kumar")
+        emp_id = next(
+            e["id"] for e in r.json()["employees"] if e["name"] == "Arjun Kumar"
+        )
         shift_payload = {
             "shift_date": today,
             "shift_type": "morning",
@@ -417,7 +450,9 @@ class TestEmployeePerformance:
 
     def test_employee_performance_summary(self, client: TestClient) -> None:
         r = client.get("/employees", headers=OWNER)
-        emp_id = next(e["id"] for e in r.json()["employees"] if e["name"] == "Arjun Kumar")
+        emp_id = next(
+            e["id"] for e in r.json()["employees"] if e["name"] == "Arjun Kumar"
+        )
         r = client.get(f"/employees/{emp_id}/performance?days=60", headers=OWNER)
         assert r.status_code == 200
         data = r.json()
@@ -447,6 +482,7 @@ class TestEmployeePerformance:
 # Feature 15 — QR-Based Table Ordering
 # ===========================================================================
 
+
 class TestTableOrdering:
     """Tests for /tables, QR menu, order placement, and kitchen display."""
 
@@ -467,7 +503,7 @@ class TestTableOrdering:
         TestTableOrdering._table_id = data["id"]
 
     def test_create_duplicate_table_is_409(self, client: TestClient) -> None:
-        payload = {"table_number": f"T{_RUN}A"}   # same as above — must conflict
+        payload = {"table_number": f"T{_RUN}A"}  # same as above — must conflict
         r = client.post("/tables", json=payload, headers=OWNER)
         assert r.status_code == 409
 
@@ -488,7 +524,7 @@ class TestTableOrdering:
     def test_menu_via_qr_no_auth_required(self, client: TestClient) -> None:
         """Public endpoint — QR scan returns menu without auth."""
         token = TestTableOrdering._qr_token
-        r = client.get(f"/tables/{token}/menu")   # No auth headers
+        r = client.get(f"/tables/{token}/menu")  # No auth headers
         assert r.status_code == 200
         data = r.json()
         assert data["table_number"] == f"T{_RUN}A"
@@ -526,7 +562,9 @@ class TestTableOrdering:
     def test_kitchen_view_table_orders(self, client: TestClient) -> None:
         # Fetch table_id dynamically to avoid relying on class variable state
         r = client.get("/tables", headers=OWNER)
-        table_id = next(t["id"] for t in r.json()["tables"] if t["table_number"] == f"T{_RUN}A")
+        table_id = next(
+            t["id"] for t in r.json()["tables"] if t["table_number"] == f"T{_RUN}A"
+        )
         r = client.get(f"/tables/{table_id}/orders", headers=OWNER)
         assert r.status_code == 200
         data = r.json()

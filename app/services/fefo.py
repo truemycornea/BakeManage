@@ -4,6 +4,7 @@
 Deducts stock from InventoryItem records in expiry order (soonest first),
 then from items with no expiry date, ensuring minimal spoilage.
 """
+
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
@@ -38,7 +39,7 @@ def fefo_decrement(
         session.query(InventoryItem)
         .filter(InventoryItem.name == product_name)
         .order_by(
-            InventoryItem.expiration_date.is_(None),   # NULLs last
+            InventoryItem.expiration_date.is_(None),  # NULLs last
             InventoryItem.expiration_date.asc(),
         )
         .with_for_update()
@@ -61,11 +62,13 @@ def fefo_decrement(
         deduct = min(item.quantity_on_hand, remaining_to_deduct)
         item.quantity_on_hand = round(item.quantity_on_hand - deduct, 6)
         remaining_to_deduct -= deduct
-        deductions.append({
-            "item_id": item.id,
-            "name": item.name,
-            "deducted": round(deduct, 6),
-            "remaining": round(item.quantity_on_hand, 6),
-        })
+        deductions.append(
+            {
+                "item_id": item.id,
+                "name": item.name,
+                "deducted": round(deduct, 6),
+                "remaining": round(item.quantity_on_hand, 6),
+            }
+        )
 
     return deductions

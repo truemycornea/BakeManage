@@ -5,10 +5,11 @@ import hashlib
 import hmac
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Optional
+from typing import Annotated, Any, Iterable, Optional
+from hashlib import pbkdf2_hmac
 
 import jwt
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -53,9 +54,13 @@ def decode_jwt(token: str) -> dict:
     try:
         return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
+        )
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        )
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -66,11 +71,15 @@ def get_current_user(
     session: Session = Depends(get_session),
 ) -> User:
     if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing credentials"
+        )
     payload = decode_jwt(credentials.credentials)
     user = session.get(User, int(payload["sub"]))
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+        )
     return user
 
 
@@ -92,19 +101,14 @@ def get_fernet() -> Fernet:
 def enforce_https(request: Request) -> None:
     proto = request.headers.get("x-forwarded-proto") or request.url.scheme
     if proto and proto.lower() != "https" and settings.environment == "production":
-        raise HTTPException(status_code=status.HTTP_426_UPGRADE_REQUIRED, detail="HTTPS required")
+        raise HTTPException(
+            status_code=status.HTTP_426_UPGRADE_REQUIRED, detail="HTTPS required"
+        )
 
 
 # ---------------------------------------------------------------------------
 # PIN-based sandbox auth (bootstrap)
 # ---------------------------------------------------------------------------
-
-import base64 as _b64
-import hmac as _hmac
-from hashlib import pbkdf2_hmac
-from typing import Iterable
-
-from cryptography.fernet import Fernet as _Fernet, InvalidToken
 
 ROLE_FIELD_PERMISSIONS: dict[str, list[str]] = {
     "owner": ["*"],
@@ -132,7 +136,14 @@ ROLE_FIELD_PERMISSIONS: dict[str, list[str]] = {
         "quality",
         "metrics",
     ],
-    "auditor": ["invoice", "vendor_name", "invoice_number", "invoice_date", "total_amount", "metrics"],
+    "auditor": [
+        "invoice",
+        "vendor_name",
+        "invoice_number",
+        "invoice_date",
+        "total_amount",
+        "metrics",
+    ],
 }
 
 
@@ -165,7 +176,9 @@ def decrypt_api_key(token: str) -> str:
     try:
         return _fernet().decrypt(token.encode()).decode()
     except InvalidToken as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
+        ) from exc
 
 
 async def authorize_request(
@@ -174,7 +187,8 @@ async def authorize_request(
 ) -> str:
     if not x_client_role or not x_client_pin:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing role or PIN headers"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing role or PIN headers",
         )
 
     if not verify_secret(x_client_pin, BOOTSTRAP_PIN_HASH, settings.pin_pepper):
@@ -182,7 +196,9 @@ async def authorize_request(
 
     allowed_domains = settings.allowed_roles.get(x_client_role)
     if allowed_domains is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Role not authorized")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Role not authorized"
+        )
     return x_client_role
 
 

@@ -18,6 +18,7 @@ ALLOW_BOOTSTRAP_IN_PRODUCTION=true override flag is also set.
 Usage (from the repository root):
   RAHUL_PIN=<pin> HELEN_PIN=<pin> python -m scripts.bootstrap_users
 """
+
 from __future__ import annotations
 
 import os
@@ -43,9 +44,9 @@ _USERS: list[tuple[str, str, str]] = [
 def bootstrap() -> None:
     # ── Production safety guard ───────────────────────────────────────────
     env = (settings.environment or "").strip().lower()
-    allow_override = os.environ.get("ALLOW_BOOTSTRAP_IN_PRODUCTION", "").strip().lower() in (
-        "true", "1", "yes"
-    )
+    allow_override = os.environ.get(
+        "ALLOW_BOOTSTRAP_IN_PRODUCTION", ""
+    ).strip().lower() in ("true", "1", "yes")
     if env == "production" and not allow_override:
         print(
             "[ERROR] Refusing to run in a production environment.\n"

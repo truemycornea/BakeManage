@@ -4,15 +4,20 @@ BakeManage Demo Data Seeder
 Populates the sandbox database with realistic bakery ERP data for UAT.
 Run: docker exec bakemanage-api-1 python /app/scripts/seed_demo_data.py
 """
+
 import sys, os
-sys.path.insert(0, '/app')
+
+sys.path.insert(0, "/app")
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from app.database import engine, Base, get_session
 from app.models import (
-    InventoryItem, ProofingTelemetry, QualityCheck,
-    QualityInspection, SaleRecord
+    InventoryItem,
+    ProofingTelemetry,
+    QualityCheck,
+    QualityInspection,
+    SaleRecord,
 )
 from app.ingestion import simulate_vlm_ocr, persist_invoice
 from sqlalchemy.orm import Session
@@ -22,7 +27,6 @@ print("=== BakeManage Demo Data Seeder ===")
 Base.metadata.create_all(bind=engine)
 
 with Session(engine) as session:
-
     # ──────────────────────────────────────────────────────────────
     # 1. INVENTORY ITEMS — full bakery stock
     # ──────────────────────────────────────────────────────────────
@@ -61,13 +65,19 @@ with Session(engine) as session:
     ]
     added = 0
     for name, qty, unit, cat, price, days_exp in stock_items:
-        existing = session.query(InventoryItem).filter(InventoryItem.name == name).first()
+        existing = (
+            session.query(InventoryItem).filter(InventoryItem.name == name).first()
+        )
         if not existing:
             exp_date = date.today() + timedelta(days=days_exp)
             item = InventoryItem(
-                name=name, quantity_on_hand=qty, unit_of_measure=unit,
-                category=cat, vertical="bakery",
-                unit_price=Decimal(str(price)), expiration_date=exp_date
+                name=name,
+                quantity_on_hand=qty,
+                unit_of_measure=unit,
+                category=cat,
+                vertical="bakery",
+                unit_price=Decimal(str(price)),
+                expiration_date=exp_date,
             )
             session.add(item)
             added += 1
@@ -85,7 +95,7 @@ with Session(engine) as session:
             (29.0, 76.2, 850, 1210, "rising", 0.08),
             (29.5, 77.0, 860, 1230, "rising", 0.11),
             (30.0, 78.0, 880, 1200, "stable", 0.07),
-            (30.5, 79.1, 1320, 1100, "anomaly", 0.42),   # CO2 spike
+            (30.5, 79.1, 1320, 1100, "anomaly", 0.42),  # CO2 spike
             (29.8, 76.5, 840, 1210, "falling", 0.09),
             (28.8, 75.2, 825, 1215, "stable", 0.05),
             (27.5, 73.0, 795, 1220, "falling", 0.12),
@@ -99,10 +109,13 @@ with Session(engine) as session:
         for i, (temp, hum, co2, fan, status, anomaly) in enumerate(readings):
             ts = datetime.utcnow() - timedelta(hours=i * 8)
             reading = ProofingTelemetry(
-                temperature_c=temp, humidity_percent=hum,
-                co2_ppm=co2, fan_speed_rpm=fan,
-                status=status, anomaly_score=anomaly,
-                created_at=ts
+                temperature_c=temp,
+                humidity_percent=hum,
+                co2_ppm=co2,
+                fan_speed_rpm=fan,
+                status=status,
+                anomaly_score=anomaly,
+                created_at=ts,
             )
             session.add(reading)
         session.commit()
@@ -118,23 +131,39 @@ with Session(engine) as session:
         inspections = [
             ("croissant_batch_001", 0.81, 0.88, "pass", "Golden, evenly layered"),
             ("sourdough_batch_001", 0.73, 0.79, "pass", "Good crust, slight pale spot"),
-            ("danish_pastry_001",   0.65, 0.70, "needs_review", "Under-browned edges"),
-            ("butter_cookie_001",   0.90, 0.95, "pass", "Perfect golden, high uniformity"),
-            ("baguette_001",        0.78, 0.85, "pass", "Crisp crust, good score"),
-            ("rye_loaf_001",        0.55, 0.62, "fail", "Burnt top — oven too hot"),
+            ("danish_pastry_001", 0.65, 0.70, "needs_review", "Under-browned edges"),
+            (
+                "butter_cookie_001",
+                0.90,
+                0.95,
+                "pass",
+                "Perfect golden, high uniformity",
+            ),
+            ("baguette_001", 0.78, 0.85, "pass", "Crisp crust, good score"),
+            ("rye_loaf_001", 0.55, 0.62, "fail", "Burnt top — oven too hot"),
             ("croissant_batch_002", 0.84, 0.91, "pass", "Excellent lamination"),
-            ("muffin_001",          0.76, 0.80, "pass", "Slightly over-baked edges"),
-            ("focaccia_001",        0.69, 0.74, "needs_review", "Pale center, good sides"),
-            ("pain_au_choc_001",    0.87, 0.93, "pass", "Rich colour, perfect chocolate"),
+            ("muffin_001", 0.76, 0.80, "pass", "Slightly over-baked edges"),
+            ("focaccia_001", 0.69, 0.74, "needs_review", "Pale center, good sides"),
+            ("pain_au_choc_001", 0.87, 0.93, "pass", "Rich colour, perfect chocolate"),
         ]
         for fp, brown, unif, status, notes in inspections:
-            existing = session.query(QualityInspection).filter(QualityInspection.image_fingerprint == fp).first()
+            existing = (
+                session.query(QualityInspection)
+                .filter(QualityInspection.image_fingerprint == fp)
+                .first()
+            )
             if not existing:
-                session.add(QualityInspection(
-                    image_fingerprint=fp, browning_score=brown,
-                    uniformity_score=unif, status=status, notes=notes,
-                    created_at=datetime.utcnow() - timedelta(days=random.randint(0, 14))
-                ))
+                session.add(
+                    QualityInspection(
+                        image_fingerprint=fp,
+                        browning_score=brown,
+                        uniformity_score=unif,
+                        status=status,
+                        notes=notes,
+                        created_at=datetime.utcnow()
+                        - timedelta(days=random.randint(0, 14)),
+                    )
+                )
         # Also add QualityCheck records
         qc_checks = [
             (82.0, "pass", "Croissant batch A"),
@@ -144,13 +173,19 @@ with Session(engine) as session:
             (88.0, "pass", "Danish pastry"),
         ]
         for score, status, notes in qc_checks:
-            session.add(QualityCheck(
-                score=score, status=status, notes=notes,
-                anomaly_score=max(0, (80 - score) / 100),
-                created_at=datetime.utcnow() - timedelta(days=random.randint(0, 7))
-            ))
+            session.add(
+                QualityCheck(
+                    score=score,
+                    status=status,
+                    notes=notes,
+                    anomaly_score=max(0, (80 - score) / 100),
+                    created_at=datetime.utcnow() - timedelta(days=random.randint(0, 7)),
+                )
+            )
         session.commit()
-        print(f"✓ Quality: {len(inspections)} inspections + {len(qc_checks)} checks added")
+        print(
+            f"✓ Quality: {len(inspections)} inspections + {len(qc_checks)} checks added"
+        )
     else:
         print(f"✓ Quality: {qi_count} inspections already exist — skipped")
 
@@ -169,9 +204,13 @@ with Session(engine) as session:
         ("Focaccia Slice", 40.0),
         ("Muffin (Chocolate)", 38.0),
     ]
-    sr_today = session.query(SaleRecord).filter(
-        SaleRecord.sold_at >= datetime.combine(date.today(), datetime.min.time())
-    ).count()
+    sr_today = (
+        session.query(SaleRecord)
+        .filter(
+            SaleRecord.sold_at >= datetime.combine(date.today(), datetime.min.time())
+        )
+        .count()
+    )
     if sr_today < 5:
         sale_entries = []
         for day_offset in range(7):
@@ -184,17 +223,21 @@ with Session(engine) as session:
                 sold_dt = datetime.combine(sales_day, datetime.min.time()) + timedelta(
                     hours=random.randint(8, 20), minutes=random.randint(0, 59)
                 )
-                sale_entries.append(SaleRecord(
-                    product_name=product, quantity_sold=qty,
-                    unit_price=Decimal(str(price)),
-                    total_amount=total, sold_at=sold_dt
-                ))
+                sale_entries.append(
+                    SaleRecord(
+                        product_name=product,
+                        quantity_sold=qty,
+                        unit_price=Decimal(str(price)),
+                        total_amount=total,
+                        sold_at=sold_dt,
+                    )
+                )
         for entry in sale_entries:
             session.add(entry)
         session.commit()
         print(f"✓ Sales: {len(sale_entries)} sale records added (7 days)")
     else:
-        print(f"✓ Sales: records already exist — skipped")
+        print("✓ Sales: records already exist — skipped")
 
     # ──────────────────────────────────────────────────────────────
     # 5. INVOICE INGESTIONS — simulated vendor delivery receipts
@@ -211,7 +254,7 @@ with Session(engine) as session:
         except Exception:
             pass
     session.commit()
-    print(f"✓ Invoices: 3 simulated vendor invoices ingested")
+    print("✓ Invoices: 3 simulated vendor invoices ingested")
 
     # ──────────────────────────────────────────────────────────────
     # Summary
