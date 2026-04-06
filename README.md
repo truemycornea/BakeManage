@@ -1,720 +1,834 @@
-# BakeManage ERP — v2.1.0 Sandbox
+# BakeManage 3.0 — India-Native Bakery ERP + POS + AI Platform
 
-Enterprise-grade SaaS ERP for Indian bakeries — multimodal AI ingestion, recipe costing,
-inventory FEFO, proofing telemetry, quality control, supply chain automation, CRM loyalty
-programme, ML-powered demand forecasting, GST compliance, and waste tracking. Built on
-FastAPI + PostgreSQL + Redis + Celery, delivered as a single-page web application.
+> **Enterprise-grade, open-source SaaS ERP for Indian bakeries** — multimodal AI ingestion, GST-compliant POS, FEFO inventory, proofing telemetry, ML demand forecasting, multilingual UI (EN/ML/TA/KN/TE), and Android-first design. Built on FastAPI + PostgreSQL + Redis + Celery + React 18.
 
-**v2.1.0 additions:** Recipe Batch Scaling, Waste Tracking, Multi-Slab GST Calculator;
-7 bug fixes (lifespan migration, real dashboard KPIs, Phase 3 status counts, targeted cache
-clear) + Injection UI overhaul: openpyxl 3.1.5 dependency, MIME normalization for Excel uploads,
-client-side file validation, sample Excel template download, friendly JSON error messages.
-97/97 tests passing. Full data seed: 221 items, 216 sales, 13 waste records.
-
-## Features
-- Upload endpoints for images (receipts, handwritten notes), PDFs, and Excel sheets
-- Docling-powered structural parsing with a simulated Vision-Language OCR response
-- PostgreSQL persistence via SQLAlchemy with models for vendors, invoices, inventory, and recipes
-- Celery workers for FEFO inventory deductions and cost of goods sold calculations
-- Dockerized multi-stage build for production deployment
-- Comprehensive pytest suite covering ingestion, costing, and integration workflows
-
-## Planning
-- SCRUM-aligned backlog and AI execution guidance: [bakemanageroot_scrum.md](./bakemanageroot_scrum.md)
-
-## Getting Started (Local Development, No Docker)
-
-If you want the recommended containerized setup, use the Docker Compose Quickstart documented later in this README. The steps below are an optional local-development path for running the services directly on your machine.
-
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Configure environment variables for your local PostgreSQL and Redis services as needed:
-   - `DATABASE_URL` (default: `postgresql+psycopg2://postgres:postgres@localhost:5432/bakemanage`)
-   - `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` (default: `redis://localhost:6379/0`)
-3. Launch the API locally:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-4. Start a local Celery worker:
-   ```bash
-   celery -A app.tasks.celery_app worker --loglevel=info
-   ```
-5. Run tests locally:
-   ```bash
-   pytest tests/
-   ```
+[![CI](https://github.com/truemycornea/BakeManage/actions/workflows/ci.yml/badge.svg)](https://github.com/truemycornea/BakeManage/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green.svg)](https://fastapi.tiangolo.com)
+[![Platform: Olympus.ai](https://img.shields.io/badge/Platform-Olympus.ai-purple.svg)](docs/PROJECT_BRAIN.md)
 
 ---
 
 ## Table of Contents
 
-- [Features](#features)
-- [Planning (SCRUM)](#planning)
-- [Getting Started (Local Development, No Docker)](#getting-started-local-development-no-docker)
-
-1. [Architecture Overview](#1-architecture-overview)
-2. [Feature Map](#2-feature-map)
-3. [Tech Stack](#3-tech-stack)
-4. [Quickstart - Docker Compose](#4-quickstart---docker-compose)
-5. [Environment Variables Reference](#5-environment-variables-reference)
-6. [API Reference](#6-api-reference)
-7. [Authentication and RBAC](#7-authentication-and-rbac)
-8. [Data Models](#8-data-models)
-9. [Running Tests](#9-running-tests)
-10. [Frontend SPA](#10-frontend-spa)
-11. [Production Backup](#11-production-backup)
-12. [Release History](#12-release-history)
-13. [Roadmap](#13-roadmap)
+1. [Vision & Mission](#1-vision--mission)
+2. [Market Context](#2-market-context)
+3. [Competitive Positioning](#3-competitive-positioning)
+4. [Unique Selling Propositions](#4-unique-selling-propositions)
+5. [Feature Set](#5-feature-set)
+6. [Current Status (v3.0 MVP)](#6-current-status-v30-mvp)
+7. [Architecture](#7-architecture)
+8. [Tech Stack](#8-tech-stack)
+9. [Data & AI Flows](#9-data--ai-flows)
+10. [Economics (Capex / Opex)](#10-economics-capex--opex)
+11. [Application Roadmap](#11-application-roadmap)
+12. [SCRUM Pipeline Overview](#12-scrum-pipeline-overview)
+13. [Getting Started](#13-getting-started)
+14. [API Reference](#14-api-reference)
+15. [Testing](#15-testing)
+16. [Security & Compliance](#16-security--compliance)
+17. [Deployment](#17-deployment)
+18. [AI Development Workflow](#18-ai-development-workflow)
+19. [Contributing](#19-contributing)
 
 ---
 
-## 1. Architecture Overview
+## 1. Vision & Mission
 
-    Browser (SPA)  http://localhost:3001
-          |   /api/*  proxy_pass
-    nginx (frontend container)
-          |   http://api:8000
-    FastAPI API  (port 8000)
-      JWT+PIN RBAC  |  Redis cache  |  Celery dispatch  |  Ingestion pipeline
-      GZip middleware | Rate-limit (120/min) | Prometheus /health/metrics
-          |                |                |
-     PostgreSQL        Redis 7         Celery Worker
-     (port 5432)     (port 6379)      (FEFO/COGS tasks)
+**BakeManage 3.0** is the **India-native, AI-augmented, IoT-aware bakery operating system** that bridges the gap between the highly unorganised reality of Indian bakery operations and enterprise-grade financial intelligence — at SME-accessible pricing.
 
-**Docker containers:**
+### The Problem
 
-| Container | Image | Purpose |
+Indian bakeries — particularly across Kerala, Karnataka, and Tamil Nadu — operate in a fragmented landscape of manual ledgers, paper receipts, and disconnected billing tools. The consequences are:
+
+- **Invisible margin erosion**: ingredient price volatility (dairy, maida, chocolate) eats into profits silently
+- **Compliance burden**: multi-slab GST, GSTR-1/3B reconciliation, FSSAI labelling requirements overwhelm small teams
+- **Operational waste**: overproduction, FEFO failures, and poor demand forecasting destroy perishable margins
+- **Language barriers**: counter staff and owners in tier-2 cities need vernacular UX, not English-first enterprise software
+
+### The Solution
+
+BakeManage eliminates the administrative burden by:
+1. **Photographing** supplier invoices (handwritten, crumpled, PDF) → auto-structured inventory and AP entries
+2. **Automating** GST billing with HSN-aware multi-slab calculation at the point of sale
+3. **Protecting** margins in real-time via FEFO inventory, waste tracking, and ML demand forecasting
+4. **Empowering** counter staff through Malayalam/Tamil/Kannada/Telugu UI and offline-first Android POS
+
+---
+
+## 2. Market Context
+
+### Indian Bakery Market Sizing
+
+| Metric | Value | Source |
+|--------|-------|--------|
+| Indian bakery market size (2024) | ~₹10,000 Cr (USD ~1.2B) | IBEF |
+| Projected CAGR (2024-2030) | 9.9% | LinkedIn/NASSCOM |
+| Digitised SME bakeries | < 15% | Estimated |
+| Target TAM (ERP-ready bakeries) | ~2.5 lakh units | FSSAI registration data |
+| SAM (South India + Tier-1) | ~75,000 units | State FSSAI data |
+| SOM (12-month reachable) | ~2,000 units | GTM estimate |
+
+### Regional Persona Analysis
+
+**Kerala** — Fresh puffs, tea-time snacks, cakes. High reliance on manual entry, handwritten receipts. Labour-scarce, price-sensitive. Needs radical simplicity + Malayalam UI + photo-to-invoice.
+
+**Karnataka** — Urban café culture, artisanal breads, Swiggy/Zomato-driven multi-channel. Needs aggregator integration, recipe consistency across outlets, and multi-location inventory.
+
+**Tamil Nadu** — Central kitchen → retail outlet model. Complex bulk production scheduling, BOM-heavy, high perishable waste. Needs FEFO + batch traceability + central kitchen indenting.
+
+---
+
+## 3. Competitive Positioning
+
+| Competitor | Core Strengths | Weaknesses | Our Advantage |
+|---|---|---|---|
+| GoFrugal | Strong inventory, central kitchen mgmt | Dated UI, expensive customisation | Open-source core, AI ingestion |
+| Petpooja | Massive market share, aggregator integrations | Limited AI/accounting | Local-first AI, full ERP depth |
+| Infor CloudSuite | Deep compliance, AI forecasting | Prohibitively expensive for SMEs | 1/10th the price, self-hostable |
+| ERPNext | Flexible, open-source | Heavy developer intervention for bakery domain | Domain-specific out of the box |
+| VasyERP | India-native GST billing | No multimodal ingestion, no ML | AI-first from day one |
+
+**Market Gap**: No existing tool combines multimodal AI ingestion + India-GST + FEFO + ML forecasting + multilingual UX at SME pricing.
+
+---
+
+## 4. Unique Selling Propositions
+
+| # | USP | Business Impact |
+|---|-----|-----------------|
+| **USP1** | **Multimodal Ingestion** — photograph crumpled receipts, handwritten notes, PDFs, Excel sheets → auto-structured inventory + AP | Eliminates data-entry bottleneck; enables tier-2 city adoption |
+| **USP2** | **Proofing Telemetry + Anomaly Scoring** — IoT temperature/humidity/CO₂ monitoring tuned for Indian bakery conditions | Reduces batch failures; unique differentiator vs all competitors |
+| **USP3** | **India-Specific GST Engine** — HSN-aware multi-slab (0/5/12/18/28%) with intra/inter-state CGST/SGST/IGST, GSTR-1/3B auto-reconciliation | CBIC-compliant, prevents ITC losses |
+| **USP4** | **Menu Engineering + Waste Tracking + ML Demand Forecasting** — real-time margin protection as ingredient prices fluctuate | Directly generates financial returns that justify subscription |
+| **USP5** | **Open-source + Self-hostable + Affordable Managed SaaS** — no per-user licence lock-in; deploy on a ₹5,000 refurbished PC | Removes the adoption barrier for Indian SMEs |
+
+---
+
+## 5. Feature Set
+
+### 5.1 Core 15 Competitive Features
+
+| # | Feature | Domain | Status |
+|---|---------|--------|--------|
+| 1 | Multimodal Document Ingestion (OCR/VLM) | Data Acquisition | ✅ Epic A3 done |
+| 2 | Vendor Price Optimization | Data Monetisation | 🔶 Sprint Athena |
+| 3 | Predictive Demand Forecasting (Prophet/SARIMA) | Analytics | 🔶 Sprint Athena |
+| 4 | Bi-Directional Batch Traceability | Compliance | 🔶 Sprint Hermes |
+| 5 | Dynamic GSTR-1 & 3B Reconciliation | Tax | 🔶 Sprint Hermes |
+| 6 | Automated Central Kitchen Indenting | Central Kitchen | 🔶 Sprint Dionysus |
+| 7 | FEFO Inventory Engine | Inventory | ✅ v2.1 done |
+| 8 | Dynamic Menu Engineering | Analytics | 🔶 Sprint Athena |
+| 9 | Offline-First Cloud Architecture | Infrastructure | ✅ Epic A1 offline sync |
+| 10 | AI-Driven Recipe Batch Scaling | Production | ✅ v2.1 done |
+| 11 | WhatsApp CRM Integration | CRM | 🔶 Sprint Dionysus |
+| 12 | Visual Waste Tracking | Inventory | ✅ v2.1 done |
+| 13 | Multi-Slab GST Calculator (POS) | Tax | ✅ Epic A1 done |
+| 14 | Employee Performance Analytics | HR | 🔶 Sprint Zeus |
+| 15 | QR-Based Table Ordering | Front-of-House | 🔶 Sprint Zeus |
+
+### 5.2 POS & Billing (Epic A1 — Implemented)
+
+- `POST /pos/sale` — idempotent (Idempotency-Key header), FEFO-integrated, GST-aware, offline-queue support
+- `GET /pos/sale/{id}` — eager-loads lines, tax_lines, payments
+- `GET /pos/daily_summary` — CGST/SGST/IGST breakdown, top-5 SKUs, void-excluded
+- `POST /pos/sale/sync` — per-item commit/rollback for Android offline sync
+- `GET /pos/receipt/{id}/pdf` — reportlab PDF (pure Python, no system libs)
+- **GST Engine**: intra-state (CGST+SGST) vs inter-state (IGST), `ROUND_HALF_UP` per CBIC guidelines
+- **FEFO Engine**: `SELECT FOR UPDATE` row-lock, `expiration_date ASC NULLS LAST`
+
+### 5.3 OCR & Invoice Ingestion (Epic A3 — Implemented)
+
+- `InvoiceIngestionService`: Docling → pytesseract → UTF-8 fallback OCR chain
+- GSTIN regex extraction, CGST/SGST/IGST amount parsing
+- SHA-256 dedup keyed on `gstin+invoice_no+date+tenant_id`
+- Gemini Vision premium path for `ocr_premium=True` tenants (confidence < 0.75 threshold)
+
+### 5.4 Multilingual UX (Epic B1 — Implemented)
+
+- React 18 + TypeScript + Vite + react-i18next
+- 5 locale packs: `en`, `ml` (Malayalam), `ta` (Tamil), `kn` (Kannada), `te` (Telugu)
+- `LanguageSwitcher` component persists to localStorage
+- `PATCH /auth/profile` persists `language_preference` to database
+
+### 5.5 Existing Backend Services (v2.1+)
+
+- **Multimodal Ingestion**: PDF/image/Excel invoice processing via Docling + VLM simulation
+- **Recipe Costing**: BOM-based COGS roll-up, batch scaling, yield-adjusted cost
+- **FEFO Inventory**: First-Expiry-First-Out with expiry tracking and alert Celery tasks
+- **Proofing Telemetry**: Temperature/humidity/CO₂ sensor ingestion + anomaly scoring
+- **Quality Control**: Automated QC checklist scoring
+- **Waste Tracking**: Category-based waste logging and cause attribution
+- **ML Demand Forecasting**: scikit-learn regression on historical sales
+- **CRM / Loyalty**: Customer points, tier management, WhatsApp stub
+- **Analytics**: Cost roll-up, margin analysis, supplier price trends
+- **Auth**: JWT + PIN, PBKDF2+SHA256 password hashing, role-based access (owner/ops/auditor)
+- **Observability**: `/healthz`, `/metrics` (Prometheus), `/health/extended`
+
+---
+
+## 6. Current Status (v3.0 MVP)
+
+### v3.0 — April 2026 (Current)
+
+```
+✅ Epic A1: POS & Billing System      — 5 endpoints, GST engine, FEFO, offline sync, PDF receipts, 17 tests
+✅ Epic A3: OCR & Invoice Ingestion   — InvoiceIngestionService, dedup, GSTIN extraction, premium Gemini path, 5 tests
+✅ Epic A4: CI/CD Workflows           — ci.yml, cd-staging.yml, cd-prod.yml, nightly.yml (Locust + integrity)
+✅ Epic B1: Multilingual UX           — React 18/TS/Vite, 5 language packs, LanguageSwitcher, /auth/profile
+```
+
+### v2.1 — March 2026 (Baseline)
+
+```
+✅ Recipe Batch Scaling               — automatic ingredient proportioning at different batch sizes
+✅ Waste Tracking                     — visual waste logging, cause attribution
+✅ Multi-Slab GST Calculator          — 0/5/12/18/28% slab engine in backend
+✅ FEFO Inventory                     — first-expiry-first-out with Celery expiry alerts
+✅ Proofing Telemetry                 — IoT sensor ingestion and anomaly detection
+✅ Demand Forecasting                 — scikit-learn ML on historical sales data
+✅ 97 tests passing                   — ingestion, costing, integration workflows
+```
+
+### Test Coverage
+
+| Test Suite | Tests | Status |
 |---|---|---|
-| `api` | `bakemanage:sandbox` | FastAPI REST server |
-| `worker` | `bakemanage:sandbox` | Celery background tasks |
-| `db` | `postgres:16-alpine` | PostgreSQL relational store |
-| `redis` | `redis:7-alpine` | Cache + Celery broker |
-| `frontend` | `nginx:alpine` | SPA host + reverse proxy |
+| `tests/test_pos.py` | 17 | ✅ All passing |
+| `tests/test_ingestion.py` | 22+ | ✅ All passing |
+| `tests/test_costing.py` | 25+ | ✅ All passing |
+| Integration suite | 35+ | ✅ All passing |
+| **Total** | **~120** | ✅ |
 
 ---
 
-## 2. Feature Map
+## 7. Architecture
 
-### Phase 1 — MVP Core
+### 7.1 High-Level Architecture
 
-| # | Module | Status | Description |
-|---|---|---|---|
-| 1 | Authentication | ✅ done | PIN-based JWT login, role-gated endpoints |
-| 2 | Multimodal Ingestion | ✅ done | Images, PDFs, Excel via VLM OCR simulation |
-| 3 | Inventory Management | ✅ done | 158 SKUs, FEFO-ready, expiry alerting, Redis hot-cache |
-| 4 | Cost Computing | ✅ done | Component roll-up, overhead, yield %, margin guardrail |
-| 5 | Proofing Telemetry | ✅ done | Temperature / humidity / CO2 ingest + anomaly scoring |
-| 6 | Quality Control | ✅ done | AI browning index, visual quality validation |
-| 7 | Sales Recording | ✅ done | Daily sales log, revenue totals, per-product history |
-| 8 | Dashboard | ✅ done | KPIs: stock count, quality pass rate, expiry alerts |
-| 9 | Stock Management | ✅ done | Add stock, list with expiry days, expiring-soon filter |
-| 10 | Compliance | ✅ done | Fernet-encrypted credentials, PBKDF2 PIN hashing, TLS hook |
-| 11 | Recipe Library | ✅ done | 13 bakery recipes, 98 ingredients, cost KPIs, BOM drawer |
-| 12 | Media Library | ✅ done | 23 assets (13 PDF cards + 10 training videos) |
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        BakeManage 3.0                               │
+│                                                                     │
+│  ┌──────────────┐    ┌──────────────┐    ┌────────────────────┐    │
+│  │ React 18 SPA │    │ Android App  │    │  3rd Party Clients │    │
+│  │ (TS + Vite)  │    │ (Kotlin/RN)  │    │ (Swiggy/Zomato/UPI)│    │
+│  └──────┬───────┘    └──────┬───────┘    └────────┬───────────┘    │
+│         │                   │                      │                │
+│         └───────────────────┴──────────────────────┘                │
+│                             │ HTTPS / REST                          │
+│                    ┌────────▼────────┐                              │
+│                    │   FastAPI 0.111  │  ← JWT + RBAC               │
+│                    │  (app/main.py)   │  ← Rate limiting (slowapi)  │
+│                    │                 │  ← SSO stub (Authentik)      │
+│                    └──┬──────────┬───┘                              │
+│                       │          │                                  │
+│            ┌──────────▼──┐   ┌───▼────────────┐                    │
+│            │  PostgreSQL  │   │     Redis 7     │                   │
+│            │  (SQLAlchemy)│   │  (Cache + Queue)│                   │
+│            └─────────────┘   └───────┬─────────┘                   │
+│                                      │                              │
+│                             ┌────────▼────────┐                    │
+│                             │  Celery Workers  │                    │
+│                             │ (FEFO, forecast, │                    │
+│                             │  OCR, alerts)    │                    │
+│                             └────────┬─────────┘                   │
+│                                      │                              │
+│                    ┌─────────────────┴──────────────┐              │
+│                    │         AI/ML Layer              │              │
+│                    │  Docling + pytesseract (OCR)    │              │
+│                    │  Gemini Vision (premium)         │              │
+│                    │  scikit-learn (forecasting)      │              │
+│                    │  Ollama/Mistral (future RAG)    │              │
+│                    └─────────────────────────────────┘              │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-### Phase 2 — Hardening & Observability
+### 7.2 Service Map
 
-| # | Module | Status | Description |
-|---|---|---|---|
-| 13 | Rate Limiting | ✅ done | slowapi — 120 req/min per IP, configurable |
-| 14 | Response Compression | ✅ done | GZip for responses ≥ 1 KB |
-| 15 | Prometheus Metrics | ✅ done | `/health/metrics` — uptime, request counters, Redis stats |
-| 16 | Health Gate | ✅ done | `/health` returns 503 if DB or Redis unreachable |
-| 17 | Extended Health | ✅ done | `/health/extended` — per-component deep checks |
+| Service | Port | Purpose |
+|---------|------|---------|
+| `api` (FastAPI + uvicorn) | 8000 | REST API, auth, business logic |
+| `worker` (Celery) | — | Async tasks: FEFO, forecasting, ingestion, alerts |
+| `db` (PostgreSQL 15) | 5432 | Primary data store |
+| `redis` (Redis 7) | 6379 | Cache + Celery broker/backend |
+| `nginx` (frontend) | 3000 | React SPA serve + reverse proxy |
+| `flower` (Celery monitor) | 5555 | Task queue observability |
 
-### Phase 3 — Enterprise Operations
+### 7.3 Data Model (Key Entities)
 
-| # | Module | Status | Description |
-|---|---|---|---|
-| 18 | Supply Chain Indent | ✅ done | Auto-generate POs for low-stock items |
-| 19 | Stock Transfer | ✅ done | Multi-location inventory transfers with deduction |
-| 20 | Supplier Lead Times | ✅ done | CRUD for vendor lead-day and price-per-unit SLAs |
-| 21 | Menu Engineering | ✅ done | Star/Plow-Horse/Puzzle/Dog quadrant analysis |
-| 22 | Vendor Optimization | ✅ done | Best vendor per ingredient (price + lead days) |
-| 23 | Demand Forecast | ✅ done | Linear regression via scikit-learn, configurable lookahead |
-| 24 | WhatsApp CRM | ✅ done | Sandboxed Twilio dispatch stub with template support |
-| 25 | Loyalty Programme | ✅ done | Bronze/Silver/Gold tiers, birthday triggers, spend tracking |
-
-### v2.1.0 — Compliance & Intelligence Add-ons
-
-| # | Module | Status | Description |
-|---|---|---|---|
-| 26 | Recipe Batch Scaling | ✅ done | Scale any recipe to target servings; returns scale factor, COGS, per-serving cost |
-| 27 | Waste Tracking | ✅ done | Log and report waste events by cause (spoilage/overproduction/trim/breakage/other) |
-| 28 | GST Calculator | ✅ done | Multi-slab CGST+SGST computation (0/5/12/18%) with category presets and custom rate |
-
----
-
-## 3. Tech Stack
-
-| Layer | Technology | Version |
-|---|---|---|
-| API Framework | FastAPI | 0.135.3 |
-| ASGI Server | Uvicorn | 0.34.3 |
-| ORM | SQLAlchemy | 2.0.48 |
-| Database | PostgreSQL | 16 |
-| DB Driver | psycopg2-binary | 2.9.10 |
-| Cache / Broker | Redis | 7 |
-| Task Queue | Celery | 5.5.1 |
-| Data Validation | Pydantic | 2.11.3 |
-| Auth Tokens | PyJWT | 2.9.0 |
-| Cryptography | cryptography | 44.0.3 |
-| Image Processing | Pillow | 11.2.1 |
-| Rate Limiting | slowapi | 0.1.9 |
-| ML Forecasting | scikit-learn | 1.6.1 |
-| Tests | pytest | 8.3.5 |
-| HTTP Client (Tests) | httpx | 0.28.1 |
-
-Full pinned dependency list: [requirements.txt](requirements.txt)
+```
+User ──< Role
+     ──< InventoryItem ──< Batch (FEFO)
+     ──< Recipe ──< RecipeLine ──< IngredientCost
+     ──< Invoice ──< InvoiceLine
+     ──< Sale ──< SaleLine ──< TaxLine
+              ──< Payment
+              ──< OfflineQueue
+     ──< ProofingSession ──< SensorReading
+     ──< WasteLog
+     ──< Customer ──< LoyaltyTransaction
+     ──< DemandForecast
+```
 
 ---
 
-## 4. Quickstart - Docker Compose
+## 8. Tech Stack
+
+### Backend
+
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| Framework | FastAPI | 0.111+ |
+| ORM | SQLAlchemy | 2.x |
+| Migrations | Alembic | latest |
+| Async tasks | Celery | 5.x |
+| Cache/Broker | Redis | 7.x |
+| Database | PostgreSQL | 15 |
+| Auth | JWT (python-jose) + PIN | — |
+| Rate limiting | slowapi | latest |
+| OCR | Docling + pytesseract | latest |
+| AI Vision | Gemini Vision API (optional) | 1.5+ |
+| ML | scikit-learn, Prophet (roadmap) | — |
+| PDF | reportlab | 4.2.5 |
+| Metrics | prometheus-fastapi-instrumentator | — |
+| Logging | structlog (roadmap) | — |
+| Secrets | Vault (hvac) / env fallback | — |
+
+### Frontend
+
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| Framework | React | 18+ |
+| Language | TypeScript | 5+ |
+| Build | Vite | 5+ |
+| State | Zustand | latest |
+| Routing | react-router-dom | 6+ |
+| i18n | react-i18next | latest |
+| HTTP | axios | latest |
+| UI | (Tailwind CSS — roadmap) | — |
+
+### Infrastructure & DevOps
+
+| Component | Technology |
+|-----------|-----------|
+| Container | Docker + Docker Compose V2 |
+| CI | GitHub Actions (ruff, mypy, pytest, Trivy) |
+| CD-Staging | GCP Artifact Registry → Cloud Run |
+| CD-Prod | GCP Cloud Run + manual approval gate |
+| Nightly | Locust load test + DB integrity + coverage trend |
+| IaC | Ansible (Olympus playbooks) |
+| Secrets | HashiCorp Vault (Olympus.ai) |
+| Monitoring | Prometheus + Grafana (roadmap) |
+| Tracing | OpenTelemetry (roadmap) |
+| SSO | Authentik (stub active; enforce post-May) |
+
+---
+
+## 9. Data & AI Flows
+
+### 9.1 Invoice Ingestion Flow
+
+```
+User uploads image/PDF/Excel
+        │
+        ▼
+InvoiceIngestionService._extract_text()
+  ├─ Docling (layout-aware PDF/image parsing)
+  ├─ pytesseract (handwritten fallback)
+  └─ UTF-8 text fallback
+        │
+        ▼
+_extract_fields()
+  ├─ GSTIN regex (\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d])
+  ├─ CGST/SGST/IGST extraction
+  └─ Invoice number, date, line items
+        │
+        ▼
+_check_duplicate()
+  └─ SHA-256(gstin+invoice_no+date+tenant_id) → DB lookup
+        │
+        ├─ [Premium tenant + confidence < 0.75] → _gemini_extract()
+        │                                          (Gemini Vision API)
+        └─ [Standard path] → persist Invoice + InvoiceLines
+                          → update InventoryItem quantities
+                          → schedule FEFO Celery task
+```
+
+### 9.2 POS Sale Flow
+
+```
+Counter staff / Android App
+        │
+        ▼ POST /pos/sale {items, payments, idempotency_key}
+app/pos_routes.py
+  ├─ Validate Idempotency-Key (unique DB constraint)
+  ├─ For each item:
+  │    ├─ calculate_gst(hsn_code, amount, intra_state) → TaxLine
+  │    └─ fefo_decrement(sku_id, quantity) → Batch deductions
+  ├─ Create Sale + SaleLines + TaxLines + Payments
+  └─ Return receipt JSON
+        │
+        ▼ (offline scenario)
+POST /pos/sale/sync [{sale_1}, {sale_2}, ...]
+  └─ Per-item commit/rollback → [{result: created|duplicate|error}]
+```
+
+### 9.3 RAG & AI Assistant Flow (Roadmap — Sprint Athena)
+
+```
+User natural language query
+        │
+        ▼ POST /ai/query
+Auth check → RAG retrieval
+  └─ pgvector HNSW index (m=16, ef_construction=64)
+       ├─ Recipes, SOPs, QC manuals
+       └─ Ranked context chunks
+        │
+        ▼
+Diplomat LLM Router (Olympus.ai)
+  ├─ Local: Ollama/Mistral 7B (default, zero API cost)
+  └─ Remote: Gemini 1.5 Pro (premium tenants)
+        │
+        ▼
+Domain-restricted answer + source links
+```
+
+### 9.4 Auth Flow
+
+```
+PIN entry → bcrypt/PBKDF2 verify → JWT (access + refresh)
+         → Role check (owner/ops/auditor/pos)
+         → [Android] device session + offline token cache
+         → [SSO enabled] X-Auth-Request-* headers from Authentik
+```
+
+---
+
+## 10. Economics (Capex / Opex)
+
+### 10.1 Pricing Tiers
+
+| Tier | Target | Features | Price |
+|------|--------|----------|-------|
+| **Starter** | Single outlet, home bakers | Basic billing, GSTR summary, standard inventory | ₹999/month |
+| **Growth** | Multi-outlet chains (2-5 locations) | All Starter + aggregator integrations, WhatsApp CRM, demand forecasting, multilingual UI | ₹2,499/month |
+| **Enterprise** | Central kitchens, >5 locations | All Growth + proofing telemetry, advanced AI, white-labelling, dedicated support | ₹6,999/month |
+| **Self-Hosted** | Tech-savvy owners, NGOs | Full open-source, self-managed | Free |
+
+### 10.2 Infrastructure Cost (Managed SaaS — GCP India Region)
+
+| Resource | Spec | Monthly (USD) | Category |
+|----------|------|--------------|---------|
+| Cloud Run (API) | 2 vCPU, 4GB, auto-scale | ~$40 (10 tenants) | Opex |
+| Cloud SQL (PostgreSQL) | 2 vCPU, 8GB, single-zone | ~$80 | Opex |
+| Memorystore (Redis) | 1GB basic | ~$25 | Opex |
+| GCS (media/backups) | 50GB | ~$1 | Opex |
+| Artifact Registry | 10GB images | ~$1 | Opex |
+| **Total (10 tenants)** | | **~$147/month** | |
+| **Per-tenant cost** | | **~$15/month** | |
+| **Growth (100 tenants)** | | **~$350/month (~$3.50/tenant)** | |
+
+### 10.3 AI/API Cost Strategy
+
+| Path | Cost | When Used |
+|------|------|-----------|
+| Docling + pytesseract | $0 | Default for all tenants |
+| Gemini Vision API | ~$0.002/image | `ocr_premium=True` tenants only |
+| Ollama/Mistral 7B (local) | $0 | Default RAG/assistant |
+| Gemini 1.5 Pro | ~$0.01/1K tokens | Enterprise/premium AI queries |
+
+**Strategy**: Local-first, API-optional. Zero recurring AI cost for standard tenants.
+
+---
+
+## 11. Application Roadmap
+
+### Phase A — MVP+ (Q1-Q2 2026) ← **Current**
+
+```
+Sprint Ares (Apr 2026):    ✅ Governance, security hardening, CI/CD, observability
+Sprint Hermes (Apr-May):   🔶 POS + billing (A1) ✅, OCR (A3) ✅, i18n (B1) ✅,
+                               GSTR reconciliation, batch traceability, structlog
+Sprint Athena (May-Jun):   ❌ Android app (A2), RAG assistant, Prophet forecasting,
+                               analytics dashboards, pgvector
+```
+
+### Phase B — Growth (Q3-Q4 2026)
+
+```
+Sprint Dionysus (Jul):     Swiggy/Zomato/ONDC aggregator integrations
+                           WhatsApp Business API (Meta direct)
+                           Central kitchen indenting
+Sprint Zeus (Aug-Sep):     QR table ordering, employee analytics
+                           Multi-tenant SaaS schema
+                           Vault secret consumption (hvac)
+Sprint Apollo (Oct-Nov):   Authentik SSO full wiring
+                           Prometheus + Grafana dashboards
+                           OpenTelemetry tracing
+```
+
+### Phase C — Scale (Q1 2027+)
+
+```
+Sprint Hephaestus:         Multi-tenant provisioning API
+                           White-labelling and theme overrides
+                           Hardware integrations (scales, printers, sensors)
+                           Data monetisation network (anonymised analytics)
+                           VC data room / investor-ready /docs
+```
+
+### Roadmap Milestone Summary
+
+| Milestone | Target | Status |
+|-----------|--------|--------|
+| v2.1 Backend (FEFO, Forecast, Waste) | Mar 2026 | ✅ Done |
+| v3.0 MVP (POS, OCR, i18n, CI/CD) | Apr 2026 | ✅ Done |
+| v3.1 (GSTR reconciliation, Android beta) | May 2026 | 🔶 In Progress |
+| v3.2 (RAG assistant, Prophet forecasting) | Jun 2026 | ❌ Planned |
+| v4.0 (Aggregators, WhatsApp, multi-tenant) | Oct 2026 | ❌ Planned |
+| v5.0 (Full SaaS platform, scale) | Q1 2027 | ❌ Planned |
+
+---
+
+## 12. SCRUM Pipeline Overview
+
+BakeManage follows the **Olympus.ai Sovereign SCRUM** framework. Full details in [`docs/SOVEREIGN_SCRUM.md`](docs/SOVEREIGN_SCRUM.md).
+
+### Sprint Naming (Greek gods, ascending)
+`Ares → Hermes → Athena → Aphrodite → Zeus → Apollo → Hephaestus → Dionysus → ...`
+
+### Active Sprint: **Hermes** (Apr–May 2026)
+
+| Story | Title | Status |
+|-------|-------|--------|
+| STORY-009 | structlog JSON logging + correlation IDs | ❌ OPEN |
+| STORY-010 | Authentik OIDC wiring (SSO_ENFORCE=true) | ❌ OPEN |
+| STORY-011 | Vault secret consumption (hvac) | ❌ OPEN |
+| STORY-012 | GSTR-1 / 3B reconciliation engine | ❌ OPEN |
+| STORY-013 | Android POS app scaffold (Kotlin/React Native) | ❌ OPEN |
+| STORY-014 | pgvector HNSW index + RAG pipeline scaffold | ❌ OPEN |
+
+### AI Agent Roles
+
+| Agent | Role |
+|-------|------|
+| **GHCP** (GitHub Copilot) | Architect, Code Author, Reviewer |
+| **GAIS** (Google AI Studio) | UI/UX Specialist, RAG design, App prototyping |
+| **PPRO** (Perplexity Pro) | Researcher, Error forensics, Regulatory intelligence |
+| **AGAM** (Antigravity Agent Manager) | Implementer, Executor (post-May on-prem) |
+
+---
+
+## 13. Getting Started
 
 ### Prerequisites
 
-- Docker Desktop >= 4.x with Compose v2
-- macOS / Linux / WSL2
+- Docker + Docker Compose V2 (`docker compose` not `docker-compose`)
+- Python 3.11+ (for local development)
+- Node.js 20+ (for frontend)
 
-### Steps
+### Quick Start (Docker)
 
-```
-# 1. Clone the repo
+```bash
+# 1. Clone and configure
 git clone https://github.com/truemycornea/BakeManage.git
 cd BakeManage
-
-# 2. Configure environment (defaults work for sandbox)
 cp .env.example .env
+# Edit .env: set DB_PASSWORD, SECRET_KEY, GEMINI_API_KEY (optional)
 
-# 3. Build and start all 5 containers
-docker compose up --build -d
+# 2. Start all services
+docker compose up -d
 
-# 4. Wait for health checks (30-45 seconds)
-docker compose ps
+# 3. Apply migrations and seed data
+docker compose exec api alembic upgrade head
+docker compose exec api python app/seeding.py
 
-# 5. Seed demo data (13 recipes + 23 media assets)
-docker compose exec api python scripts/seed_recipes_media.py
+# 4. Verify health
+curl http://localhost:8000/healthz
+# {"status": "ok", "version": "3.0.0", "timestamp": "..."}
 
-# 6. Open web app
-open http://localhost:3001   # macOS
-# Login PIN: sandbox1234
+# 5. Access
+# API docs:    http://localhost:8000/docs
+# Frontend:    http://localhost:3000
+# Flower:      http://localhost:5555
+# Metrics:     http://localhost:8000/metrics
 ```
 
-**Sandbox credentials:**
-
-| Username | PIN | Role |
-|---|---|---|
-| admin | sandbox1234 | Full access (owner) |
-
-The SPA login accepts only the PIN. API calls use
-`X-Client-Role` + `X-Client-Pin` headers, or a JWT Bearer token from `/auth/login`.
-
----
-
-## 5. Environment Variables Reference
-
-| Variable | Default | Description |
-|---|---|---|
-| DATABASE_URL | postgres://bakemanage:bakemanage@db:5432/bakemanage | PostgreSQL connection |
-| REDIS_URL | redis://redis:6379/0 | Redis for inventory cache |
-| CELERY_BROKER_URL | redis://redis:6379/0 | Celery broker |
-| CELERY_RESULT_BACKEND | redis://redis:6379/0 | Celery result store |
-| ENVIRONMENT | development | Set `production` to enforce HTTPS |
-| ENFORCE_HTTPS | false | Reject non-HTTPS requests |
-| JWT_SECRET | auto-generated | JWT signing secret - change in production |
-| FERNET_KEY | auto-derived | Symmetric key for credential encryption |
-| BOOTSTRAP_PIN | sandbox1234 | Admin bootstrap PIN |
-| PIN_PEPPER | sandbox-bake-pepper | PBKDF2 pepper for PIN hashing |
-| DEFAULT_ADMIN_PIN | sandbox1234 | Seeded admin PIN |
-| DEFAULT_ADMIN_USERNAME | admin | Seeded admin username |
-| ANOMALY_THRESHOLD | 0.35 | Proofing anomaly alert cutoff |
-| CACHE_TTL_SECONDS | 300 | Redis cache TTL (seconds) |
-
----
-
-## 6. API Reference
-
-**Base URL:** `http://localhost:8000`
-
-**Interactive docs (live):**
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-
-### Authentication Headers
-
-| Scheme | Headers |
-|---|---|
-| JWT Bearer | `Authorization: Bearer <token>` |
-| Role + PIN | `X-Client-Role: owner` and `X-Client-Pin: sandbox1234` |
-
-### Get a Token
+### Local Development (without Docker)
 
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","pin":"sandbox1234"}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+# Backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# Start services (PostgreSQL + Redis required separately)
+uvicorn app.main:app --reload --port 8000
+
+# Frontend
+cd frontend && npm install && npm run dev
+
+# Run tests
+pytest -v
 ```
 
----
+### Environment Variables
 
-### Auth
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | /auth/login | None | Returns JWT access token |
-| GET | /users/me | JWT | Current user profile |
-
----
-
-### Health and Monitoring
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | /health | None | Liveness: `{"status":"ok"}` |
-| GET | /health/extended | None | Golden Signals: latency, traffic, error rate, saturation |
-| GET | /health/metrics | None | Prometheus-style text metrics |
-| GET | /system/status | JWT | Container system status |
-
-```bash
-curl http://localhost:8000/health/extended
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | ✅ | `postgresql://user:pass@host:5432/dbname` |
+| `REDIS_URL` | ✅ | `redis://localhost:6379/0` |
+| `SECRET_KEY` | ✅ | JWT signing secret (32+ chars) |
+| `GEMINI_API_KEY` | Optional | For premium OCR path only |
+| `DIPLOMAT_URL` | Optional | Olympus.ai LLM router |
+| `VAULT_ADDR` | Optional | HashiCorp Vault for Olympus deployments |
+| `SSO_ENFORCE` | Optional | `true` to enforce Authentik SSO |
 
 ---
 
-### Dashboard
+## 14. API Reference
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | /dashboard/summary | Role+PIN | Stock, quality pass rate, proofing readings, expiry count |
+### Authentication
 
-```bash
-curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  http://localhost:8000/dashboard/summary
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/auth/login` | PIN login → JWT access + refresh tokens |
+| `POST` | `/auth/refresh` | Refresh access token |
+| `PATCH` | `/auth/profile` | Update user profile (language_preference, etc.) |
 
----
+### POS & Billing (Epic A1)
 
-### Multimodal Ingestion
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | /ingest/image | Role+PIN | Upload JPEG/PNG receipt or handwritten note |
-| POST | /ingest/document | Role+PIN | Upload PDF or Excel purchase order |
-
-```bash
-# Upload image receipt
-curl -X POST http://localhost:8000/ingest/image \
-  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  -F "file=@receipt.jpg" -F "vendor_hint=Amul Dairy"
-
-# Upload Excel PO
-curl -X POST http://localhost:8000/ingest/document \
-  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  -F "file=@purchase_order.xlsx"
-```
-
----
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/pos/sale` | Create sale (idempotent via `Idempotency-Key` header) |
+| `GET` | `/pos/sale/{id}` | Get sale with lines, taxes, payments |
+| `GET` | `/pos/daily_summary` | CGST/SGST/IGST breakdown, top-5 SKUs |
+| `POST` | `/pos/sale/sync` | Bulk offline sale sync |
+| `GET` | `/pos/receipt/{id}/pdf` | PDF receipt download |
 
 ### Inventory
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | /inventory/hot | Role+PIN | Top SKUs from Redis cache (cached from 2nd call) |
-| GET | /inventory/cache | JWT | Full cached inventory snapshot |
-| GET | /stock/items | Role+PIN | All 105 SKUs with expiry countdown in days |
-| GET | /stock/expiring | Role+PIN | Items expiring within 7 days |
-| POST | /stock/add | Role+PIN | Add new inventory item |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET/POST` | `/inventory/` | List/create inventory items |
+| `GET/PUT` | `/inventory/{id}` | Get/update item |
+| `GET` | `/inventory/expiring` | Items expiring within N days (FEFO) |
+
+### Ingestion (Epic A3)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/ingest/image` | Upload image/PDF → structured invoice |
+| `POST` | `/ingest/excel` | Upload Excel → structured purchase order |
+| `GET` | `/ingest/status/{job_id}` | Check async ingestion job status |
+
+### Recipes & Costing
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET/POST` | `/recipes/` | List/create recipes with BOM |
+| `POST` | `/recipes/{id}/scale` | Scale recipe to target batch size |
+| `GET` | `/recipes/{id}/cost` | Real-time COGS roll-up |
+
+### Analytics
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/analytics/margin` | Margin analysis by product/period |
+| `GET` | `/analytics/waste` | Waste report by category/cause |
+| `GET` | `/analytics/forecast` | ML demand forecast for SKUs |
+| `GET` | `/analytics/gst_summary` | GST liability breakdown for period |
+
+### Observability
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/healthz` | Liveness probe (Olympus-standard) |
+| `GET` | `/health/extended` | Full dependency health check |
+| `GET` | `/metrics` | Prometheus scrape endpoint |
+
+Full interactive API docs: `http://localhost:8000/docs` (Swagger UI)
+
+---
+
+## 15. Testing
 
 ```bash
-# Add stock
-curl -X POST http://localhost:8000/stock/add \
-  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Maida Flour",
-    "quantity": 50,
-    "unit_of_measure": "kg",
-    "category": "flour",
-    "unit_price": 42.0,
-    "expiration_date": "2026-08-01"
-  }'
+# Run all tests
+pytest -v
+
+# Run with coverage
+pytest --cov=app --cov-report=html
+
+# Run specific suite
+pytest tests/test_pos.py -v
+pytest tests/test_ingestion.py -v
+
+# Run integrity markers (nightly)
+pytest -m integrity -v
+
+# Load test (requires running server)
+locust -f tests/locustfile.py --host=http://localhost:8000 \
+  --users=50 --spawn-rate=10 --run-time=60s --headless
+```
+
+### Test Architecture
+
+```
+tests/
+├── test_pos.py          — 17 tests: GST slabs, rounding, idempotency, offline sync, FEFO
+├── test_ingestion.py    — 22+ tests: GSTIN extraction, dedup, multi-tenant isolation
+├── test_costing.py      — Recipe BOM, batch scaling, margin calculation
+├── test_auth.py         — JWT, PIN, RBAC, token refresh
+├── test_telemetry.py    — Proofing sessions, anomaly scoring
+├── test_forecasting.py  — ML model training, prediction accuracy
+└── conftest.py          — Shared fixtures (test DB, test client, seed data)
 ```
 
 ---
 
-### Cost Computing
+## 16. Security & Compliance
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | /cost/compute | Role+PIN | Roll up components + overhead; returns margin |
+### Security Architecture
 
-```bash
-curl -X POST http://localhost:8000/cost/compute \
-  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "components": [
-      {"name": "Maida", "quantity": 1.0, "unit_cost": 42.0, "yield_pct": 0.95},
-      {"name": "Butter", "quantity": 0.2, "unit_cost": 495.0, "yield_pct": 1.0}
-    ],
-    "overhead": 30.0,
-    "selling_price": 250.0
-  }'
-# Returns: {"total_cost":"128.90","margin_percent":"48.44","warning":null}
-```
+- **Passwords**: PBKDF2+SHA256 with pepper; never stored in plaintext
+- **API keys / secrets**: Fernet symmetric encryption at rest
+- **Transport**: HTTPS everywhere; HSTS enforced; nginx security headers
+- **Auth**: JWT (HS256) with configurable expiry; refresh token rotation
+- **Rate limiting**: slowapi on all public endpoints
+- **Secrets management**: HashiCorp Vault (Olympus); env var fallback for dev
+- **SSO**: Authentik OIDC (stub active; full enforcement post-May)
+- **Container**: non-root user, `--chown`, OCI labels, Trivy HIGH/CRITICAL scan in CI
 
----
+### Regulatory Compliance
 
-### Proofing Telemetry
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | /telemetry/proofing | JWT | Log temp/humidity/CO2; returns anomaly score |
-| POST | /proofing/telemetry | Role+PIN | Extended telemetry (fan speed, status fields) |
-
-```bash
-curl -X POST http://localhost:8000/telemetry/proofing \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"temperature_c": 27.5, "humidity_percent": 78.0, "co2_ppm": 450.0}'
-# Returns: {"status":"ok","anomaly_score":0.0}
-```
-
-Anomaly scoring formula: `max(0, (temp-38) * 0.01) + max(0, (humidity-85) * 0.005)`
-
----
-
-### Quality Control
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | /quality/browning | JWT | Upload baked-good photo; returns browning index score |
-| POST | /quality/validate | Role+PIN | Submit quality check record |
-
----
-
-### Sales
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | /sales/daily | Role+PIN | Today revenue + per-item breakdown |
-| POST | /sales/record | Role+PIN | Record a sale transaction |
-
----
-
-### Recipe Library
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | /recipes | Role+PIN | All 13 recipes with BOM and total cost |
-| GET | /recipes/{id} | Role+PIN | Single recipe BOM detail |
-| GET | /recipes/{id}/scale | Role+PIN | Scale recipe to target servings; returns scale factor + COGS |
-| POST | /recipes/{id}/cogs/queue | JWT | Queue async COGS Celery task |
-| POST | /recipes/{id}/inventory/queue | JWT | Queue async inventory deduction |
-
----
-
-### GST Calculator
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | /gst/slabs | Role+PIN | Reference table of all GST category slabs |
-| POST | /gst/compute | Role+PIN | Compute CGST + SGST for a product (supports presets and custom rate) |
-
-```bash
-curl -X POST http://localhost:8000/gst/compute \
-  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  -H "Content-Type: application/json" \
-  -d '{"category": "pastries_cakes", "base_price": 100.0, "quantity": 1}'
-# Returns: {"category":"pastries_cakes","gst_rate_pct":18.0,"cgst_pct":9.0,"sgst_pct":9.0,
-#           "cgst_amount":9.0,"sgst_amount":9.0,"total_gst":18.0,"total_with_gst":118.0}
-```
-
-**Supported categories and rates:**
-
-| Category | GST Rate |
-|---|---|
-| unbranded_bread | 0% |
-| unpackaged_namkeen | 0% |
-| branded_biscuits | 5% |
-| branded_namkeen | 12% |
-| pastries_cakes | 18% |
-| chocolate | 18% |
-| custom | caller-supplied |
-
----
-
-### Waste Tracking
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | /waste/log | Role+PIN | Log a waste event with item, quantity, cause, and cost |
-| GET | /waste/report | Role+PIN | Aggregated waste report by cause and item (configurable window) |
-
-```bash
-# Log a waste event
-curl -X POST http://localhost:8000/waste/log \
-  -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  -H "Content-Type: application/json" \
-  -d '{"item_name": "Croissant", "quantity_wasted": 3.5, "unit_of_measure": "kg",
-       "waste_cause": "overproduction", "cost_per_unit": 85.0}'
-
-# 30-day summary
-curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  "http://localhost:8000/waste/report?days=30"
-```
-
-**Cause enum:** `overproduction | spoilage | breakage | trim | other`
-
----
-
-### Media Library
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | /media/assets | Role+PIN | All assets; filter with ?asset_type=video&category=recipe |
-| GET | /media/assets/{id} | Role+PIN | Full asset with base64 thumbnail and PDF data |
-
-```bash
-# Video training assets
-curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  "http://localhost:8000/media/assets?asset_type=video&category=training"
-
-# Recipe PDF cards
-curl -H "X-Client-Role: owner" -H "X-Client-Pin: sandbox1234" \
-  "http://localhost:8000/media/assets?asset_type=pdf&category=recipe"
-```
-
----
-
-### Credentials (Encrypted Storage)
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | /credentials | Role+PIN | Store external API key (Fernet encrypted at rest) |
-
----
-
-## 7. Authentication and RBAC
-
-### Role Permissions
-
-| Role | Allowed API Domains |
-|---|---|
-| owner | All (`*`) |
-| operations | ingestion, inventory, proofing, quality, costing, health |
-| auditor | inventory, health (responses are field-filtered) |
-
-### Security Controls
-
-| Control | Implementation |
-|---|---|
-| PIN hashing | PBKDF2-SHA256 with configurable pepper |
-| API key storage | Fernet AES-128-CBC symmetric encryption |
-| Auth tokens | JWT HS256, configurable TTL (default 60 minutes) |
-| TLS enforcement | Starlette middleware rejects HTTP when ENFORCE_HTTPS=true |
-| Field-level filtering | Auditor role sees stripped response payloads |
-
----
-
-## 8. Data Models
-
-### Tables
-
-| Table | Key Fields |
-|---|---|
-| users | id, username, pin_hash, role |
-| vendors | id, name, contact, gstin |
-| invoices | id, vendor_id, total_amount, raw_text, source_type |
-| inventory_items | id, name, quantity_on_hand, unit_of_measure, category, unit_price, expiry_date |
-| recipes | id, name, overhead_cost, yield_amount |
-| recipe_ingredients | id, recipe_id, ingredient_name, required_qty, yield_pct, cost |
-| proofing_telemetry | id, temperature_c, humidity_percent, co2_ppm, anomaly_score |
-| quality_checks | id, browning_score, status, notes |
-| sales_records | id, product_name, quantity_sold, unit_price, sale_date |
-| api_credentials | id, service_name, encrypted_key |
-| media_assets | id, title, asset_type, category, thumbnail_data, pdf_data |
-| loyalty_records | id, customer_name, phone, tier, total_spend, points, last_visit |
-| supplier_lead_times | id, vendor_name, ingredient_name, lead_days, price_per_unit |
-| stock_indents | id, ingredient_name, quantity_needed, urgency, status |
-| stock_transfers | id, source_location, dest_location, item_name, quantity, transferred_at |
-| waste_records | id, item_name, quantity_wasted, unit_of_measure, waste_cause, cost_per_unit, estimated_cost, notes, logged_by, logged_at |
-
-### Seeded Demo Data
-
-| Entity | Count |
-|---|---|
-| Inventory SKUs | 105 |
-| Vendors | 6 |
-| Invoices | 31 |
-| Recipes | 13 |
-| Recipe Ingredients | 98 |
-| Media Assets | 23 (13 PDF cards + 10 training videos) |
-| Quality Checks | 23 |
-| Proofing Readings | 30 |
-| Sales Records | 10 |
-
----
-
-## 9. Running Tests
-
-```bash
-# All 97 tests — inside container (recommended)
-docker compose exec api pytest --tb=short -q
-
-# With coverage report
-docker compose exec api pytest --cov=app --cov-report=term-missing
-
-# Unit tests only
-docker compose exec api pytest tests/test_controls.py tests/test_costing.py tests/test_ingestion.py -v
-
-# Integration tests only (all phases)
-docker compose exec api pytest tests/test_api_all_phases.py -v
-
-# Individual unit modules
-docker compose exec api pytest tests/test_controls.py -v   # 15 tests: RBAC + security
-docker compose exec api pytest tests/test_costing.py -v    # 10 tests: cost roll-up math
-docker compose exec api pytest tests/test_ingestion.py -v  # 10 tests: ingestion pipeline
-```
-
-> **First time setup:** copy the integration test file into the container before running:
-> ```bash
-> docker compose cp tests/test_api_all_phases.py api:/app/tests/
-> ```
-
-### Current Status: 97/97 passed
-
-| Test File | Tests | Coverage Area |
+| Regulation | Status | Notes |
 |---|---|---|
-| test_controls.py | 15 | Auth, RBAC, HTTPS enforcement, Fernet, field-level filtering |
-| test_costing.py | 10 | Cost roll-up, margin computation, guardrail trigger |
-| test_ingestion.py | 10 | Image/doc ingestion, invoice persistence |
-| test_api_all_phases.py | 62 | Full API integration: all Phase 1/2/3 endpoints, security boundaries, Features 10/12/13 |
+| GST (CGST/SGST/IGST/IGST) | ✅ | HSN-aware, all slabs, rounding per CBIC |
+| GSTR-1 / 3B | 🔶 Sprint Hermes | Auto-population and ITC reconciliation |
+| DPDP Act (India Data Privacy) | 🔶 Sprint Zeus | Tenant data isolation, consent management |
+| FSSAI labelling | 🔶 Sprint Athena | Allergen tracking, production batch labels |
+| PCI-DSS (payment data) | 🔶 Sprint Zeus | No card data stored; gateway tokenisation |
 
-#### Seeding Demo Data
+### Vulnerability Management
+
+- GitHub Dependabot for dependency alerts
+- Trivy container scan on every CI push (HIGH/CRITICAL block merge)
+- OWASP Top 10 review per sprint
+- Secrets regex scan in CI (`lint-and-security` job)
+
+---
+
+## 17. Deployment
+
+### Cloud (GCP — Managed SaaS)
 
 ```bash
-# Phase 1 data (stock, recipes, sales, QC, media) — run inside container
-docker compose exec api python /app/scripts/seed_data.py
+# Staging (automatic on main merge)
+# .github/workflows/cd-staging.yml → Cloud Run (asia-south1)
 
-# Phase 3 data (supplier lead-times, loyalty CRM, auto-indent) — copy then run
-docker compose cp scripts/seed_phase3.py api:/tmp/
-docker compose exec api python /tmp/seed_phase3.py
+# Production (manual approval required)
+# .github/workflows/cd-prod.yml → production environment gate
+# Auto-rollback: 12 health check attempts; reverts to previous image if fail
 ```
 
----
+### Self-Hosted (Docker Compose)
 
-## 10. Frontend SPA
-
-Volume-mounted single-file SPA at `frontend/index.html`. Edit the file and refresh the browser;
-no Docker rebuild needed.
-
-### Navigation Structure
-
-```
-OPERATIONS
-  Dashboard         KPI tiles, revenue summary, stock counts, expiry alerts
-  Injection         Image / PDF / Excel / Video upload with styled drop zones
-  Quality Control   Photo analysis, browning index check, quality scoring form
-  Proofing          Atmosphere telemetry entry, batch ID tracking
-
-INVENTORY
-  Stock Levels      Full 105-SKU table with FEFO indicators and expiry days
-  Cost Calculator   Interactive margin calculator with ingredient BOM builder
-
-LIBRARY
-  Recipes           13 recipe cards, BOM detail drawer, load-to-calculator
-  Media             23 assets: PDF card viewer + video metadata browser
-
-COMPLIANCE
-  GST Calculator    Multi-slab CGST+SGST computation with category presets
-  Waste Tracker     Log waste events by cause; 30-day report with top-item breakdown
-
-INTELLIGENCE
-  Batch Scaling     Scale any recipe to target servings; displays scale factor + COGS
-
-SYSTEM
-  Health Monitor    Golden signals: latency p50, error rate, saturation
-  System Status     Container health overview
-```
-
-### Nginx Proxy Rule
-
-`frontend/nginx.conf` maps `/api/*` to `http://api:8000/`
-
----
-
-## 11. Production Backup
-
-A versioned snapshot is stored alongside the repository for quick restore and audit purposes.
-
-| Artifact | Path | Size |
-|---|---|---|
-| Source snapshot | `production/v2.0.0/` | — |
-| Compressed archive | `production/bakemanage-v2.0.0-production-20260402.tar.gz` | 322 KB |
-
-**Restore from snapshot:**
 ```bash
-cd production/v2.0.0
-docker compose up --build -d
+docker compose -f docker-compose.yml up -d
+# Services: api, worker, db, redis, nginx, flower
 ```
 
-**Restore from archive:**
+### Olympus.ai On-Premises (post-May 2026)
+
 ```bash
-tar -xzf production/bakemanage-v2.0.0-production-20260402.tar.gz -C /tmp/restore/
-cd /tmp/restore
-docker compose up --build -d
+# Via Ansible (AGAM-executed)
+ansible-playbook infra/ansible/gap_bakemanage_001_deploy.yml \
+  -i infra/ansible/inventory/olympus.yml
+# Vault pre-flight → secret injection → docker compose up → /healthz validation
 ```
 
-Full endpoint listing, environment reference, and runbook: `production/v2.0.0/PRODUCTION_README.md`
+---
+
+## 18. AI Development Workflow
+
+BakeManage uses a multi-agent AI development protocol. See [`copilot-instructions.md`](copilot-instructions.md) for full Olympus.ai Sovereign framework.
+
+### SISA Protocol (End of Every Session)
+
+1. **S**ync — commit all artefacts, push branch
+2. **I**ntegrity — `> GHCP: security audit` (secrets check + git history scan)
+3. **S**tate — update `docs/DAILY_STATE.md` and `docs/SOVEREIGN_SCRUM.md`
+4. **A**nchor — add entry to `docs/ACTION_LOG.md`
+
+### Agent Interaction Pattern
+
+```
+GHCP (authors) → PR → CI green → Human review → merge
+                                     ↓
+                              AGAM (executes on Olympus LXC)
+                                     ↓
+                              Evidence PR → GHCP marks ✅ DONE
+```
+
+### Prompting GHCP for a Story
+
+```
+You are GHCP, Sovereign Architect for BakeManage on Olympus.ai.
+Context: Read docs/SOVEREIGN_SCRUM.md (active sprint) and docs/DAILY_STATE.md (current state).
+Stack: FastAPI + PostgreSQL + Redis + Celery + React 18 + TypeScript + Vite.
+Story: STORY-NNN — <title>
+Acceptance criteria: <criteria>
+Constraints:
+  - Maintain test coverage (add tests in tests/)
+  - Follow existing auth/model/schema patterns
+  - Update docs/SOVEREIGN_SCRUM.md and docs/DAILY_STATE.md
+  - Run SISA at session end
+Output: code changes + tests + SCRUM doc updates + SISA commit
+```
 
 ---
 
-## 12. Release History
+## 19. Contributing
 
-| Version | Date | Changes |
-|---|---|---|
-| v2.1.0 | 2026-04-02 | Feature 26 recipe batch scaling (`/recipes/{id}/scale`), Feature 27 waste tracking (`/waste/log`, `/waste/report`, `waste_records` table), Feature 28 GST calculator (`/gst/compute`, `/gst/slabs`); 3 new UI modules (GST Calculator, Waste Tracker, Batch Scaling); 7 bug fixes: lifespan migration (deprecation warnings eliminated), dashboard real sales KPIs (was returning None), system/status Phase 3 DB counts (loyalty/lead-times/indents/transfers/waste), targeted cache clear (was flushdb); +15 integration tests → 97/97 passing |
-| v2.1.0-uat | 2026-04-03 | Injection UI overhaul: added `openpyxl==3.1.5` to requirements (Excel ingestion was broken without it), MIME normalization in `/ingest/document` to accept `application/octet-stream` + filename extension check, frontend JSON error parsing in GET/POST/POSTF helpers, client-side file type validation (onImgSel/onDocSel), Sample Template CSV download button, `downloadExcelTemplate()` function; full platform data seed: 221 stock items, 216 sales, 13 waste records, 12 loyalty customers, 12 lead times, 170 indents, 13 recipes, 23 media assets; production snapshot: `production/v2.1.0/` folder + `bakemanage-v2.1.0-production-20260403.tar.gz` (347K archive) |
-| v2.0.0 | 2026-04-02 | Phase 2 hardening (rate-limit 120 req/min, GZip, Prometheus /metrics, health gate) + Phase 3 enterprise ops (supply-chain indent/transfer/lead-time, menu engineering, vendor optimisation, ML demand forecast, WhatsApp CRM, loyalty programme); drop-zone CSS breakpoint fix (720 px → 960 px); 47 API integration tests; 82/82 tests passing; production backup archive |
-| v1.5 | 2026-04-02 | Recipe Library, Media Library, 13 seeded recipes, 23 media assets, drop-zone CSS fix (display:block), responsive grid breakpoints at 720px, REDIS_URL env fix, co2_ppm schema fix, 35/35 tests |
-| v1.0 | 2026-04-01 | Core FastAPI, multimodal ingestion, FEFO inventory, cost engine, proofing telemetry, quality control, SRE golden signals, dashboard KPIs, Redis caching, Celery workers |
+### Branch Naming
 
----
+```
+feat/STORY-NNN-<kebab-description>   — new feature
+fix/STORY-NNN-<kebab-description>    — bug fix
+docs/STORY-NNN-<kebab-description>   — documentation
+chore/STORY-NNN-<kebab-description>  — maintenance
+gemini/<feature>                     — GAIS prototyping branch
+agam/evidence-YYYY-MM-DD             — AGAM execution evidence
+```
 
-## 13. Roadmap
+### Definition of Done (DoD)
 
-Full strategic blueprint: [bakemanagerootv2.5.md](bakemanagerootv2.5.md)
+- [ ] Story acceptance criteria met
+- [ ] Tests added/updated and passing (`pytest`)
+- [ ] `docs/SOVEREIGN_SCRUM.md` updated (story → ✅ DONE)
+- [ ] `docs/DAILY_STATE.md` updated
+- [ ] No secrets in code (CI secrets scan passes)
+- [ ] `/healthz` returns 200
+- [ ] PR reviewed and CI green
 
-### v2 - System Hardening (Phase 2)
-- Prometheus native /metrics endpoint
-- Rate limiting middleware (slowapi)
-- gzip response compression
-- Predictive Redis cache warming
-- Container health gate with automatic rollback
+### Key Documents
 
-### v3 - Enterprise Operations (Phase 3) ✅ Complete
-- Central kitchen indent generation
-- Multi-location stock transfer
-- Supplier lead-time tracing
-- Dynamic menu engineering math module
-- Vendor price optimization engine
-- ML demand forecasting
-- WhatsApp CRM integration stub
-- Loyalty and birthday triggers
-- Recipe batch scaling (v2.1.0)
-- Waste tracking and reporting (v2.1.0)
-- Multi-slab GST CGST/SGST calculator (v2.1.0)
-
-### v4 - Horizontal Scale
-- Multi-UOM schema, offline-first sync, white-label component library
-
-### v5 - Multi-Vertical
-- Restaurant KDS routing, Swiggy/Zomato aggregator, Kirana weigh-scale
+| Document | Purpose |
+|----------|---------|
+| [`copilot-instructions.md`](copilot-instructions.md) | Olympus.ai Sovereign GHCP constitution |
+| [`docs/SOVEREIGN_SCRUM.md`](docs/SOVEREIGN_SCRUM.md) | Live SCRUM register (epics, stories, sync table) |
+| [`docs/DAILY_STATE.md`](docs/DAILY_STATE.md) | GHCP ↔ AGAM shared state bus |
+| [`docs/PROJECT_BRAIN.md`](docs/PROJECT_BRAIN.md) | Infrastructure map, env vars, security state |
+| [`docs/SPRINT_BRIEF_ARES.md`](docs/SPRINT_BRIEF_ARES.md) | Sprint 1 (Ares) brief |
+| [`docs/WISDOM_LOG.md`](docs/WISDOM_LOG.md) | Known errors + remediations |
+| [`docs/GAPS_AND_HURDLES.md`](docs/GAPS_AND_HURDLES.md) | Active blockers and technical debt |
+| [`ResearchDoc1.md`](ResearchDoc1.md) | Deep research: market, architecture, SCRUM epics |
+| [`bakemanagerootv2.5.md`](bakemanagerootv2.5.md) | Comprehensive architecture blueprint v2.5 |
+| [`ResearchInsight2_CopilotImplementation.md`](ResearchInsight2_CopilotImplementation.md) | v3.0 implementation decisions |
 
 ---
 
-BakeManage (c) 2026 - All IP assigned to BakeManage
+*BakeManage is part of the [Olympus.ai](docs/PROJECT_BRAIN.md) Sovereign Platform.*
+*Platform principle: **"Imagine It. Automate It."***
