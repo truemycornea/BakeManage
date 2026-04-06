@@ -336,9 +336,9 @@ Three primary forces are accelerating Indian bakery digitisation:
 |---------|------|---------|
 | `api` (FastAPI + uvicorn) | 8000 | REST API, auth, business logic |
 | `worker` (Celery) | — | Async: FEFO, forecasting, ingestion, alerts |
-| `db` (PostgreSQL 15) | 5432 | Primary data store |
+| `db` (PostgreSQL 16) | 5432 | Primary data store |
 | `redis` (Redis 7) | 6379 | Cache + Celery broker/backend |
-| `nginx` (frontend) | 3000 | React SPA + reverse proxy |
+| `nginx` (frontend) | 3001 | React SPA + reverse proxy |
 | `flower` (Celery monitor) | 5555 | Task queue observability |
 
 ### 8.3 Key Data Model
