@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, Request, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from PIL import Image, ImageStat
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -408,6 +408,25 @@ async def login(request: Request, payload: AuthRequest, session: Session = Depen
 @app.get("/users/me", response_model=UserOut)
 async def me(user: User = Depends(require_role("admin", "operator", "viewer"))) -> UserOut:
     return user
+
+
+class ProfileUpdateRequest(BaseModel):
+    language_preference: str = Field(pattern="^(en|ml|ta|kn|te)$")
+
+
+@app.patch("/auth/profile", response_model=dict)
+async def update_profile(
+    payload: ProfileUpdateRequest,
+    user: User = Depends(require_role("admin", "operator", "viewer")),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Update user profile preferences — Epic B1 (language preference)."""
+    db_user = session.query(User).filter(User.id == user.id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    db_user.language_preference = payload.language_preference
+    session.commit()
+    return {"id": db_user.id, "username": db_user.username, "language_preference": db_user.language_preference}
 
 
 # ---------------------------------------------------------------------------

@@ -30,6 +30,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="viewer")
     hashed_pin: Mapped[str] = mapped_column(String(255), nullable=False)
     salt: Mapped[str] = mapped_column(String(255), nullable=False)
+    language_preference: Mapped[str] = mapped_column(String(8), nullable=False, default="en")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 class UserAccount(Base):
     __tablename__ = "user_accounts"
