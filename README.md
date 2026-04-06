@@ -723,10 +723,10 @@ curl http://localhost:8000/healthz
 # {"status": "ok", "version": "3.0.0", "timestamp": "..."}
 
 # 5. Access
-# API Swagger docs: http://localhost:8000/docs
-# Frontend SPA:     http://localhost:3000
-# Celery Flower:    http://localhost:5555
-# Prometheus:       http://localhost:8000/metrics
+# API Swagger docs:        http://localhost:8000/docs
+# Frontend SPA:            http://localhost:3001
+# App metrics endpoint:    http://localhost:8000/metrics
+# Celery Flower:           not included in the default docker-compose.yml setup
 ```
 
 ### Local Development (without Docker)
