@@ -28,7 +28,8 @@
     "print_receipt": "Print Receipt",
     "void_sale": "Void Sale",
     "offline_mode": "Offline Mode",
-    "sync_pending": "Sync Pending"
+    "sync_pending": "Sync Pending",
+    "no_items_yet": "No items yet"
   },
   "inventory": {
     "title": "Inventory",

@@ -10,10 +10,9 @@ Endpoints:
 """
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, date as _date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from io import BytesIO
 from typing import List
 
@@ -23,9 +22,6 @@ from sqlalchemy.orm import Session
 
 from .database import get_session
 from .models import (
-    InventoryItem,
-    OfflineQueue,
-    OfflineQueueStatus,
     Payment,
     PaymentMethod,
     Sale,
@@ -80,7 +76,7 @@ def _compute_sale(
         price = line_in.unit_price
         disc_pct = line_in.discount_pct / Decimal("100")
         line_pre_disc = qty * price
-        disc_amt = (line_pre_disc * disc_pct).quantize(Decimal("0.01"))
+        disc_amt = (line_pre_disc * disc_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         taxable = line_pre_disc - disc_amt
 
         hsn = line_in.hsn_code or "1905"  # default to bakery HSN
@@ -388,7 +384,7 @@ async def daily_summary(
         .all()
     )
 
-    total_revenue = sum(s.total for s in sales)
+    total_revenue = sum((s.total for s in sales), Decimal("0"))
     total_cgst = Decimal("0")
     total_sgst = Decimal("0")
     total_igst = Decimal("0")
@@ -455,6 +451,14 @@ async def sync_offline_sales(
             session.add(payment)
             session.commit()
             results.append(SyncResultItem(idempotency_key=key, result="created", sale_id=sale.id))
+        except IntegrityError:
+            session.rollback()
+            # Race condition — another request with same key won; return duplicate
+            dup = session.query(Sale).filter(Sale.idempotency_key == key).first()
+            if dup:
+                results.append(SyncResultItem(idempotency_key=key, result="duplicate", sale_id=dup.id))
+            else:
+                results.append(SyncResultItem(idempotency_key=key, result="error", error="Integrity error"))
         except HTTPException as exc:
             session.rollback()
             results.append(SyncResultItem(idempotency_key=key, result="error", error=exc.detail))

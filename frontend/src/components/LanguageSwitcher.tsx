@@ -1,4 +1,4 @@
-import React from "react";
+import { ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 const LANGUAGES = [
@@ -12,7 +12,7 @@ const LANGUAGES = [
 export default function LanguageSwitcher() {
   const { i18n } = useTranslation();
 
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const lang = e.target.value;
     i18n.changeLanguage(lang);
     localStorage.setItem("bakemanage_lang", lang);

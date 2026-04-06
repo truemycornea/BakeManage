@@ -1,4 +1,3 @@
-import React from "react";
 import { useTranslation } from "react-i18next";
 
 interface CartItem {
@@ -21,7 +20,7 @@ export default function Cart({ items = [], onCheckout }: CartProps) {
     <div style={{ border: "1px solid #ccc", borderRadius: "8px", padding: "1rem" }}>
       <h2>{t("pos.cart")}</h2>
       {items.length === 0 ? (
-        <p style={{ color: "#888" }}>No items yet</p>
+        <p style={{ color: "#888" }}>{t("pos.no_items_yet")}</p>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>

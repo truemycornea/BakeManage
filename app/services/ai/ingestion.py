@@ -149,7 +149,12 @@ class InvoiceIngestionService:
             try:
                 result = self._gemini_extract(file, mime_type, tenant_id)
                 result.source = "gemini"
-                self._check_duplicate(result.gstin, result.invoice_no, str(result.date), tenant_id)
+                self._check_duplicate(
+                    result.gstin,
+                    result.invoice_no,
+                    str(result.date) if result.date is not None else None,
+                    tenant_id,
+                )
                 return result
             except (ImportError, Exception) as exc:
                 logger.warning("Gemini Vision failed, using local result: %s", exc)

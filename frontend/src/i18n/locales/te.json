@@ -28,7 +28,8 @@
     "print_receipt": "రసీదు ముద్రించండి",
     "void_sale": "అమ్మకం రద్దు చేయండి",
     "offline_mode": "ఆఫ్‌లైన్ మోడ్",
-    "sync_pending": "సింక్ పెండింగ్"
+    "sync_pending": "సింక్ పెండింగ్",
+    "no_items_yet": "ఏ వస్తువులు లేవు"
   },
   "inventory": {
     "title": "నిల్వ",

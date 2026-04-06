@@ -28,7 +28,8 @@
     "print_receipt": "ರಸೀದಿ ಮುದ್ರಿಸಿ",
     "void_sale": "ಮಾರಾಟ ರದ್ದು ಮಾಡಿ",
     "offline_mode": "ಆಫ್‌ಲೈನ್ ಮೋಡ್",
-    "sync_pending": "ಸಿಂಕ್ ಬಾಕಿ ಇದೆ"
+    "sync_pending": "ಸಿಂಕ್ ಬಾಕಿ ಇದೆ",
+    "no_items_yet": "ಯಾವುದೇ ಐಟಂಗಳಿಲ್ಲ"
   },
   "inventory": {
     "title": "ದಾಸ್ತಾನು",

@@ -6,7 +6,6 @@ tax component as prescribed by the CBIC.
 """
 from __future__ import annotations
 
-import decimal
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 

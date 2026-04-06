@@ -19,7 +19,6 @@ HSN_GST_RATES: dict[str, int] = {
     "1701": 0,   # Cane or beet sugar
     "0901": 0,   # Coffee (raw)
     "0902": 0,   # Tea
-    "2106": 0,   # Food preparations (unbranded)
     # 5% — packaged foods / bakery raw materials
     "0409": 5,   # Natural honey
     "0805": 5,   # Citrus fruits
@@ -28,7 +27,7 @@ HSN_GST_RATES: dict[str, int] = {
     "2009": 5,   # Fruit juices
     "2101": 5,   # Extracts of coffee, tea
     "2103": 5,   # Sauces, condiments
-    "2106": 5,   # Food preparations (branded)  # noqa: F811
+    "2106": 5,   # Food preparations (branded/packaged)
     "0811": 5,   # Frozen fruits
     "1507": 5,   # Soya-bean oil
     "1511": 5,   # Palm oil

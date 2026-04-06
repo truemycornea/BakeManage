@@ -1,4 +1,3 @@
-import React from "react";
 import { useTranslation } from "react-i18next";
 import Cart from "../components/pos/Cart";
 import ProductGrid from "../components/pos/ProductGrid";

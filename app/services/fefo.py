@@ -6,8 +6,6 @@ then from items with no expiry date, ensuring minimal spoilage.
 """
 from __future__ import annotations
 
-from decimal import Decimal
-
 from sqlalchemy.orm import Session
 
 from ..models import InventoryItem

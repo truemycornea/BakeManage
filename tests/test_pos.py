@@ -10,13 +10,16 @@ Minimum 15 test cases as required by the SCRUM epic spec.
 from __future__ import annotations
 
 import os
+import tempfile
 import uuid
 from decimal import Decimal
 
 import pytest
 
 # ── Environment setup before any imports ──────────────────────────────────
-os.environ.setdefault("DATABASE_URL", "sqlite:///./test_pos_bakemanage.db")
+# Use a unique temp DB file per run to avoid test pollution across runs
+_tmp_db = tempfile.mktemp(suffix=".db", prefix="test_pos_")
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{_tmp_db}")
 os.environ.setdefault("CELERY_BROKER_URL", "memory://")
 os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
 os.environ.setdefault("ENFORCE_HTTPS", "false")
@@ -31,9 +34,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.gst import calculate_gst  # noqa: E402
 from app.services.fefo import fefo_decrement  # noqa: E402
-from app.database import get_session, engine, Base  # noqa: E402
+from app.database import engine, Base  # noqa: E402
 from app.models import InventoryItem, Sale, SaleStatus  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
 
 # ── Auth headers ─────────────────────────────────────────────────────────────
 _PIN = os.environ["BOOTSTRAP_PIN"]

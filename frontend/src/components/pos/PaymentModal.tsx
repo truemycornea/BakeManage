@@ -1,4 +1,4 @@
-import React from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 interface PaymentModalProps {
@@ -9,7 +9,7 @@ interface PaymentModalProps {
 
 export default function PaymentModal({ total, onConfirm, onClose }: PaymentModalProps) {
   const { t } = useTranslation();
-  const [method, setMethod] = React.useState("CASH");
+  const [method, setMethod] = useState("CASH");
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
