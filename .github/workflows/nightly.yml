@@ -142,6 +142,8 @@ jobs:
     name: Locust Load Test (Staging)
     runs-on: ubuntu-latest
     needs: nightly-integrity
+    permissions:
+      contents: read
     continue-on-error: true  # don't fail nightly if staging is down
 
     steps:

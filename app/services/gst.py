@@ -10,7 +10,7 @@ import decimal
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
-from ..gst_rates import get_gst_rate
+from app.gst_rates import get_gst_rate
 
 
 @dataclass

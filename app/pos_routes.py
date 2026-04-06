@@ -59,6 +59,7 @@ router = APIRouter(prefix="/pos", tags=["pos"])
 def _compute_sale(
     payload: SaleIn,
     session: Session,
+    idempotency_key: str,
 ) -> tuple[Sale, list[SaleLine], list[TaxLine], Payment]:
     """Compute sale, lines, tax_lines, and payment — caller persists."""
     subtotal = Decimal("0")
@@ -66,12 +67,12 @@ def _compute_sale(
     # Group tax by HSN for tax line consolidation
     tax_map: dict[str, dict] = {}
 
-    # We create Sale first (without id), lines are added after flush
+    # We create Sale with the provided idempotency key
     sale = Sale(
         bakery_id=payload.bakery_id,
         cashier_id=payload.cashier_id,
         status=SaleStatus.COMPLETED.value,
-        idempotency_key="__placeholder__",  # replaced before commit
+        idempotency_key=idempotency_key,
     )
 
     for line_in in payload.lines:
@@ -313,8 +314,7 @@ async def create_sale(
     if existing:
         return _sale_to_receipt(existing)
 
-    sale, lines, tax_lines, payment = _compute_sale(payload, session)
-    sale.idempotency_key = idempotency_key
+    sale, lines, tax_lines, payment = _compute_sale(payload, session, idempotency_key)
 
     session.add(sale)
     session.flush()  # get sale.id
@@ -442,8 +442,7 @@ async def sync_offline_sales(
             continue
 
         try:
-            sale, lines, tax_lines, payment = _compute_sale(item.sale, session)
-            sale.idempotency_key = key
+            sale, lines, tax_lines, payment = _compute_sale(item.sale, session, key)
             session.add(sale)
             session.flush()
             for sl in lines:
