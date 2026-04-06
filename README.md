@@ -714,8 +714,9 @@ cp .env.example .env
 # 2. Start all services
 docker compose up -d
 
-# 3. Apply migrations and seed
-docker compose exec api alembic upgrade head
+# 3. Initialize the database and seed data
+# The API creates tables automatically on startup using SQLAlchemy metadata.
+# Seed demo/reference data after the containers are healthy.
 docker compose exec api python app/seeding.py
 
 # 4. Verify
