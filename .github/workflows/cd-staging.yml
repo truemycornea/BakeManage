@@ -1,0 +1,79 @@
+name: CD — Staging
+
+on:
+  push:
+    branches: [develop]
+
+env:
+  PROJECT_ID: bakemanage
+  REGION: asia-south1
+  REGISTRY: asia-south1-docker.pkg.dev/bakemanage/api
+  SERVICE_NAME: bakemanage-api-staging
+  STAGING_URL: https://staging-api.bakemanage.in
+
+jobs:
+  build-and-deploy-staging:
+    name: Build, Push & Deploy to Staging
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # OIDC for Workload Identity Federation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag ${{ env.REGISTRY }}:${{ github.sha }} \
+            --tag ${{ env.REGISTRY }}:staging-latest \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.REGISTRY }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}:staging-latest
+
+      - name: Deploy to Cloud Run Staging
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGISTRY }}:${{ github.sha }}
+          env_vars: |
+            ENVIRONMENT=staging
+            ENFORCE_HTTPS=true
+          secrets: |
+            DATABASE_URL=bakemanage-db-url:latest
+            JWT_SECRET=bakemanage-jwt-secret:latest
+            BOOTSTRAP_PIN=bakemanage-bootstrap-pin:latest
+            DEFAULT_ADMIN_PIN=bakemanage-admin-pin:latest
+            REDIS_URL=bakemanage-redis-url:latest
+            CELERY_BROKER_URL=bakemanage-redis-url:latest
+            CELERY_RESULT_BACKEND=bakemanage-redis-url:latest
+
+      - name: Smoke test — staging health check
+        run: |
+          for i in $(seq 1 10); do
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" ${{ env.STAGING_URL }}/health/extended || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Staging smoke test passed"
+              exit 0
+            fi
+            echo "Attempt $i: status=$STATUS — retrying in 10s"
+            sleep 10
+          done
+          echo "❌ Staging smoke test failed after 10 attempts"
+          exit 1

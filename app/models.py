@@ -30,6 +30,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="viewer")
     hashed_pin: Mapped[str] = mapped_column(String(255), nullable=False)
     salt: Mapped[str] = mapped_column(String(255), nullable=False)
+    language_preference: Mapped[str] = mapped_column(String(8), nullable=False, default="en")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 class UserAccount(Base):
     __tablename__ = "user_accounts"
@@ -504,3 +505,118 @@ class TableOrder(Base):
     served_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     table: Mapped["DiningTable"] = relationship("DiningTable", back_populates="orders")
+
+
+# ---------------------------------------------------------------------------
+# Epic A1 — POS & Billing System
+# ---------------------------------------------------------------------------
+
+import enum as _enum
+
+
+class PaymentMethod(_enum.Enum):
+    CASH = "CASH"
+    UPI = "UPI"
+    CARD = "CARD"
+
+
+class SaleStatus(_enum.Enum):
+    COMPLETED = "COMPLETED"
+    VOIDED = "VOIDED"
+    PENDING_SYNC = "PENDING_SYNC"
+
+
+class OfflineQueueStatus(_enum.Enum):
+    PENDING = "PENDING"
+    PROCESSED = "PROCESSED"
+    FAILED = "FAILED"
+
+
+class Sale(Base):
+    """POS sale header — one row per transaction."""
+    __tablename__ = "pos_sales"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    bakery_id: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    cashier_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sale_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    tax_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=SaleStatus.COMPLETED.value)
+    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    lines: Mapped[List["SaleLine"]] = relationship(
+        "SaleLine", back_populates="sale", cascade="all, delete-orphan"
+    )
+    tax_lines: Mapped[List["TaxLine"]] = relationship(
+        "TaxLine", back_populates="sale", cascade="all, delete-orphan"
+    )
+    payments: Mapped[List["Payment"]] = relationship(
+        "Payment", back_populates="sale", cascade="all, delete-orphan"
+    )
+
+
+class SaleLine(Base):
+    """Individual product line within a POS sale."""
+    __tablename__ = "pos_sale_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    sale_id: Mapped[int] = mapped_column(ForeignKey("pos_sales.id"), nullable=False)
+    product_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    batch_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    discount_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
+    line_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    hsn_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+    sale: Mapped["Sale"] = relationship("Sale", back_populates="lines")
+
+
+class TaxLine(Base):
+    """GST tax breakdown per HSN slab per sale."""
+    __tablename__ = "pos_tax_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    sale_id: Mapped[int] = mapped_column(ForeignKey("pos_sales.id"), nullable=False)
+    hsn_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    gst_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    taxable_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    cgst: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    sgst: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    igst: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+
+    sale: Mapped["Sale"] = relationship("Sale", back_populates="tax_lines")
+
+
+class Payment(Base):
+    """Payment record for a POS sale (supports split payment in future)."""
+    __tablename__ = "pos_payments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    sale_id: Mapped[int] = mapped_column(ForeignKey("pos_sales.id"), nullable=False)
+    method: Mapped[str] = mapped_column(String(16), nullable=False, default=PaymentMethod.CASH.value)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    paid_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    sale: Mapped["Sale"] = relationship("Sale", back_populates="payments")
+
+
+class OfflineQueue(Base):
+    """Buffered POS sale payload from an Android device awaiting sync."""
+    __tablename__ = "pos_offline_queue"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    bakery_id: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    device_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload_json: Mapped[str] = mapped_column(String, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default=OfflineQueueStatus.PENDING.value)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

@@ -1,0 +1,54 @@
+{
+  "app_title": "ಬೇಕ್‌ಮ್ಯಾನೇಜ್",
+  "nav": {
+    "dashboard": "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್",
+    "pos": "ಮಾರಾಟ ಬಿಂದು",
+    "inventory": "ದಾಸ್ತಾನು",
+    "telemetry": "ಟೆಲಿಮೆಟ್ರಿ",
+    "analytics": "ವಿಶ್ಲೇಷಣೆ",
+    "admin": "ನಿರ್ವಾಹಕ"
+  },
+  "pos": {
+    "title": "ಮಾರಾಟ ಬಿಂದು",
+    "add_item": "ಐಟಂ ಸೇರಿಸಿ",
+    "cart": "ಕಾರ್ಟ್",
+    "product": "ಉತ್ಪನ್ನ",
+    "quantity": "ಪ್ರಮಾಣ",
+    "price": "ಬೆಲೆ",
+    "subtotal": "ಉಪ ಮೊತ್ತ",
+    "discount": "ರಿಯಾಯಿತಿ",
+    "tax": "ತೆರಿಗೆ (GST)",
+    "total": "ಒಟ್ಟು",
+    "payment_method": "ಪಾವತಿ ವಿಧಾನ",
+    "cash": "ನಗದು",
+    "upi": "UPI",
+    "card": "ಕಾರ್ಡ್",
+    "pay_now": "ಈಗ ಪಾವತಿಸಿ",
+    "sale_complete": "ಮಾರಾಟ ಪೂರ್ಣಗೊಂಡಿದೆ!",
+    "print_receipt": "ರಸೀದಿ ಮುದ್ರಿಸಿ",
+    "void_sale": "ಮಾರಾಟ ರದ್ದು ಮಾಡಿ",
+    "offline_mode": "ಆಫ್‌ಲೈನ್ ಮೋಡ್",
+    "sync_pending": "ಸಿಂಕ್ ಬಾಕಿ ಇದೆ",
+    "no_items_yet": "ಯಾವುದೇ ಐಟಂಗಳಿಲ್ಲ"
+  },
+  "inventory": {
+    "title": "ದಾಸ್ತಾನು",
+    "add_item": "ಐಟಂ ಸೇರಿಸಿ",
+    "item_name": "ಐಟಂ ಹೆಸರು",
+    "quantity": "ಪ್ರಮಾಣ",
+    "unit": "ಘಟಕ",
+    "expiry": "ಮುಕ್ತಾಯ ದಿನಾಂಕ",
+    "low_stock": "ಕಡಿಮೆ ಸ್ಟಾಕ್ ಎಚ್ಚರಿಕೆ"
+  },
+  "common": {
+    "save": "ಉಳಿಸಿ",
+    "cancel": "ರದ್ದು ಮಾಡಿ",
+    "delete": "ಅಳಿಸಿ",
+    "edit": "ಸಂಪಾದಿಸಿ",
+    "search": "ಹುಡುಕಿ",
+    "loading": "ಲೋಡ್ ಆಗುತ್ತಿದೆ...",
+    "error": "ದೋಷ",
+    "success": "ಯಶಸ್ಸು",
+    "language": "ಭಾಷೆ"
+  }
+}

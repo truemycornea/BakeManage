@@ -1,0 +1,54 @@
+{
+  "app_title": "BakeManage",
+  "nav": {
+    "dashboard": "Dashboard",
+    "pos": "Point of Sale",
+    "inventory": "Inventory",
+    "telemetry": "Telemetry",
+    "analytics": "Analytics",
+    "admin": "Admin"
+  },
+  "pos": {
+    "title": "Point of Sale",
+    "add_item": "Add Item",
+    "cart": "Cart",
+    "product": "Product",
+    "quantity": "Quantity",
+    "price": "Price",
+    "subtotal": "Subtotal",
+    "discount": "Discount",
+    "tax": "Tax (GST)",
+    "total": "Total",
+    "payment_method": "Payment Method",
+    "cash": "Cash",
+    "upi": "UPI",
+    "card": "Card",
+    "pay_now": "Pay Now",
+    "sale_complete": "Sale Complete!",
+    "print_receipt": "Print Receipt",
+    "void_sale": "Void Sale",
+    "offline_mode": "Offline Mode",
+    "sync_pending": "Sync Pending",
+    "no_items_yet": "No items yet"
+  },
+  "inventory": {
+    "title": "Inventory",
+    "add_item": "Add Item",
+    "item_name": "Item Name",
+    "quantity": "Quantity",
+    "unit": "Unit",
+    "expiry": "Expiry Date",
+    "low_stock": "Low Stock Alert"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "language": "Language"
+  }
+}
