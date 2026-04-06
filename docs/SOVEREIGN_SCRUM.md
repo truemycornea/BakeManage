@@ -48,7 +48,7 @@
 | EPIC-02 | Security Hardening (Secrets, Auth) | 🔴 Critical | GHCP | 🔶 IN PROGRESS | SSO stub ✅; Vault deferred |
 | EPIC-03 | Observability (healthz, metrics, logs) | 🟡 High | GHCP | 🔶 IN PROGRESS | /healthz ✅; structlog ❌ |
 | EPIC-04 | CI/CD Pipeline | 🟡 High | GHCP | ✅ DONE | PR #23 + #24: all 4 workflows |
-| EPIC-05 | Multimodal Ingestion (Docling/VLM) | Feature | GHCP/GAIS | ✅ DONE | PR #24: InvoiceIngestionService |
+| EPIC-05 | Multimodal Ingestion (Docling/VLM) | Feature | GHCP/GAIS | 🔶 IN PROGRESS | PR #24: InvoiceIngestionService built; /ingest/* wiring pending (STORY-016) |
 | EPIC-06 | FEFO Inventory & Recipe Engine | Feature | GHCP | ✅ DONE | v2.1 + FEFO service PR #24 |
 | EPIC-07 | GST Compliance & Billing | Feature | GHCP | 🔶 IN PROGRESS | POS GST ✅; GSTR reconciliation ❌ |
 | EPIC-08 | AGAM-Ready Deployment Artefacts | Platform | GHCP | 🔷 CODED | infra/ansible/ |
