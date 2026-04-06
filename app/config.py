@@ -45,8 +45,9 @@ class Settings(BaseModel):
                 "quality",
                 "costing",
                 "health",
+                "pos",
             ],
-            "auditor": ["inventory", "health"],
+            "auditor": ["inventory", "health", "pos"],
         }
     )
     redis_url: str = Field(default=os.getenv("REDIS_URL", "redis://localhost:6379/0"))

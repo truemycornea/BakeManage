@@ -95,6 +95,7 @@ from .tasks import (
     validate_requirements_locked,
 )
 from . import gemini as _gemini
+from .pos_routes import router as pos_router
 
 # ---------------------------------------------------------------------------
 # Application setup
@@ -175,6 +176,9 @@ app.add_middleware(
 
 if settings.enforce_https:
     app.add_middleware(HTTPSRedirectMiddleware)
+
+# Register feature routers
+app.include_router(pos_router)
 
 
 # ---------------------------------------------------------------------------
