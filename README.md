@@ -786,7 +786,7 @@ pytest -v
 | `GET/POST` | `/inventory/` | List/create inventory items |
 | `GET` | `/inventory/expiring` | Items expiring within N days (FEFO) |
 | `POST` | `/ingest/image` | Upload image/PDF → structured invoice |
-| `POST` | `/ingest/excel` | Upload Excel → structured purchase order |
+| `POST` | `/ingest/document` | Upload document → structured purchase order |
 
 ### Recipes & Analytics
 
