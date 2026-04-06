@@ -27,6 +27,7 @@
 | STORY-013 | ❌ Not started | ❌ N/A | ❌ OPEN | Sprint Athena |
 | STORY-014 | ❌ Not started | ❌ N/A | ❌ OPEN | Sprint Athena |
 | STORY-015 | ❌ Not started | ❌ N/A | ❌ OPEN | Sprint Hermes |
+| STORY-016 | ❌ Not started | ❌ N/A | ❌ OPEN | Sprint Hermes |
 
 ---
 
