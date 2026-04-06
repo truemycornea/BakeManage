@@ -721,7 +721,7 @@ docker compose exec api python app/seeding.py
 
 # 4. Verify
 curl http://localhost:8000/healthz
-# {"status": "ok", "version": "3.0.0", "timestamp": "..."}
+# {"status": "ok", "version": "<app.version>", "timestamp": "..."}
 
 # 5. Access
 # API Swagger docs:        http://localhost:8000/docs
